@@ -1,0 +1,32 @@
+{
+  "name": "workout-block",
+  "version": "1.0.0",
+  "description": "训练块 Workout Block —— 高度可自定义的 Obsidian 训练记录插件",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs --production",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
+  },
+  "keywords": [
+    "obsidian",
+    "workout",
+    "fitness"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "obsidian": "^1.5.0",
+    "papaparse": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/papaparse": "^5.3.14",
+    "@vitest/coverage-v8": "^1.0.0",
+    "esbuild": "^0.20.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}

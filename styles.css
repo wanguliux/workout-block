@@ -1,0 +1,1267 @@
+/*
+ * styles.css（插件样式表）
+ * 文件作用：Obsidian 会自动加载插件根目录下的 styles.css，为插件界面提供样式。
+ * 说明：本文件是「基础重建版」。原 styles.css 已从项目仓库中丢失，这里根据代码里实际使用的
+ *       workout-* 类，用 Obsidian 的 CSS 变量重新写了一份干净、能适配明暗主题的样式。
+ *       变量说明：var(--background-primary) 背景、var(--text-normal) 正文、
+ *       var(--interactive-accent) 主题强调色、var(--background-modifier-border) 边框等，
+ *       Obsidian 会按当前明暗主题自动替换这些变量，所以无需为亮/暗各写一套。
+ * 想改界面：直接改下面的规则即可，比如把输入框圆角、间距、强调色等调成你喜欢的样子。
+ */
+
+/* ===== 根容器 ===== */
+/* 弹窗/视图内最外层容器，统一一点内边距 */
+.workout-plugin,
+.workout-settings,
+.workout-config {
+  padding: 4px 0;
+}
+
+/* ===== 表单控件（输入框 / 下拉 / 文本域）===== */
+/* 让插件里的输入框长得和 Obsidian 原生输入框一致，并统一高度（36px）解决"长短不一" */
+.workout-input,
+.workout-select,
+.workout-textarea {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--workout-radius, 6px);
+  background: var(--background-modifier-form-field);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small, 14px);
+  line-height: 1.4;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.workout-textarea {
+  min-height: 64px;
+  resize: vertical;
+  font-family: var(--font-text, inherit);
+}
+
+.workout-input:focus,
+.workout-select:focus,
+.workout-textarea:focus {
+  outline: none;
+  border-color: var(--workout-accent, var(--interactive-accent));
+}
+
+/* disabled 态（如编辑模式锁定的训练项）：弱化但保持统一高度 */
+.workout-input:disabled,
+.workout-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ID 字段的轻量实时校验提示：默认隐藏，触发时淡入；用主题错误色 */
+.workout-id-hint {
+  flex-basis: 100%;
+  font-size: var(--font-ui-smaller, 12px);
+  color: var(--text-error, #e05656);
+  margin: 2px 0 0;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: opacity 0.15s ease, max-height 0.15s ease;
+}
+
+.workout-id-hint.is-visible {
+  opacity: 1;
+  max-height: 2em;
+}
+
+/* 弹窗内灰色辅助提示（如"编辑时不可修改"），只读说明性文字 */
+.workout-hint {
+  font-size: var(--font-ui-smaller, 12px);
+  color: var(--text-muted, #888);
+  margin-left: 6px;
+}
+
+/* ===== 布局行（flex 横向排列，带间距）===== */
+.workout-row,
+.workout-duration-row,
+.workout-btn-row,
+.workout-plan-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+/* 单位选「自定义」时才出现的自定义单位输入框 */
+.workout-field-card .workout-custom-unit {
+  display: none;
+  margin-top: 4px;
+}
+
+.workout-field-card .workout-custom-unit.is-custom {
+  display: block;
+}
+
+/* 时长输入行的三个小框（时/分/秒）均匀撑开 */
+.workout-duration-row .workout-input {
+  flex: 1;
+  text-align: center;
+}
+
+/* ===== 按钮 ===== */
+/* 普通操作按钮：主题强调色填充样式 */
+.workout-action-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--interactive-accent);
+  border-radius: var(--radius-s, 4px);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent, #fff);
+  cursor: pointer;
+  font-size: var(--font-ui-small, 13px);
+}
+
+.workout-action-btn:hover {
+  background: var(--interactive-accent-hover, var(--interactive-accent));
+  color: var(--text-on-accent, #fff);
+}
+
+/* 危险按钮（删除类）：红色描边 */
+.workout-danger-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--text-error, #e05656);
+  border-radius: var(--radius-s, 4px);
+  background: transparent;
+  color: var(--text-error, #e05656);
+  cursor: pointer;
+  font-size: var(--font-ui-small, 13px);
+}
+
+.workout-danger-btn:hover {
+  background: var(--text-error, #e05656);
+  color: #fff;
+}
+
+/* 按钮行里多个按钮靠右排列 */
+.workout-btn-row {
+  justify-content: flex-end;
+}
+
+/* ===== 表格（训练记录表）===== */
+.workout-log-table,
+.workout-day-table  {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  font-size: var(--font-ui-small, 13px);
+}
+
+.workout-log-table th,
+.workout-log-table td,
+.workout-day-table th,
+.workout-day-table td  {
+  border: 1px solid var(--background-modifier-border);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.workout-log-table th,
+.workout-day-table th  {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* 操作列（最后一个 td）收缩到刚好容纳按钮，右对齐消除两端空白 */
+.workout-log-table td:last-child {
+  width: 1%;
+  white-space: nowrap;
+  padding-right: 8px;
+}
+.workout-log-table td:last-child .workout-card-actions {
+  justify-content: flex-end;
+}
+.workout-log-table th:last-child {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.workout-log-table tbody tr:hover,
+.workout-day-table tbody tr:hover  {
+  background: var(--background-modifier-hover);
+}
+
+/* 代码块渲染的日志容器 */
+.workout-log-container {
+  margin: 8px 0;
+}
+
+.workout-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+/* workout-day 代码块的头部：左为"查看日期"，右为"固定为当日"按钮 */
+.workout-day-container {
+  margin: 8px 0;
+}
+
+.workout-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.workout-day-date {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+
+/* 分组头行：有统计 / 无统计（纯日期） */
+.workout-log-stat td:first-child {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.workout-log-stat td[colspan] {
+  color: var(--interactive-accent);
+  font-size: var(--font-ui-large, 15px);
+  font-weight: 600;
+}
+
+/* 统计值单元格：多条统计用换行排列时，保留 \n 换行并给足行距 */
+.workout-log-stat-cell {
+  white-space: pre-line;
+  line-height: 1.6;
+}
+.workout-log-group-header td:first-child {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.workout-plan-remove-btn {
+  margin-left: auto;
+}
+
+/* ===== 管理类弹窗（训练类型/训练项/肌肉列表）===== */
+.workout-manager-modal,
+.workout-edit-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 管理弹窗顶部搜索框：吸顶，长列表滚动时始终可见，便于随时筛选 */
+.workout-manager-search {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--modal-background, var(--background-primary));
+  padding: 2px 0 6px;
+  margin-bottom: 4px;
+}
+.workout-manager-search .workout-input {
+  margin: 0;
+}
+
+.workout-muscles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workout-manager-detail {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller, 12px);
+}
+
+.workout-fields,
+.workout-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+/* ===== 肌肉列表行 ===== */
+.workout-muscles-container,
+.workout-muscles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0;
+}
+
+/* ===== 空状态提示 ===== */
+.workout-empty {
+  color: var(--text-faint, var(--text-muted));
+  font-style: italic;
+  padding: 16px 0;
+  text-align: center;
+}
+
+/* ===== 入口/辅助按钮（笔记里嵌的"记一组"等链接）===== */
+.workout-record-set,
+.workout-record-plan,
+.workout-new-exercise,
+.workout-new-type  {
+  cursor: pointer;
+  color: var(--interactive-accent);
+}
+
+/* ===== 肌肉热力图 workout-heatmap ===== */
+.workout-heatmap-container {
+  margin: 8px 0;
+}
+
+.workout-heatmap-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.workout-heatmap-switch {
+  display: flex;
+  gap: 6px;
+}
+
+.workout-heatmap-switch button {
+  padding: 4px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: var(--font-ui-small, 13px);
+}
+
+.workout-heatmap-switch button.mod-cta {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent, #fff);
+  border-color: var(--interactive-accent);
+}
+
+.workout-heatmap-info {
+  display: flex;
+  gap: 12px;
+  font-size: var(--font-ui-smaller, 12px);
+  color: var(--text-muted);
+}
+
+.workout-heatmap-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.workout-heatmap-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-ui-smaller, 12px);
+  color: var(--text-muted);
+}
+
+.workout-heatmap-views {
+  position: relative;
+}
+
+.workout-heatmap-view svg {
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+/* 肌肉路径悬停时显示可交互光标（默认会继承 Obsidian 的文本型 I-beam 光标） */
+.workout-heatmap-view svg path,
+.workout-heatmap-view svg g[id] {
+  cursor: pointer;
+}
+
+.workout-heatmap-empty {
+  color: var(--text-faint, var(--text-muted));
+  font-style: italic;
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* 肌肉悬停提示气泡：自定义黑框，进入肌肉即时显示、跟随光标。背景/文字硬编码深色，
+   避免某些 Obsidian 主题下 --background-modifier-tooltip 变成浅色而显示成白框。 */
+.workout-heatmap-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  display: none;
+  padding: 4px 8px;
+  border-radius: var(--radius-s, 4px);
+  background: rgba(0, 0, 0, 0.88);
+  color: #fff;
+  font-size: var(--font-ui-small, 13px);
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+/* ===== 训练计划：选择计划下拉（代码块无 plan 时）===== */
+.workout-plan-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.workout-plan-select-label {
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.workout-plan-select .workout-select {
+  width: auto;
+  min-width: 200px;
+}
+
+/* ===== 训练计划完成面板（workout-plan 代码块）===== */
+.workout-plan-panel {
+  margin: 8px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m, 8px);
+  padding: 12px;
+  background: var(--background-secondary);
+}
+.workout-plan-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.workout-plan-name {
+  font-size: var(--font-ui-large, 15px);
+  font-weight: 700;
+  color: var(--text-normal);
+}
+.workout-plan-time {
+  font-size: var(--font-ui-small, 13px);
+  color: var(--text-muted);
+}
+.workout-plan-progress {
+  margin-left: auto;
+  font-size: var(--font-ui-small, 13px);
+  color: var(--interactive-accent);
+  font-weight: 600;
+}
+.workout-plan-panel .workout-plan-item {
+  margin: 10px 0;
+}
+.workout-plan-item-title {
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 4px;
+}
+.workout-plan-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 8px;
+  border-left: 2px solid var(--background-modifier-border);
+}
+.workout-plan-set {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.workout-plan-setno {
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 3em;
+}
+.workout-plan-setfields {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small, 13px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workout-plan-completed {
+  color: var(--text-success, #4caf50);
+  font-size: var(--font-ui-small, 13px);
+  font-weight: 600;
+}
+.workout-plan-set .workout-plan-set-edit,
+.workout-plan-set .workout-plan-set-complete {
+  padding: 2px 10px;
+  font-size: var(--font-ui-small, 13px);
+}
+
+/* ===== 新增训练计划弹窗（配置形态）===== */
+.workout-plan-time-controls {
+  margin: 4px 0;
+}
+.workout-plan-weekdays {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.workout-plan-weekday {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-s, 4px);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: var(--font-ui-small, 13px);
+}
+.workout-plan-weekday.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent, #fff);
+  border-color: var(--interactive-accent);
+}
+.workout-plan-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0;
+}
+.workout-plan-modal .workout-plan-item {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  padding: 8px;
+  background: var(--background-primary);
+}
+.workout-plan-set-del {
+  padding: 2px 8px;
+}
+.workout-plan-addset {
+  margin-top: 4px;
+}
+.workout-plan-selectall {
+  align-items: center;
+}
+
+/* 应用内确认弹窗（替代原生 confirm，避免 Electron 焦点丢失 bug） */
+.workout-confirm-msg {
+  margin: 4px 0 18px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.workout-confirm-row {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+/* ============================================================
+ * 设置页 - 训练设置：管理列表拖拽排序样式
+ * 对应 SettingsTab.renderManagersSection 渲染的五个平铺管理条目。
+ * ============================================================ */
+
+/* 管理列表：五个条目平铺，纯间距分隔，无分隔线 */
+.workout-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 左侧拖拽手柄：仅手柄可发起拖拽，避免与右侧"打开管理"按钮冲突 */
+.workout-manager-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  min-width: 18px;
+  margin-right: 6px;
+  color: var(--text-faint);
+  cursor: grab;
+  flex: 0 0 auto;
+}
+.workout-manager-handle:hover {
+  color: var(--text-muted);
+}
+.workout-manager-handle:active {
+  cursor: grabbing;
+}
+
+/* 拖拽中：源行半透明，提示正在移动 */
+.workout-manager-row--dragging {
+  opacity: 0.5;
+}
+
+/* 拖拽悬停目标：顶部高亮一条插入线，指示松手后的插入位置 */
+.workout-manager-row--over {
+  box-shadow: inset 0 2px 0 0 var(--interactive-accent);
+}
+
+/* ============================================================
+ * 重设计样式体系（2026-07-13）
+ * 设计目标：标签在控件上方、输入框 100% 等宽、统一 36px 行高、
+ *   布尔开关组件、列表卡片、复选框网格、字段卡片、两列网格。
+ * 兼容 Obsidian 明暗主题：背景/文字/边框用原生变量；
+ *   强调色用插件自有 --workout-accent（紫），明暗下都协调。
+ * ============================================================ */
+:root {
+  --workout-accent: #7c3aed;
+  --workout-accent-hover: #6d28d9;
+  --workout-accent-soft: rgba(124, 58, 237, 0.12);
+  --workout-accent-border: rgba(124, 58, 237, 0.35);
+  --workout-accent-text: #a78bfa;
+  --workout-radius: 6px;
+  --workout-radius-lg: 8px;
+  --workout-row-gap: 16px;
+  --workout-control-h: 36px;
+}
+
+/* ---- 表单：标签在上方（替换旧的"标签在左" workout-row）---- */
+.workout-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--workout-row-gap);
+}
+.workout-field:last-child {
+  margin-bottom: 0;
+}
+.workout-field > label {
+  font-size: var(--font-ui-smaller, 12px);
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.workout-field .workout-input,
+.workout-field .workout-select,
+.workout-field .workout-textarea {
+  width: 100%;
+}
+
+/* 双列紧凑网格（如记录弹窗"训练项 / 训练类型"同行） */
+.workout-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: var(--workout-row-gap);
+}
+.workout-two-col .workout-field {
+  margin-bottom: 0;
+}
+
+/* ---- 只读派生类型胶囊（记录弹窗"训练类型"随训练项自动带出）---- */
+.workout-type-pill {
+  display: flex;
+  align-items: center;
+  min-height: var(--workout-control-h);
+  padding: 7px 12px;
+  background: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--workout-accent, var(--interactive-accent));
+  border-radius: var(--workout-radius, 6px);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small, 14px);
+}
+
+/* ---- 布尔开关（toggle switch）组件 ---- */
+/* 外层框（含文字 + 开关），与相邻输入框同高 */
+.workout-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--workout-control-h);
+  padding: 7px 12px;
+  box-sizing: border-box;
+  background: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--workout-radius, 6px);
+}
+.workout-toggle > span {
+  font-size: var(--font-ui-small, 14px);
+  color: var(--text-normal);
+}
+/* 原生 checkbox 重皮肤为滑动开关（保持 DOM 不变、事件不变） */
+input[type="checkbox"].workout-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 11px;
+  background: var(--background-modifier-border);
+  background-image: none !important;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+input[type="checkbox"].workout-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--text-on-accent, #fff);
+  transition: transform 0.2s ease;
+}
+input[type="checkbox"].workout-switch:checked {
+  background: var(--workout-accent, var(--interactive-accent));
+  background-image: none !important;
+}
+input[type="checkbox"].workout-switch:checked::after {
+  transform: translateX(18px);
+}
+
+/* ---- 列表卡片（管理窗口：统计/类型/训练项/肌肉/计划 共用）---- */
+.workout-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--workout-radius-lg, 8px);
+  margin-bottom: 10px;
+}
+.workout-card:last-child {
+  margin-bottom: 0;
+}
+.workout-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.workout-card-title {
+  font-size: var(--font-ui-small, 14px);
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 6px;
+}
+.workout-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: var(--font-ui-smaller, 12px);
+  color: var(--text-muted);
+}
+.workout-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---- 内联勾选框（管理列表卡片里的「启用」等）---- */
+.workout-inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-ui-small, 13px);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+.workout-inline-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--workout-accent, var(--interactive-accent));
+  flex-shrink: 0;
+  margin: 0;
+}
+.workout-check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px 12px;
+}
+.workout-check-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--workout-radius, 6px);
+  font-size: var(--font-ui-small, 13px);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+.workout-check-item input {
+  accent-color: var(--workout-accent, var(--interactive-accent));
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+/* ---- 字段卡片（新建/编辑训练类型的字段列表，替换旧表格）---- */
+.workout-field-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--workout-radius-lg, 8px);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.workout-field-card:last-child {
+  margin-bottom: 0;
+}
+.workout-field-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.workout-field-card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--font-ui-small, 13px);
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.workout-field-card-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--workout-accent-soft);
+  color: var(--workout-accent-text);
+  font-size: var(--font-ui-smaller, 12px);
+  font-weight: 600;
+}
+.workout-field-card-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.workout-field-card-body .workout-field {
+  margin-bottom: 0;
+}
+.workout-field-card-cond {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--background-modifier-border);
+}
+
+/* ---- 时长三列等宽网格（时/分/秒）---- */
+.workout-duration-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.workout-duration-grid .workout-input {
+  text-align: center;
+}
+
+/* ---- 添加按钮（虚线描边，轻盈）---- */
+.workout-btn-outline {
+  width: 100%;
+  background: transparent;
+  color: var(--workout-accent-text);
+  border: 1px dashed var(--workout-accent-border);
+  border-radius: var(--workout-radius, 6px);
+  font-size: var(--font-ui-small, 13px);
+  font-weight: 500;
+  padding: 9px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+}
+.workout-btn-outline:hover {
+  border-color: var(--workout-accent, var(--interactive-accent));
+  background: var(--workout-accent-soft);
+  color: var(--workout-accent-text);
+}
+
+/* ---- 区块标题（SVG 映射 / 公式 / 字段列表 等小节）---- */
+.workout-section-title {
+  font-size: var(--font-ui-small, 13px);
+  font-weight: 600;
+  color: var(--text-normal);
+  margin: 22px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.workout-section-title:first-child {
+  margin-top: 0;
+}
+
+/* ---- 映射工具栏（搜索 + 计数 + 操作）---- */
+.workout-mapping-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.workout-mapping-toolbar .workout-input {
+  flex: 1;
+}
+.workout-mapping-count {
+  font-size: var(--font-ui-smaller, 12px);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.workout-mapping-group {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--workout-radius-lg, 8px);
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.workout-mapping-group-title {
+  font-size: var(--font-ui-smaller, 12px);
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 10px;
+}
+.workout-mapping-group .workout-check-grid {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+/* ---- 计划项卡片（新增训练计划）---- */
+.workout-plan-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--workout-radius-lg, 8px);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.workout-plan-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.workout-plan-card-header .workout-select {
+  flex: 1;
+  min-width: 0;
+}
+.workout-plan-set-grid {
+  display: grid;
+  grid-template-columns: 56px 1fr 32px;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+.workout-plan-set-no {
+  font-size: var(--font-ui-smaller, 12px);
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-top: 9px;
+}
+.workout-plan-set-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.workout-plan-set-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.workout-plan-set-field > label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.workout-plan-set-field .workout-input,
+.workout-plan-set-field .workout-select {
+  padding: 6px 8px;
+  font-size: var(--font-ui-smaller, 12px);
+}
+
+/* 训练计划弹窗：组列表容器（卡片内，逐条 set-grid 堆叠，每条自带下间距） */
+.workout-plan-set-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- 热力图颜色分级行（编辑肌肉弹窗：色块 / 十六进制 / ≤ / 阈值）---- */
+/* 对应重设计稿「编辑肌肉」页面的 scale-row 网格：32 / 100 / 24 / 1fr */
+.workout-scale-row {
+  display: grid;
+  grid-template-columns: 32px 100px 24px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.workout-scale-row:last-child {
+  margin-bottom: 0;
+}
+/* 色块：原生 color 拾色器兼作预览小圆点 */
+.workout-scale-swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+/* 十六进制代码输入框 */
+.workout-scale-hex {
+  width: 100px;
+}
+/* 「≤」分隔符 */
+.workout-scale-sep {
+  margin: 0 6px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+/* 阈值输入框 */
+.workout-scale-max {
+  width: 80px;
+}
+/* 末档"无穷大"占位文字 */
+.workout-scale-unbounded {
+  font-size: var(--font-ui-smaller, 12px);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ===== 训练项搜索 Combobox ===== */
+.workout-combo-wrapper {
+  position: relative;
+}
+.workout-combo-input {
+  width: 100%;
+  cursor: text;
+}
+.workout-combo-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 4px);
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.15));
+}
+.workout-combo-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: var(--font-normal, 14px);
+  line-height: 1.4;
+}
+.workout-combo-item:hover,
+.workout-combo-highlighted {
+  background: var(--background-modifier-hover);
+}
+.workout-combo-selected {
+  background: var(--background-modifier-border); /* 轻微高亮已选中项 */
+  font-weight: 600;
+}
+.workout-combo-selected:hover {
+  background: var(--background-modifier-hover);
+}
+.workout-combo-empty {
+  color: var(--text-muted);
+  padding: 8px 12px;
+  font-size: var(--font-smaller, 13px);
+  cursor: default;
+}
+.workout-combo-type-tag {
+  font-size: var(--font-ui-smaller, 11px);
+  color: var(--text-faint);
+  margin-left: 8px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   移动端适配（根类 .is-mobile 由 main.ts 在 app.isMobile 时注入 <body>）
+   桌面端不添加该 class，故以下规则对桌面端零回归。
+   ============================================================ */
+
+/* 表单行：label 与控件上下堆叠，控件占满宽度 */
+.is-mobile .workout-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+.is-mobile .workout-row > label { margin-bottom: 2px; }
+
+/* 时长三框：无论 .workout-duration-grid（RecordModal）还是 .workout-duration-row
+   （NewPlanModal / PlanSetEditModal），移动端统一为可收缩的三列网格 */
+.is-mobile .workout-duration-grid,
+.is-mobile .workout-duration-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.is-mobile .workout-duration-grid .workout-input,
+.is-mobile .workout-duration-row .workout-input {
+  min-width: 0;
+  flex: none;
+}
+
+/* 下拉不再写死最小宽度，移动端占满可用空间 */
+.is-mobile .workout-plan-select .workout-select { min-width: 0; width: 100%; }
+
+/* 触控靶与字号：≥44px 保证可点，16px 防止 iOS 聚焦时整页缩放 */
+.is-mobile .workout-input,
+.is-mobile .workout-select,
+.is-mobile .workout-btn-row button,
+.is-mobile .workout-manager-move {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+/* 弹窗内容安全区（刘海 / 底部手势条） */
+.is-mobile .modal-content {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* 表格横向滚动：容器可滚动，表格按内容宽度展开而非撑破视口 */
+.is-mobile .workout-log-container,
+.is-mobile .workout-day-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.is-mobile .workout-log-table,
+.is-mobile .workout-day-table  {
+  width: max-content;
+  min-width: 100%;
+}
+
+/* 吸底保存栏：须为 .modal-content（滚动容器）的直接子元素才生效 */
+.is-mobile .workout-btn-row {
+  position: sticky;
+  bottom: 0;
+  background: var(--background-primary);
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--background-modifier-border);
+  z-index: 5;
+}
+
+/* 触摸 / 键盘反馈（补充桌面 :hover） */
+.is-mobile .workout-btn-row button:active,
+.is-mobile .workout-manager-row:active,
+.is-mobile .workout-manager-move:active { opacity: 0.7; }
+.is-mobile .workout-input:focus-visible,
+.is-mobile .workout-select:focus-visible,
+.is-mobile .workout-manager-move:focus-visible { outline: 2px solid var(--interactive-accent); }
+
+/* 管理器排序：移动端隐藏拖拽手柄（改用上下移按钮）；上移/下移按钮更易点 */
+.is-mobile .workout-manager-handle { display: none; }
+.is-mobile .workout-manager-move { min-width: 36px; padding: 0 8px; }
+
+/* ============ 插入代码块弹窗 ============ */
+.workout-insert-modal .workout-insert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.workout-insert-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+.workout-insert-card:hover {
+  border-color: var(--interactive-accent);
+  background: var(--background-secondary-alt);
+}
+.workout-insert-card:active { transform: scale(0.99); }
+
+.workout-insert-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-s);
+  background: var(--background-modifier-active-hover);
+  color: var(--interactive-accent);
+}
+.workout-insert-card-icon svg { width: 18px; height: 18px; }
+
+.workout-insert-card-text { min-width: 0; flex: 1 1 auto; }
+.workout-insert-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.workout-insert-card-badge {
+  font-size: var(--font-ui-smaller);
+  font-weight: 500;
+  color: var(--text-muted);
+  background: var(--background-modifier-active-hover);
+  border-radius: 999px;
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.workout-insert-card-desc {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.4;
+}
+
+.workout-insert-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* 参数弹窗 */
+.workout-insert-param-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.workout-insert-param-header h2 { margin: 0; }
+.workout-insert-param-subtitle {
+  margin: 12px 0 4px;
+  font-weight: 600;
+  color: var(--text-normal);
+}
+.workout-insert-params { display: flex; flex-direction: column; gap: 4px; }
+
+.workout-insert-param-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.workout-insert-param-optional {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-faint);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  padding: 0 6px;
+}
+.workout-insert-param-hint {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-top: 2px;
+}
