@@ -3,7 +3,7 @@
   "name": "训练块 Workout Block",
   "version": "1.0.0",
   "minAppVersion": "1.5.0",
-  "description": "Obsidian 训练记录插件：记录力量/有氧/自重训练，支持完全自定义训练类型、肌肉映射、热力图与训练计划；内置移动端适配与代码块快捷插入。",
+  "description": "以「极致自由度」为核心的 Obsidian 训练记录插件：训练类型、记录字段、衍生统计、肌肉热力图与训练计划，全部由你自定义。",
   "author": "wanguliux",
   "authorUrl": "https://github.com/wanguliux",
   "isDesktopOnly": false
