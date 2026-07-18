@@ -230,7 +230,7 @@ export class StatModal extends Modal {
         } else if (kind === 'productSum') {
           this.builder = { kind: 'productSum', fieldA: field, fieldB: allowed[0] ?? '' };
         } else {
-          this.builder = { kind, field } as StatAggregation;
+          this.builder = { kind, field };
         }
         this.renderFormula();
       });

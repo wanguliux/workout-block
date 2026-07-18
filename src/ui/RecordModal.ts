@@ -169,7 +169,7 @@ export class RecordModal extends Modal {
     this.planInput.addClass('workout-select');
 
     // 空选项：不关联任何方案
-    const emptyOpt = this.planInput.createEl('option', {
+    this.planInput.createEl('option', {
       value: '',
       text: t('modal.recordSet.noSchemeOption') || '— 不关联方案 —',
     });
@@ -330,7 +330,7 @@ export class RecordModal extends Modal {
       // 高亮当前选中项
       if (ex.id === this.exerciseId) item.addClass('workout-combo-selected');
 
-      const nameSpan = item.createSpan({ text: getExerciseName(ex) });
+      item.createSpan({ text: getExerciseName(ex) });
       // 显示类型标签辅助区分
       const typeTag = item.createSpan({
         text: getTrainingTypeName(this.trainingTypes.find(t => t.id === ex.category)) || ex.category,

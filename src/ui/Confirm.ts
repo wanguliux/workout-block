@@ -51,7 +51,7 @@ export function confirmWithModal(
     const confirmBtn = new ButtonComponent(btnRow)
       .setButtonText(opts.confirmText ?? t('common.ok'))
       .setCta();
-    if (opts.warning !== false) confirmBtn.setDestructive();
+    if (opts.warning !== false) confirmBtn.setClass('mod-destructive');
     confirmBtn.onClick(() => finish(true));
 
     // 打开后把焦点放到「取消」按钮（应用内 DOM，不会触发原生焦点 bug）。

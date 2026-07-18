@@ -322,7 +322,7 @@ export class SettingsTab extends PluginSettingTab {
       .addButton((btn) =>
         btn
           .setButtonText(t('settings.compactCsv'))
-          .setDestructive()
+          .setClass('mod-destructive')
           .onClick(async () => {
             if (!(await confirmWithModal(this.app, t('settings.confirmCompact')))) return;
             const removed = await this.dataManager.compactLogs();

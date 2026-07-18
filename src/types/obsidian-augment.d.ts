@@ -14,6 +14,7 @@ declare module 'obsidian' {
   }
 
   // AbstractInputSuggest 的 inputEl 在运行时存在，但 obsidian 类型桩未声明。
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- T 必须与官方 AbstractInputSuggest<T> 的泛型签名一致才能声明合并，此处未直接使用
   interface AbstractInputSuggest<T> {
     inputEl: HTMLInputElement;
   }

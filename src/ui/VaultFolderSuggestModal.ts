@@ -21,7 +21,7 @@ export class VaultFolderSuggestModal extends FuzzySuggestModal<TFolder> {
 
   // 返回弹窗里要展示的全部可选项：取出 vault 里所有"已加载的文件"，过滤出其中的文件夹（TFolder）
   getItems(): TFolder[] {
-    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof TFolder) as TFolder[];
+    return this.app.vault.getAllLoadedFiles().filter((file) => file instanceof TFolder);
   }
 
   // 决定每个文件夹在列表里显示的文本（这里用它的路径，空路径显示根目录 '/'）

@@ -1,296 +1,274 @@
 <p align="center">
-<a href="./README.md"><b>🇨🇳 中文</b></a> &nbsp;|&nbsp; <a href="./README_EN.md">🇺🇸 English</a>
+<a href="./README.zh.md">🇨🇳 中文</a> &nbsp;|&nbsp; <a href="./README.md"><b>🇺🇸 English</b></a>
 </p>
 
-# 训练块 Workout Block
+# Workout Block
 
-一款以**「极致的自由度」**为核心的 Obsidian 训练记录插件。它不预设任何训练体系——你**自己定义训练类型**、**记录任何你想记录的数据**、**对记录字段做任意衍生计算**；训练计划、肌肉管理、肌肉热力图同样全部由你按自己的方式配置。所有内容以**代码块**形式呈现，渲染与数据层高度解耦。数据以纯文本（CSV / JSON）存放在你的 vault 中，可被 Dataview 等工具直接查询。
+An Obsidian workout-tracking plugin built on **"ultimate flexibility."** It imposes no training system on you — *you* define the workout types, log *any* data you want, and run *arbitrary* derived calculations on your log fields. Training plans, muscle management, and muscle heatmaps are all configurable to fit your own style. Everything is rendered as **code blocks**, with the rendering and data layers cleanly decoupled. Data lives as plain text (CSV / JSON) inside your vault, directly queryable by tools like Dataview.
 
-> **核心主张**：没有「固定字段」、没有「标准动作库」、没有「官方模板」。插件只提供一套可无限自定义的骨架，怎么用完全由你决定。
+> **Core proposition**: No "fixed fields," no "standard exercise library," no "official templates." The plugin only provides an endlessly customizable skeleton — how you use it is entirely up to you.
 
-> 插件 ID：`workout-block` ｜ 最低 Obsidian 版本：`1.5.0` ｜ 许可证：MIT ｜ 语言：中文 / English
+> Plugin ID: `workout-block` ｜ Minimum Obsidian version: `1.5.0` ｜ License: MIT ｜ Languages: 中文 / English
 
 ---
 
-## 🧭 设计哲学：一切皆可自定义
+## 🧭 Design Philosophy: Everything Is Customizable
 
-多数训练 App 把字段、动作、计划写死，你只能被动适配。本插件反其道而行——它把「定义权」还给你：
+Most training apps hard-code fields, exercises, and plans, forcing you to adapt to them. This plugin does the opposite — it gives the "definition power" back to you:
 
-| 你决定什么 | 怎么决定 | 文档/代码 |
+| What you decide | How you decide | Docs / Code |
 |------------|----------|-----------|
-| 有哪些**训练类型** | 完全自建，如「力量 / 有氧 / 自重 / 敏捷 / 攀岩」任意增删 | 记录录入 §5 |
-| 每种类型**记录哪些字段** | 任意数量、任意组合（数字 / 时长 / 文本 / 下拉），无系统约束 | 同上 |
-| 字段**单位** | 重量自动 kg/lb 换算，或自由文本单位（次 / 公里 / 层 / 圈…） | 同上 |
-| 记录字段的**衍生数据** | 像配训练类型一样配「数据统计」，引导式或写表达式 `sum(reps*weight)` | 数据统计设计 |
-| **训练计划**怎么排 | 每个训练项、每一组的目标量自定义；按具体日期或每周周几执行 | 训练计划设计 |
-| **肌肉怎么管** | 任意颗粒度：一块肌肉可映射到 1 条或 N 条解剖路径 | 肌肉管理设计 |
-| **热力图**画什么 | 逐肌选指标 / 时间窗 / 颜色分档，医学解剖级人体图 | 同上 |
+| Which **workout types** exist | Build freely — e.g. add or remove "Strength / Cardio / Bodyweight / Agility / Climbing" at will | Logging §5 |
+| What **fields** each type logs | Any number, any combination (number / duration / text / select) — no system constraints | Same |
+| Field **units** | Weight auto-converts kg/lb, or free-text units (reps / km / floors / laps…) | Same |
+| **Derived data** from log fields | Configure "data stats" just like workout types — guided builder or expression `sum(reps*weight)` | Stats design |
+| How **training plans** are laid out | Custom target volume per exercise and per set; run on specific dates or weekly weekdays | Plan design |
+| How **muscles** are managed | Any granularity: one muscle can map to 1 or N anatomy paths | Muscle design |
+| What the **heatmap** draws | Per-muscle metric / time window / color tiers on a medical-grade anatomy figure | Same |
 
-下面分模块展开。
+The modules below go into detail.
 
 ---
 
-## ✨ 功能特性
+## ✨ Features
 
-### 1. 完全自定义的训练类型 —— 你练什么，由你定义
+### 1. Fully Custom Workout Types — You Define What You Train
 
-训练类型（如「力量」「有氧」「自重」）只是种子默认值，**你可以新建任意类型**，并为每个类型配置它包含的字段。系统**不预设**「某类型必须有哪些字段」，字段的「数量、控件、单位」完全由你决定。
+Workout types (e.g. "Strength," "Cardio," "Bodyweight") are only seed defaults. **You can create any type** and configure the fields it contains. The system does **not** assume "a type must have certain fields" — the count, control, and unit of fields are entirely your call.
 
-- 支持 **4 种输入控件**自由组合：`number`（数字）/ `duration`（时·分·秒，存储为秒）/ `text`（文本）/ `select`（下拉，可自定义选项）。
-- 每个类型至少 1 个字段，可任意增删。
-- 改一个类型，所有「新建训练项 / 记录」的录入界面随之改变（字段由类型的 `fields` 动态渲染）。
+- Supports **4 input controls** in any combination: `number` (numeric) / `duration` (h·m·s, stored as seconds) / `text` / `select` (dropdown with custom options).
+- Each type needs at least 1 field; add or remove freely.
+- Editing a type instantly changes every "new log / record" entry UI (fields are dynamically rendered from the type's `fields`).
 
-**自定义示例**：新建「敏捷训练」类型，字段设为 `组数`(数字) + `距离`(数字，单位「公里」) + `组间休息`(下拉：30s / 60s / 90s)。—— 换作力量训练，也可以只有 `重量` + `次数`。没有限制。
+**Custom example**: Create an "Agility" type with fields `sets` (number) + `distance` (number, unit "km") + `rest between sets` (select: 30s / 60s / 90s). For strength, you could have just `weight` + `reps`. No limits.
 
-<img width="40%" height="803" alt="image" src="https://github.com/user-attachments/assets/aa00c94f-d809-4a3e-9d4c-7a66da97c898" /> <img width="40%" height="825" alt="image" src="https://github.com/user-attachments/assets/ac374b25-2250-4d4d-b245-05e5ecbe16f8" />
+### 2. Log Any Training Data You Want — Freedom Down to "Each Set"
 
+The smallest log granularity is **"one set"** (e.g. "Bench press 60kg × 8 reps" = one CSV row). The fields you fill in are **entirely determined by the selected workout type**, so you can log as many kinds of data as you have defined types and fields.
 
-### 2. 记录任何你想训练的数据 —— 自由度落到「每一组」
+- **Last-value memory**: entering the next set auto-fills the previous value for that exercise, saving re-typing (toggleable in settings).
+- **Fuzzy match**: exercise search supports substring matching — type a fragment and hit it.
+- All data lands as plain text; fields are stored as JSON in the `fields` column, decoupling table structure from type definitions — adding types / fields never breaks historical logs.
 
-记录的最小颗粒度是**「一组」**（如「卧推 60kg × 8 次」= CSV 一行）。录入时填写的字段**完全由所选训练类型决定**，所以你定义了多少种类型、每个类型有多少字段，就能记录多少种数据。
+### 3. Arbitrary Derived Calculations on Log Fields — Compute the Metrics You Care About
 
-- **上次值记忆**：录入下一组时自动带出该训练项上一次的数值，省去重复输入（可在设置关闭）。
-- **模糊匹配**：训练项搜索支持子串匹配，随手输入即可命中。
-- 所有数据落盘为纯文本，字段以 JSON 存于 `fields` 列，表结构与类型定义解耦——新增类型 / 字段不会破坏历史记录。
-  
-<img width="40%" height="1113" alt="image" src="https://github.com/user-attachments/assets/56a99a1a-7d57-45f9-b360-6f196ebe81f8" /> <img width=40% height="1131" alt="image" src="https://github.com/user-attachments/assets/52c418b6-a84a-4f83-9c24-01d148033eff" />
+The built-in "total sets" is just one ordinary, pre-seeded stat. You can delete it and define your own derived metrics.
 
-### 3. 对记录字段做任意衍生计算 —— 你想要的指标，自己算
+- **Dual-mode formulas**:
+  - Guided builder: sum `sum` / sum-of-products `Σ(a×b)` / average·max·min / count `count` — just click to pick.
+  - Free expressions (advanced): write directly `sum(reps * weight)`, `avg(weight)`, `max(weight)`, etc.
+- **Link to workout types**: a stat can link to one or more types and only appears in those types' code blocks (e.g. "total volume" links to both Strength and Bodyweight).
+- **Safe**: a sandboxed evaluator disables `eval` / `Function`, uses a function whitelist + field references + arithmetic, validates syntax and legality before saving, and blocks illegal formulas.
+- Stat results are **computed at render time** — never written back to CSV, never polluting raw data.
 
-内置的「总组数」只是系统预置的**一条普通统计**，你完全可以删掉它，定义自己关心的派生指标。
+### 4. Highly Flexible Training Plans — Schedule Your Own Way
 
-- **双模式公式**：
-  - 引导式构建器：求和 `sum` / 乘积求和 `Σ(a×b)` / 平均·最大·最小 / 计数 `count`，点选即可。
-  - 自由表达式（高级）：直接写 `sum(reps * weight)`、`avg(weight)`、`max(weight)` 等。
-- **关联训练类型**：一条统计可关联一个或多个类型，只在对应类型的代码块里出现（如「总训练量」同时关联力量与自重）。
-- **安全**：内置受限求值器，禁用 `eval` / `Function`，函数白名单 + 字段引用 + 四则运算，保存前做语法与合法性校验，非法公式拦截保存。
-- 统计结果**渲染时实时计算**，不写回 CSV、不污染原始数据。
+A training plan isn't boxed in by a template; it's a fully configurable plan instance:
 
-<img width="40%" height="787" alt="image" src="https://github.com/user-attachments/assets/bb0b6959-2871-4575-a1c4-789a31373aa6" /> <img width="40%" height="998" alt="image" src="https://github.com/user-attachments/assets/bcfd0e43-0595-4ff9-bdbc-10d1320712b0" />
+- **Per-set target volume**: each exercise, each set can preset a different target field value (since fields are yours, each set may differ).
+- **Flexible schedule**: a specific day, or an ISO weekday loop like "every Mon / Wed / Fri."
+- **Build plans from schemes**: scan notes containing `workout-plan` code blocks as sources and merge exercises in one click; also supports manually adding items outside the scheme, and adding/removing any training set individually.
+- **Note-as-scheme**: a note with a `workout-plan` code block is itself a training scheme — no extra entity needed.
+- **Completion state persisted independently**: tick "done" per set inside the code block to write the record; completion state lives in config, independent of training logs — **done means done, with no daily / weekly reset**, and deleting logs doesn't affect completion.
 
+### 5. Muscle Management at Any Granularity — From "One Big Shoulder" to "Front/Middle/Rear Delts"
 
+The relationship between muscles and the body SVG is a configurable mapping of **1 muscle → N SVG paths**, with granularity set by you:
 
-### 4. 极高自由度的训练计划 —— 排你自己的练法
+- A beginner wants just "shoulders" as one block; a coach wants to color "anterior / middle / posterior deltoid" separately — the same plugin supports both.
+- **First-run guided 3-tier import** (just an initial config, not a locked-in "mode"):
+  - **Default**: 13 base muscles mapped to all anatomy paths by fitness group (most complete, recommended).
+  - **Lean**: each muscle maps only its representative main path, for a cleaner chart.
+  - **Manual**: mappings left empty for you to tick one by one.
+- After import, add/remove mappings anytime in the edit popup — "change whenever you want, never held hostage by presets."
+- Bilingual muscle catalog (Chinese / English anatomical names) with **143** mappable paths, plus a search box to handle the scale.
 
-训练计划不是被模板框死的，而是完全可配的训练方案实例：
+### 6. Medical-Grade Muscle Heatmap — See Your Body's Strengths & Weaknesses
 
-- **逐组目标量**：每个训练项、每一组都可以预设不同的目标字段值（因为字段是你自定义的，每组可能不同）。
-- **灵活的计划时间**：具体到某一天，或「每周一、三、五」这类 ISO 周几循环。
-- **基于方案快速建计划**：扫描含 `workout-plan` 代码块的笔记作为来源，一键合并训练项；也支持手动添加方案外的项目、单独增删任意训练组。
-- **笔记即方案**：含 `workout-plan` 代码块的笔记天然就是训练方案，无需额外实体。
-- **完成态独立持久化**：在代码块里逐组点「完成」即写入记录；完成状态存于配置、独立于训练记录，**完成即完成，不做按日 / 周重置**，删除记录不影响完成态。
+Renders full-body muscle load based on **complete front / back human anatomy SVGs** (medical anatomical naming, from flutter-body-atlas, CC BY 4.0):
 
-<img width="40%" height="992" alt="image" src="https://github.com/user-attachments/assets/5da46faf-ca00-4ef6-bb0e-e91b9ce336f7" /> <img width="40%" height="1042" alt="image" src="https://github.com/user-attachments/assets/78369009-e21f-4d78-8d62-b36f5b53bb4e" />
+- One-click front / back switch; both SVGs are inlined, so switching only changes display, not recomputation.
+- Colors muscles by training volume (default "reps," changeable per muscle); color tiers are configurable per muscle (tiers ≤ 99, each tier's color and threshold are custom hex).
+- **Three-level fallback**: muscle-level → code-block-level (`metric` / `range` params) → global default; each muscle can individually set "what metric, over what window."
+- Weighted coloring: primary exercise weight 1.0, auxiliary 0.5, accumulated; absolute-threshold coloring (not whole-image normalization); when multiple muscles hit the same path, the highest contributor decides the tier.
+- Computed and colored only when scrolled into view (lazy render), low main-thread cost.
 
-### 5. 任意颗粒度的肌肉管理 —— 从「一大块肩膀」到「前/中/后束」
+### 7. Code-Block Presentation, Highly Decoupled — Content Lives in Your Notes
 
-肌肉与人体示意图 SVG 的关系是 **1 块肌肉 → N 条 SVG 路径**的可配置映射，精细度由你定：
+The plugin takes over rendering of four fenced code-block types — just write them in your notes; rendering and data layers are fully separated:
 
-- 新手只想看「肩膀」一大块；教练要区分「三角肌前 / 中 / 后束」分别着色——同一个插件都支持。
-- **首次引导三档导入**（只是初份配置，不是锁死的「模式」）：
-  - **默认**：13 块基础肌肉，按健身群映射到全部解剖路径（最完整，推荐）。
-  - **精简**：每块只映射代表性主路径，图表更干净。
-  - **手动**：映射留空，由你逐个勾选。
-- 导入后随时在编辑弹窗增删映射，「想改就改，不被预设绑架」。
-- 双语肌肉目录（中文 / 英文解剖名）共 **143 条**可映射路径，配搜索框应对规模。
-
-<img width="30%" height="1036" alt="image" src="https://github.com/user-attachments/assets/9e431ca2-8f03-421f-bddd-28b8fdf74573" /> <img width="30%" height="1022" alt="image" src="https://github.com/user-attachments/assets/da115383-8e41-4973-a80a-e5b5f3bb76d8" /> <img width="30%" height="627" alt="image" src="https://github.com/user-attachments/assets/a27ea6a8-fe3b-411f-a89b-45079128ca5d" />
-
-
-
-
-### 6. 医学解剖级的肌肉热力图 —— 看见身体的强弱
-
-基于**完整正 / 背面人体解剖 SVG**（医学解剖命名，源自 flutter-body-atlas，CC BY 4.0）渲染全身肌肉负荷：
-
-- 正 / 背面一键切换，两份 SVG 均内联，切换只改显示不重算。
-- 按训练量（默认「次数」，可逐肌改）给各肌肉着色，颜色分级逐肌可配（级数 ≤ 99，每级颜色与阈值自定义十六进制）。
-- **三级回退**：肌肉级 → 代码块级（`metric` / `range` 参数）→ 全局默认，每块肌肉都能单独定「用什么指标、看多久」。
-- 加权着色：主练权重 1.0、辅练 0.5 累加；绝对阈值着色（非全图归一化），多肌命中同路径取贡献最大者分档。
-- 进入视口才计算上色（懒渲染），主线程负担低。
-
-### 7. 代码块呈现、高度解耦 —— 内容长在笔记里
-
-插件接管四类围栏代码块的渲染，直接在笔记里写即可，渲染与数据层完全分离：
-
-| 代码块 | 视角 |
+| Code block | View |
 |--------|------|
-| `workout-log` | 单动作历史表 + 分组聚合统计 |
-| `workout-day` | 当日训练总览（项目 / 统计值 / 主辅肌群 / 方案） |
-| `workout-plan` | 训练计划完成面板（逐组点完成） |
-| `workout-heatmap` | 全身肌肉负荷热力图（正/背切换） |
+| `workout-log` | Single-exercise history table + grouped aggregate stats |
+| `workout-day` | That day's training overview (exercises / stat values / primary·aux muscles / scheme) |
+| `workout-plan` | Training-plan completion panel (tick per set) |
+| `workout-heatmap` | Full-body muscle-load heatmap (front/back switch) |
 
-- **可扩展注册表**：内部维护代码块类型注册表，新增一种代码块 = 写一个 handler 并 `registerCodeBlock`，**无需改动既有逻辑**。
-- **精准重渲染**：数据变更时只重画含该训练项的代码块（`rerenderBlocksForExercise`），避免全量卡顿；语言切换 / 外部改文件才全局刷新。
-- 预览模式与阅读模式均生效，样式作用域隔离，不污染 vault 全局。
+- **Extensible registry**: internally maintains a code-block type registry; adding a new code block = write a handler and `registerCodeBlock`, **no changes to existing logic needed**.
+- **Precise re-render**: on data change, only re-draws code blocks containing that exercise (`rerenderBlocksForExercise`), avoiding full reloads; only language switch / external file edits trigger a global refresh.
+- Works in both preview and reading mode, with scoped styles that don't pollute the vault globally.
 
-### 8. 中英双语 & 纯文本数据
+### 8. Bilingual (中文 / English) & Plain-Text Data
 
-- 界面随 Obsidian 语言切换，切换即重渲染，代码块表格 / 热力图文字 / 时长 token 均干净无残留。
-- 所有数据存于 vault 内的文本文件（CSV + JSON），不使用任何私有二进制格式，可进 Git、随手备份、被 Dataview 等工具直接查询。
-
----
-
-## 📦 安装
-
-### 方式一：BRAT（推荐，支持自动更新）
-
-1. 在 Obsidian 社区插件市场安装 **BRAT**。
-2. 打开 BRAT 设置 → `Add a beta plugin`，填入本仓库地址。
-3. 在「社区插件」中启用 **训练块 Workout Block**。
-
-### 方式二：手动安装
-
-1. 从 Releases 或仓库根目录下载 `main.js` 与 `manifest.json`。
-2. 把它们放进你的 vault：`<vault>/.obsidian/plugins/workout-block/`。
-3. 在「社区插件」中启用本插件。
-
-> 首次启动会自动写入默认训练类型、肌肉与统计配置，热力图开箱即用，无需手动初始化。
+- UI follows Obsidian's language; switching re-renders instantly, with code-block tables / heatmap text / duration tokens all clean and residue-free.
+- All data lives in in-vault text files (CSV + JSON), no proprietary binary format — goes into Git, backs up easily, and is directly queryable by tools like Dataview.
 
 ---
 
-## 🚀 快速上手
+## 📦 Installation
 
-启用插件后：
+### Method 1: BRAT (recommended, supports auto-update)
 
-- 点击左侧栏的 **哑铃图标**，或命令面板（`Ctrl/Cmd + P`）搜索「记录一组」，即可录入一条训练。
-- 想长期跟踪某训练项，在笔记里写一个 `workout-log` 代码块（见下）。
-- 想自定义体系：打开设置 → 训练块 → 对应的「管理」弹窗，新建训练类型 / 训练项 / 训练计划 / 统计 / 肌肉映射。
+1. Install **BRAT** from the Obsidian community plugin marketplace.
+2. Open BRAT settings → `Add a beta plugin`, and enter this repository's URL.
+3. Enable **Workout Block** under "Community plugins."
+
+### Method 2: Manual install
+
+1. Download `main.js` and `manifest.json` from Releases or the repo root.
+2. Place them in your vault: `<vault>/.obsidian/plugins/workout-block/`.
+3. Enable the plugin under "Community plugins."
+
+> On first launch, default workout types, muscles, and stats are written automatically — the heatmap works out of the box, no manual init needed.
 
 ---
 
-## 📝 代码块（Code Blocks）
+## 🚀 Quick Start
 
-插件接管了以下四种围栏代码块的渲染，直接在笔记里写即可。
+After enabling the plugin:
 
-### `workout-log` —— 训练记录表（按动作看历史）
+- Click the **dumbbell icon** in the left ribbon, or open the command palette (`Ctrl/Cmd + P`) and search "Log a set" to enter a training entry.
+- To track an exercise long-term, write a `workout-log` code block in a note (see below).
+- To customize the system: open Settings → Workout Block → the corresponding "Manage" popup to create workout types / exercises / plans / stats / muscle mappings.
 
-展示训练记录，可点「记录 / 编辑 / 删除」交互操作；分组上方显示该组聚合统计。
+---
 
-| 参数 | 说明 | 默认 |
+## 📝 Code Blocks
+
+The plugin takes over rendering of the four fenced code-block types below — just write them in your notes.
+
+### `workout-log` — Training Log Table (history by exercise)
+
+Shows training logs with interactive "log / edit / delete" actions; grouped-above shows that group's aggregate stats.
+
+| Param | Description | Default |
 |------|------|------|
-| `exercise` | 仅显示指定训练项（按名称） | 显示全部 |
-| `limit` / `number` | 最多显示条数 | 50 |
-| `day` | 仅显示最近 N 天的记录 | — |
-| `group_by` | `date`（按天）/ `week`（年-周） | `date` |
+| `exercise` | Show only the specified exercise (by name) | show all |
+| `limit` / `number` | Max rows to show | 50 |
+| `day` | Show only records from the last N days | — |
+| `group_by` | `date` (by day) / `week` (year-week) | `date` |
 | `sort` | `desc` / `asc` | `desc` |
-| `show_add` | 是否显示顶部「添加记录」按钮 | `true` |
+| `show_add` | Whether to show the top "add record" button | `true` |
 
 ````markdown
 ```workout-log
-exercise: 深蹲
+exercise: Squat
 limit: 20
 ```
 ````
-<img width="40%" height="833" alt="image" src="https://github.com/user-attachments/assets/24f51cbe-f731-42e5-8e74-71eab135e39a" />
 
+### `workout-day` — That Day's Training Overview
 
-### `workout-day` —— 当日训练总览
+Summarizes "what was trained" by day; columns: exercise / stat value / primary muscles / auxiliary muscles / training scheme.
 
-按天汇总「练了哪些项目」，表格列为：项目 / 数据统计值 / 主肌群 / 辅助肌群 / 训练方案。
-
-| 参数 | 说明 |
+| Param | Description |
 |------|------|
-| `day: 2026-07-12` | 查询指定日期 |
-| `day: today` | 显示当日（活数据，随日期滚动） |
-| 不写 `day` | 同样显示当日，并提供「固定为当日」按钮写回日期 |
+| `day: 2026-07-12` | Query a specific date |
+| `day: today` | Show today (live data, rolls with the date) |
+| no `day` | Also shows today, and provides a "pin to today" button that writes the date back |
 
 ````markdown
 ```workout-day
 day: 2026-07-12
 ```
 ````
-<img width="1075" height="161" alt="image" src="https://github.com/user-attachments/assets/40ba7a4c-097e-44e9-ac89-c61e5e07bf39" />
 
-### `workout-heatmap` —— 肌肉热力图
+### `workout-heatmap` — Muscle Heatmap
 
-渲染完整人体肌肉图，按训练量着色。代码块上方有 **正面 / 背面** 切换按钮；颜色分级（默认 4 级：蓝 / 绿 / 橙 / 红）的级数、每级颜色与阈值，均可在「肌肉管理」里逐肌肉自定义。
+Renders the full-body muscle figure, colored by training volume. Above the code block is a **front / back** switch; the color tiers (default 4: blue / green / orange / red) — tier count, each tier's color and threshold — are all customizable per muscle in "Muscle management."
 
-| 参数 | 说明 | 默认 |
+| Param | Description | Default |
 |------|------|------|
-| `metric` | 引用一条数据统计配置（如「次数」） | 全局默认（次数） |
-| `range` | `7d` / `30d` / `90d` / `all` / 日期区间 | 全局默认（7d） |
+| `metric` | Reference a stats config (e.g. "reps") | global default (reps) |
+| `range` | `7d` / `30d` / `90d` / `all` / date range | global default (7d) |
 
 ````markdown
 ```workout-heatmap
-metric: 次数
+metric: reps
 range: 7d
 ```
 ````
-<img width="1061" height="1193" alt="image" src="https://github.com/user-attachments/assets/7467dd79-38b1-4f4f-8efd-af337e858f4a" />
 
-### `workout-plan` —— 训练计划完成面板
+### `workout-plan` — Training Plan Completion Panel
 
-跟踪某个训练方案的完成进度，逐组标记完成。
+Tracks completion progress of a training scheme, ticking off sets one by one.
 
-| 参数 | 说明 |
+| Param | Description |
 |------|------|
-| `plan: 计划名` | 指定要展示的训练方案；不写则显示「选择计划」下拉，选中后自动把计划名写回代码块 |
+| `plan: Plan Name` | Specify which scheme to show; if omitted, shows a "select plan" dropdown that writes the name back to the code block on selection |
 
 ````markdown
 ```workout-plan
-plan: 推日 A
+plan: Push Day A
 ```
 ````
-<img width="1060" height="674" alt="image" src="https://github.com/user-attachments/assets/56d35395-d952-4f11-bf62-dfb4def6fe3f" />
 
 ---
 
-## ⚙️ 设置与数据管理
+## ⚙️ Settings & Data Management
 
-在设置页（`Ctrl/Cmd + ,` → 训练块）可配置：
+In Settings (`Ctrl/Cmd + ,` → Workout Block) you can configure:
 
-- **训练类型 / 训练项 / 肌肉 / 统计值 / 训练计划**：均在对应的「管理」弹窗中增删改——这是插件「自由度」的总开关。
-- **语言**：中文 / English。
-- **重量单位**：kg / lb（影响重量类字段的展示与换算）。
-- **上次值记忆**：开关。
-- **数据目录**：训练记录 CSV 的存放位置（默认 vault 根目录）。
-- **压缩清理 CSV**：删除训练记录采用「软删除」（界面即时移除，磁盘空间延迟回收）；点此按钮真正压缩文件、回收空间。
+- **Workout types / exercises / muscles / stats / training plans**: all added/edited/removed in their corresponding "Manage" popups — this is the master switch for the plugin's "freedom."
+- **Language**: 中文 / English.
+- **Weight unit**: kg / lb (affects display and conversion of weight-type fields).
+- **Last-value memory**: toggle.
+- **Data directory**: where the training-log CSV is stored (vault root by default).
+- **Compact & clean CSV**: deleting logs uses "soft delete" (immediately removed from UI, disk space reclaimed lazily); click this to truly compact the file and reclaim space.
 
-### 数据存储位置
+### Data Storage Locations
 
-| 文件 | 内容 |
+| File | Content |
 |------|------|
-| `workout_logs.csv` | 所有训练记录（纯 CSV，便于 Dataview 查询） |
-| `workout-config.json` | 配置：训练类型、训练项、肌肉及其 SVG 映射、统计值、训练计划 |
+| `workout_logs.csv` | All training logs (plain CSV, easy Dataview querying) |
+| `workout-config.json` | Config: workout types, exercises, muscles and their SVG mappings, stats, training plans |
 
-两套数据都位于 vault 内（数据目录可在设置中更改），均为纯文本，可放进 Git 或随手备份。
+Both datasets live inside the vault (data directory changeable in settings), both plain text, ready for Git or a quick backup.
 
 ---
 
-## 🔧 开发
+## 🔧 Development
 
 ```bash
-# 安装依赖
+# Install dependencies
 npm install
 
-# 开发模式（监听改动，不压缩）
+# Dev mode (watch changes, unminified)
 npm run dev
 
-# 生产构建（输出根目录 main.js）
+# Production build (outputs root main.js)
 npm run build
 
-# 运行测试
+# Run tests
 npm test
 
-# 测试覆盖率
+# Test coverage
 npm run test:coverage
 ```
 
-构建产物为根目录的 `main.js`，配合 `manifest.json` 即可作为插件运行。
+The build artifact is the root `main.js`, which together with `manifest.json` makes the plugin runnable.
 
-### 技术栈
+### Tech Stack
 
-- TypeScript + [esbuild](https://esbuild.github.io/)（打包）
-- [Vitest](https://vitest.dev/) + jsdom（单元测试）
-- [papaparse](https://www.papaparse.com/)（CSV 读写）
+- TypeScript + [esbuild](https://esbuild.github.io/) (bundling)
+- [Vitest](https://vitest.dev/) + jsdom (unit testing)
+- [papaparse](https://www.papaparse.com/) (CSV read/write)
 - Obsidian API
 
 ---
 
-## 📄 许可证
+## 📄 License
 
-MIT —— 可自由使用、修改与分发。仓库根目录已附带 `LICENSE` 文件（MIT 全文），以便 GitHub 自动识别许可证。
+MIT — free to use, modify, and distribute. The repo root includes a `LICENSE` file (full MIT text) so GitHub auto-detects the license.
 
-插件打包的肌肉 SVG 插图来自第三方，遵循 **CC BY 4.0**（作者 Ryan Graves）与 **BSD-3-Clause**（flutter-body-atlas, Kit G.）。署名与许可详情见 [THIRD-PARTY-NOTICES](./THIRD-PARTY-NOTICES)。
-
+The bundled muscle SVG illustrations come from third parties, under **CC BY 4.0** (author Ryan Graves) and **BSD-3-Clause** (flutter-body-atlas, Kit G). Attribution and license details are in [THIRD-PARTY-NOTICES](./THIRD-PARTY-NOTICES).

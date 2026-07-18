@@ -168,7 +168,7 @@ export default class WorkoutPlugin extends Plugin {
           config,
           (exercise, plan) => this.openRecordModal(exercise, plan), // 点击"记录"按钮
           (log) => this.openEditRecordModal(log),                   // 点击"编辑"
-          (log) => this.deleteRecord(log)                          // 点击"删除"
+          (log) => void this.deleteRecord(log)                     // 点击"删除"
         ).catch(() => {});
       }).catch(() => {});
     };
