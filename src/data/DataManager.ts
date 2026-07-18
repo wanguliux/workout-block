@@ -3,6 +3,7 @@ import { LogRow, WorkoutConfig, TrainingType, Exercise, Muscle, PluginSettings, 
 import { generateId } from '../util/id';
 import { CSVStore } from './CSVStore';
 import { ConfigStore } from './ConfigStore';
+import { getDefaultConfig } from './seed';
 
 /*
  * DataManager.ts —— 插件的「数据中枢」。
@@ -110,18 +111,18 @@ export class DataManager {
   private applySettingsMigration(): void {
     const s = this.settings as unknown as Record<string, unknown>;
     if (typeof s['dataDirectory'] === 'string' && s['dataDirectory']) {
-      const oldDir = s['dataDirectory'] as string;
+      const oldDir = s['dataDirectory'];
       if (!this.settings.csvDirectory) this.settings.csvDirectory = oldDir;
       if (!this.settings.configDirectory) this.settings.configDirectory = oldDir;
     }
     if (typeof s['csvPath'] === 'string' && s['csvPath']) {
-      const parts = (s['csvPath'] as string).split('/');
+      const parts = s['csvPath'].split('/');
       parts.pop();
       const dir = parts.join('/');
       if (!this.settings.csvDirectory) this.settings.csvDirectory = dir;
     }
     if (typeof s['configPath'] === 'string' && s['configPath']) {
-      const parts = (s['configPath'] as string).split('/');
+      const parts = s['configPath'].split('/');
       parts.pop();
       const dir = parts.join('/');
       if (!this.settings.configDirectory) this.settings.configDirectory = dir;
@@ -131,6 +132,12 @@ export class DataManager {
   // 获取设置（仅内存）。
   getSettings(): PluginSettings {
     return this.settings;
+  }
+
+  // 同步获取配置（声明式设置 API 用）。init() 之后缓存已就绪，
+  // 故通常直接返回 ConfigStore 缓存；极端兜底回退到默认配置，避免空引用。
+  getConfigSync(): WorkoutConfig {
+    return this.configStore.getCache() ?? getDefaultConfig();
   }
 
   // 保存设置到私有 data，并广播 settings-changed。
@@ -684,8 +691,16 @@ export class DataManager {
   on(event: 'data-changed', callback: (data: { type: string; row?: LogRow; rows?: LogRow[]; id?: string }) => void): void;
   on(event: 'config-changed', callback: (config: WorkoutConfig) => void): void;
   on(event: 'settings-changed', callback: (settings: PluginSettings) => void): void;
-  on(event: string, callback: (...args: any[]) => void): void {
-    this.events.on(event, callback);
+  // 实现签名不引入 any：用「三个公共重载回调类型的并集」表达"接受任意已类型化的事件回调"，
+  // 再向 Obsidian Events.on（其回调本就是 unknown[]）做一次经 unknown 的安全转型。
+  on(
+    event: string,
+    callback:
+      | ((data: { type: string; row?: LogRow; rows?: LogRow[]; id?: string }) => void)
+      | ((config: WorkoutConfig) => void)
+      | ((settings: PluginSettings) => void)
+  ): void {
+    this.events.on(event, callback as unknown as (...args: unknown[]) => unknown);
   }
 
   // 取消订阅事件

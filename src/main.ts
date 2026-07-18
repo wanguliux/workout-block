@@ -1,4 +1,4 @@
-import { Plugin, Notice } from 'obsidian';
+import { Plugin, Notice, MarkdownPostProcessorContext } from 'obsidian';
 import { DataManager } from './data/DataManager';
 import { getExerciseNameById } from './data/display';
 import { setLocale, t } from './i18n';
@@ -147,7 +147,7 @@ export default class WorkoutPlugin extends Plugin {
     //   source: 代码块的原始文本（用户写在 ``` 之间的内容）
     //   el:     插件用来往页面里插入渲染结果的 DOM 容器
     //   ctx:    Obsidian 的渲染上下文（一般无需关心）
-    const codeBlockHandler = (source: string, el: HTMLElement, ctx: any) => {
+    const codeBlockHandler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
       const logs = this.dataManager.getLogs();
       const unit = this.dataManager.getSettings().unit;
       this.dataManager.getConfig().then((config) => {
@@ -182,7 +182,7 @@ export default class WorkoutPlugin extends Plugin {
     });
 
     // 同样的模式注册 workout-day 代码块（当日训练总览表）。
-    const dayHandler = (source: string, el: HTMLElement, ctx: any) => {
+    const dayHandler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
       const logs = this.dataManager.getLogs();
       this.dataManager.getConfig().then((config) => {
         void renderWorkoutDay(source, el, ctx, this.app, logs, config).catch(() => {});
@@ -194,7 +194,7 @@ export default class WorkoutPlugin extends Plugin {
     });
 
     // 注册 workout-heatmap 代码块（全身肌肉热力图）
-    const heatmapHandler = (source: string, el: HTMLElement, ctx: any) => {
+    const heatmapHandler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
       const logs = this.dataManager.getLogs();
       this.dataManager.getConfig().then((config) => {
         void renderWorkoutHeatmap(source, el, ctx, logs, config).catch(() => {});
@@ -207,7 +207,7 @@ export default class WorkoutPlugin extends Plugin {
 
     // 注册 workout-plan 代码块（训练计划完成面板）。无 plan 参数时渲染「选择计划」下拉，
     // 选中后写回代码块；有 plan 时渲染完成面板（每组 [编辑][完成] + 进度）。
-    const planHandler = (source: string, el: HTMLElement, ctx: any) => {
+    const planHandler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
       void renderWorkoutPlan(source, el, ctx, this.dataManager).catch(() => {});
     };
     registerCodeBlock('workout-plan', planHandler);

@@ -75,7 +75,7 @@ export class CSVStore {
           }
           // 逐行兜底：某行 fields 解析失败只影响该行，绝不让整文件解析失败导致全部记录丢失。
           try {
-            fields = JSON.parse(raw);
+            fields = JSON.parse(raw) as Record<string, unknown>;
           } catch {
             fields = {};
           }
@@ -295,7 +295,7 @@ function normalizeFields(f: unknown): Record<string, unknown> {
   if (f && typeof f === 'object') return f as Record<string, unknown>;
   if (typeof f === 'string') {
     try {
-      const parsed = JSON.parse(f);
+      const parsed: unknown = JSON.parse(f);
       return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
     } catch {
       return {};

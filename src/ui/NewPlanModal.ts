@@ -71,7 +71,7 @@ export class NewPlanModal extends Modal {
     if (this.editPlan) {
       this.name = this.editPlan.name;
       this.nameManuallyEdited = true;
-      this.timeRule = JSON.parse(JSON.stringify(this.editPlan.timeRule));
+      this.timeRule = JSON.parse(JSON.stringify(this.editPlan.timeRule)) as TimeRule;
       this.sourceNote = this.editPlan.sourceNote;
       this.items = this.editPlan.items.map((it) => ({
         exerciseId: it.exerciseId,

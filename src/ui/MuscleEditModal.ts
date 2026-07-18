@@ -502,7 +502,7 @@ export class MuscleEditModal extends Modal {
       svgRegionIds: Array.from(this.selectedIds),
       heatmapMetric: this.metricId || undefined,
       heatmapRange: range || undefined,
-      heatmapLevels: this.muscleLevels ? JSON.parse(JSON.stringify(this.muscleLevels)) : undefined,
+      heatmapLevels: this.muscleLevels ? (JSON.parse(JSON.stringify(this.muscleLevels)) as HeatmapLevel[]) : undefined,
     };
 
     try {

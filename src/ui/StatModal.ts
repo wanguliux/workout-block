@@ -13,6 +13,19 @@ interface StatModalOptions {
   editStat?: StatDef;
 }
 
+// 引导式公式构造器的「全字段」视图：StatAggregation 是判别联合（sum 只有 field、
+// productSum 才有 fieldA/fieldB、oneRepMax 才有 weightField/repsField …），直接按联合类型
+// 读写跨成员字段须经窄化。为让弹窗内对 builder 的读写既类型安全又不至于到处窄化，
+// 这里用一份「所有字段均可选」的扁平视图；在写回 StatDef 时再一次性转成严格的 StatAggregation。
+interface StatBuilder {
+  kind: StatAggregation['kind'];
+  field?: string;
+  fieldA?: string;
+  fieldB?: string;
+  weightField?: string;
+  repsField?: string;
+}
+
 // 引导式运算下拉的展示标签（内部 kind 不友好，需映射成用户看得懂的文字）。
 // 用函数（而非模块常量）是为了在「每次渲染」时取当前语言，语言切换后能即时更新。
 function opLabel(kind: StatAggregation['kind']): string {
@@ -35,10 +48,12 @@ export class StatModal extends Modal {
   private name = '';
   private associatedTypes: string[] = [];
   private mode: 'builder' | 'expression' = 'builder';
-  private builder: StatAggregation = { kind: 'sum', field: '' };
+  private builder: StatBuilder = { kind: 'sum', field: '' };
   private expression = '';
   private granularity: StatGranularity = 'daily';
   private enabled = true;
+  // 表达式模式的错误信息挂载点（替代往 DOM 元素上挂自定义属性）。
+  private errEl?: HTMLElement;
 
   private typesContainer!: HTMLDivElement;
   private formulaContainer!: HTMLDivElement;
@@ -104,7 +119,7 @@ export class StatModal extends Modal {
       // 引导式 → 表达式：用 builderToExpr 生成表达式字符串。
       // 表达式 → 引导式：用 exprToBuilder 尽力回填；复杂表达式降级为默认 sum。
       if (this.mode === 'expression') {
-        this.expression = builderToExpr(this.builder) || this.expression;
+        this.expression = builderToExpr(this.builder as unknown as StatAggregation) || this.expression;
       } else {
         const b = exprToBuilder(this.expression);
         if (b) this.builder = b;
@@ -159,7 +174,7 @@ export class StatModal extends Modal {
   private allowed(): string[] {
     const tmp: StatDef = {
       id: 'tmp', name: this.name, associatedTypes: this.associatedTypes,
-      formula: { mode: 'builder', builder: this.builder },
+      formula: { mode: 'builder', builder: this.builder as unknown as StatAggregation },
       granularity: this.granularity, enabled: this.enabled,
     };
     return allowedStatFields(tmp, this.config);
@@ -191,7 +206,7 @@ export class StatModal extends Modal {
   // 关联类型变化：重算字段交集，重置越界字段，重渲染公式区
   private onTypesChanged(): void {
     const allowed = this.allowed();
-    const b = this.builder as any;
+    const b = this.builder;
     if (!b.field || !allowed.includes(b.field)) b.field = allowed[0] ?? '';
     if (!b.fieldA || !allowed.includes(b.fieldA)) b.fieldA = allowed[0] ?? '';
     if (!b.fieldB || !allowed.includes(b.fieldB)) b.fieldB = allowed[0] ?? '';
@@ -219,7 +234,7 @@ export class StatModal extends Modal {
       opSelect.addEventListener('change', () => {
         const kind = opSelect.value as StatAggregation['kind'];
         // 切换运算时尽量保留用户已选的「主字段」，避免来回切运算把选择清空。
-        const prevField = (this.builder as any).field ?? (this.builder as any).fieldA ?? (this.builder as any).weightField ?? '';
+        const prevField = this.builder.field ?? this.builder.fieldA ?? this.builder.weightField ?? '';
         const fieldOk = allowed.includes(prevField);
         const field = fieldOk ? prevField : (allowed[0] ?? '');
         // oneRepMax 需要 weightField + repsField；productSum 需要 fieldA + fieldB；其余只需 field。
@@ -250,10 +265,10 @@ export class StatModal extends Modal {
         } else {
           for (const f of allowed) {
             const opt = wfSelect.createEl('option', { value: f, text: f });
-            if (f === (this.builder as any).weightField) opt.selected = true;
+            if (f === this.builder.weightField) opt.selected = true;
           }
         }
-        wfSelect.addEventListener('change', () => { (this.builder as any).weightField = wfSelect.value; });
+        wfSelect.addEventListener('change', () => { this.builder.weightField = wfSelect.value; });
 
         // 次数字段
         const rfRow = this.formulaContainer.createDiv();
@@ -266,10 +281,10 @@ export class StatModal extends Modal {
         } else {
           for (const f of allowed) {
             const opt = rfSelect.createEl('option', { value: f, text: f });
-            if (f === (this.builder as any).repsField) opt.selected = true;
+            if (f === this.builder.repsField) opt.selected = true;
           }
         }
-        rfSelect.addEventListener('change', () => { (this.builder as any).repsField = rfSelect.value; });
+        rfSelect.addEventListener('change', () => { this.builder.repsField = rfSelect.value; });
       } else {
         // 通用字段下拉（sum / avg / max / min 的字段；productSum 的字段 A）
         const fieldRow = this.formulaContainer.createDiv();
@@ -282,16 +297,16 @@ export class StatModal extends Modal {
         } else {
           // 选中值：productSum 取 fieldA，其余取 field
           const selectedValue = this.builder.kind === 'productSum'
-            ? (this.builder as any).fieldA
-            : (this.builder as any).field;
+            ? this.builder.fieldA
+            : this.builder.field;
           for (const f of allowed) {
             const opt = fieldSelect.createEl('option', { value: f, text: f });
             if (f === selectedValue) opt.selected = true;
           }
         }
         fieldSelect.addEventListener('change', () => {
-          if (this.builder.kind === 'productSum') (this.builder as any).fieldA = fieldSelect.value;
-          else (this.builder as any).field = fieldSelect.value;
+          if (this.builder.kind === 'productSum') this.builder.fieldA = fieldSelect.value;
+          else this.builder.field = fieldSelect.value;
         });
 
         // 乘积求和需要第二个字段 B
@@ -306,10 +321,10 @@ export class StatModal extends Modal {
           } else {
             for (const f of allowed) {
               const opt = fieldBSelect.createEl('option', { value: f, text: f });
-              if (f === (this.builder as any).fieldB) opt.selected = true;
+              if (f === this.builder.fieldB) opt.selected = true;
             }
           }
-          fieldBSelect.addEventListener('change', () => { (this.builder as any).fieldB = fieldBSelect.value; });
+          fieldBSelect.addEventListener('change', () => { this.builder.fieldB = fieldBSelect.value; });
         }
       }
     } else {
@@ -327,18 +342,18 @@ export class StatModal extends Modal {
       const errEl = this.formulaContainer.createEl('p', { cls: 'workout-manager-detail' });
       errEl.addClass('workout-stat-error');
       errEl.setCssStyles({ color: 'var(--text-error)' });
-      (this.formulaContainer as any)._errEl = errEl;
+      this.errEl = errEl;
       this.updateExprError(allowed);
     }
 
     // 预览
     const preview = this.formulaContainer.createEl('p', { cls: 'workout-manager-detail' });
-    const exprStr = this.mode === 'builder' ? builderToExpr(this.builder) : this.expression;
+    const exprStr = this.mode === 'builder' ? builderToExpr(this.builder as unknown as StatAggregation) : this.expression;
     preview.textContent = `${t('modal.statManager.preview')}: ${exprStr || '-'}`;
   }
 
   private updateExprError(allowed: string[]): void {
-    const errEl = (this.formulaContainer as any)?._errEl as HTMLElement | undefined;
+    const errEl = this.errEl;
     if (!errEl) return;
     if (this.mode !== 'expression' || !this.expression.trim()) {
       errEl.textContent = '';
@@ -362,7 +377,7 @@ export class StatModal extends Modal {
     if (this.mode === 'builder') {
       if (this.builder.kind !== 'count') {
         // productSum 需要 fieldA + fieldB；oneRepMax 需要 weightField + repsField；其余（sum/avg/max/min）需要 field。
-        const b = this.builder as any;
+        const b = this.builder;
         const missing = this.builder.kind === 'productSum'
           ? !(b.fieldA && b.fieldB)
           : this.builder.kind === 'oneRepMax'
@@ -373,7 +388,7 @@ export class StatModal extends Modal {
           return;
         }
       }
-      formula = { mode: 'builder', builder: this.builder };
+      formula = { mode: 'builder', builder: this.builder as unknown as StatAggregation };
     } else {
       try {
         validateExpression(this.expression, allowed);

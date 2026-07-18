@@ -1,5 +1,9 @@
 import { App, TFile } from 'obsidian';
-import { WorkoutConfig, CONFIG_FILENAME } from './types';
+import { WorkoutConfig, CONFIG_FILENAME, FieldDef } from './types';
+
+// 旧版字段单位模型遗留字段（unit 枚举 + customUnit）。仅迁移函数内部使用，
+// 不污染权威的 FieldDef 类型。
+type LegacyFieldDef = FieldDef & { unit?: string; customUnit?: string };
 import { DataManager } from './DataManager';
 import { applyDefaultNameKeys } from './display';
 import { getDefaultConfig } from './seed';
@@ -49,7 +53,7 @@ export class ConfigStore {
     const content = await this.readFileContent();
     if (content !== null) {
       try {
-        this.cache = this.migrate(JSON.parse(content));
+        this.cache = this.migrate(JSON.parse(content) as WorkoutConfig);
       } catch {
         // 配置文件损坏：回退到默认（或 legacy）并覆盖写入，避免一直报错
         const fallback = legacyConfig ? this.migrate(legacyConfig) : this.migrate(getDefaultConfig());
@@ -141,7 +145,7 @@ export class ConfigStore {
     }
     // 字段单位模型迁移：旧 unit 枚举(none/mass/length/count/time/custom) -> mass + unitLabel。
     // 幂等：已迁移的数据没有 unit/customUnit 字段，重复执行无副作用。
-    const migrateUnit = (fields: any[] | undefined): void => {
+    const migrateUnit = (fields: LegacyFieldDef[] | undefined): void => {
       if (!fields) return;
       for (const f of fields) {
         if (!f) continue;
