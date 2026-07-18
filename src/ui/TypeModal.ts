@@ -71,7 +71,7 @@ export class TypeModal extends Modal {
 
     // 轻量实时校验：ID 不能含逗号/引号/换行（会破坏 CSV 单元格与键引用）。
     // beforeinput 阶段直接拦截非法字符（光标不跳），input 阶段再兜底 strip（覆盖粘贴）。
-    this.idHint = contentEl.createEl('div', { cls: 'workout-id-hint' });
+    this.idHint = contentEl.createDiv({ cls: 'workout-id-hint' });
     this.idInput.addEventListener('beforeinput', (e: Event) => {
       const data = (e as InputEvent).data ?? '';
       if (data && INVALID_ID_RE.test(data)) {
@@ -119,7 +119,7 @@ export class TypeModal extends Modal {
 
     const saveBtn = btnRow.createEl('button', { text: t('common.save') });
     saveBtn.addClass('mod-cta');
-    saveBtn.addEventListener('click', () => this.save());
+    saveBtn.addEventListener('click', () => { void this.save(); });
   }
 
   // 渲染所有字段行：没有字段时显示提示文案；否则逐个用 buildFieldRow 生成并挂载。
@@ -140,7 +140,7 @@ export class TypeModal extends Modal {
   // 切换输入类型时也能用新元素 replaceWith 整行重渲染，保证单位/选项列随类型正确显隐。
   private buildFieldRow(index: number): HTMLDivElement {
     const field = this.fields[index];
-    const card = document.createElement('div') as HTMLDivElement;
+    const card = createDiv();
     card.addClass('workout-field-card');
 
     // 头部：序号徽标 + 删除按钮（上方保持简洁，字段详情在下方输入框中）
@@ -148,7 +148,7 @@ export class TypeModal extends Modal {
     header.addClass('workout-field-card-header');
     const titleWrap = header.createDiv();
     titleWrap.addClass('workout-field-card-title');
-    const badge = titleWrap.createEl('span');
+    const badge = titleWrap.createSpan();
     badge.addClass('workout-field-card-badge');
     badge.setText(String(index + 1));
     const removeBtn = header.createEl('button', { text: t('modal.newType.removeField') });
@@ -364,7 +364,7 @@ export class TypeModal extends Modal {
         new Notice(t('modal.newType.saved'));
       }
       this.close();
-    } catch (error) {
+    } catch {
       new Notice(t('modal.newType.saveFailed'));
     }
   }

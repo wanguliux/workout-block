@@ -154,7 +154,7 @@ function validateStructure(ast: Node): void {
   if (ast.type !== 'func') {
     throw new Error('表达式必须是一个聚合函数调用（如 sum(...)）');
   }
-  const f = ast as Extract<Node, { type: 'func' }>;
+  const f = ast;
   if (f.name === 'count') {
     if (f.args.length !== 0) throw new Error('count() 不接受参数');
   } else {
@@ -218,6 +218,7 @@ function evalNode(node: Node, record: LogRow): number {
         case '*': return l * r;
         case '/': return r === 0 ? 0 : l / r; // 除零保护
       }
+      break;
     }
     case 'func':
       throw new Error('聚合函数不能嵌套'); // 理论上不会到达
@@ -238,7 +239,7 @@ export function computeStat(stat: StatDef, records: LogRow[]): number {
     return NaN; // 表达式非法：渲染时兜底，不崩
   }
   if (ast.type !== 'func') return NaN;
-  const f = ast as Extract<Node, { type: 'func' }>;
+  const f = ast;
 
   // count：记录条数
   if (f.name === 'count') {
@@ -306,7 +307,7 @@ export function exprToBuilder(expr: string): StatAggregation | null {
     return null;
   }
   if (ast.type !== 'func') return null;
-  const f = ast as Extract<Node, { type: 'func' }>;
+  const f = ast;
 
   if (f.name === 'count' && f.args.length === 0) return { kind: 'count' };
   if (f.args.length !== 1) return null;

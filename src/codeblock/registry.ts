@@ -142,7 +142,7 @@ function scheduleRerender(shouldRender: (source: string, type: string) => boolea
           if (e2) e2.focus();
         }
       };
-      requestAnimationFrame(restore);
+      window.requestAnimationFrame(restore);
       window.setTimeout(restore, 80);
     }
   }, RERENDER_DEBOUNCE_MS);

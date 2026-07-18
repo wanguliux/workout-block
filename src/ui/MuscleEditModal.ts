@@ -119,7 +119,7 @@ export class MuscleEditModal extends Modal {
     const coverageToggleWrap = coverRestCol.createDiv();
     coverageToggleWrap.addClass('workout-toggle');
     this.coverageToggle = coverageToggleWrap.createEl('input', { type: 'checkbox', cls: 'workout-switch' });
-    coverageToggleWrap.createEl('span', { text: t('modal.muscleManager.coverage') });
+    coverageToggleWrap.createSpan({ text: t('modal.muscleManager.coverage') });
     if (muscle?.contributesToCoverage) {
       this.coverageToggle.checked = true;
     }
@@ -140,8 +140,7 @@ export class MuscleEditModal extends Modal {
     this.renderMappingHeader(contentEl);
     this.mappingContainer = contentEl.createDiv();
     this.mappingContainer.addClass('workout-fields-list');
-    this.mappingContainer.style.maxHeight = '320px';
-    this.mappingContainer.style.overflow = 'auto';
+    this.mappingContainer.setCssStyles({ maxHeight: '320px', overflow: 'auto' });
     this.renderMappingList();
 
     // 热力图设置
@@ -159,7 +158,7 @@ export class MuscleEditModal extends Modal {
 
     const saveBtn = btnRow.createEl('button', { text: t('common.save') });
     saveBtn.addClass('mod-cta');
-    saveBtn.addEventListener('click', () => this.save());
+    saveBtn.addEventListener('click', () => { void this.save(); });
   }
 
   private renderMappingHeader(parent: HTMLElement): void {
@@ -174,7 +173,7 @@ export class MuscleEditModal extends Modal {
       this.renderMappingList();
     });
 
-    this.countEl = header.createEl('span', { text: this.countText() });
+    this.countEl = header.createSpan({ text: this.countText() });
     this.countEl.addClass('workout-mapping-count');
 
     const clearBtn = header.createEl('button', { text: t('modal.muscleManager.clearMapping') });
@@ -244,7 +243,7 @@ export class MuscleEditModal extends Modal {
       if (!sideMap) continue;
 
       const sideHeader = this.mappingContainer.createEl('h4', { text: t(side === 'front' ? 'modal.muscleManager.front' : 'modal.muscleManager.back') });
-      sideHeader.style.margin = '8px 0 4px';
+      sideHeader.setCssStyles({ margin: '8px 0 4px' });
 
       for (const group of FITNESS_GROUPS) {
         const entries = sideMap.get(group.key);
@@ -263,7 +262,7 @@ export class MuscleEditModal extends Modal {
         for (const entry of entries) {
           const item = grid.createEl('label');
           item.addClass('workout-check-item');
-          const checkbox = item.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+          const checkbox = item.createEl('input', { type: 'checkbox' });
           checkbox.checked = this.selectedIds.has(entry.id);
           checkbox.addEventListener('change', () => {
             if (checkbox.checked) this.selectedIds.add(entry.id);
@@ -287,7 +286,7 @@ export class MuscleEditModal extends Modal {
     const rangeRow = rangeMetricCol.createDiv();
     rangeRow.addClass('workout-field');
     rangeRow.createEl('label', { text: t('modal.muscleManager.heatmapRange') });
-    const rangeSelect = rangeRow.createEl('select') as HTMLSelectElement;
+    const rangeSelect = rangeRow.createEl('select');
     rangeSelect.addClass('workout-select');
     rangeSelect.createEl('option', { value: '', text: t('modal.muscleManager.followDefaultRange') });
     for (const r of RANGE_OPTIONS) {
@@ -297,15 +296,15 @@ export class MuscleEditModal extends Modal {
     const customOpt = rangeSelect.createEl('option', { value: 'custom', text: t('modal.muscleManager.customRange') });
     if (this.rangeValue === 'custom') customOpt.selected = true;
 
-    const customInput = rangeRow.createEl('input', { type: 'text' }) as HTMLInputElement;
+    const customInput = rangeRow.createEl('input', { type: 'text' });
     customInput.addClass('workout-input');
     customInput.placeholder = 'YYYY-MM-DD..YYYY-MM-DD';
-    customInput.style.display = this.rangeValue === 'custom' ? 'block' : 'none';
+    customInput.setCssStyles({ display: this.rangeValue === 'custom' ? 'block' : 'none' });
     customInput.value = this.customRange;
 
     rangeSelect.addEventListener('change', () => {
       this.rangeValue = rangeSelect.value;
-      customInput.style.display = this.rangeValue === 'custom' ? 'block' : 'none';
+      customInput.setCssStyles({ display: this.rangeValue === 'custom' ? 'block' : 'none' });
     });
     customInput.addEventListener('input', () => {
       this.customRange = customInput.value.trim();
@@ -315,7 +314,7 @@ export class MuscleEditModal extends Modal {
     const metricRow = rangeMetricCol.createDiv();
     metricRow.addClass('workout-field');
     metricRow.createEl('label', { text: t('modal.muscleManager.heatmapMetric') });
-    const metricSelect = metricRow.createEl('select') as HTMLSelectElement;
+    const metricSelect = metricRow.createEl('select');
     metricSelect.addClass('workout-select');
     metricSelect.createEl('option', { value: '', text: t('modal.muscleManager.followDefaultMetric') });
     for (const stat of this.config.statistics) {
@@ -339,20 +338,20 @@ export class MuscleEditModal extends Modal {
       text: t('modal.muscleManager.scaleHint'),
       cls: 'workout-manager-detail',
     });
-    hint.style.marginTop = '4px';
+    hint.setCssStyles({ marginTop: '4px' });
 
     // —— 颜色分级数（控制在指标下方）：决定下方颜色设置栏的数量 ——
     const countRow = this.heatmapSection.createDiv();
     countRow.addClass('workout-field');
     countRow.createEl('label', { text: t('modal.muscleManager.colorLevels') });
-    const countInput = countRow.createEl('input', { type: 'number' }) as HTMLInputElement;
+    const countInput = countRow.createEl('input', { type: 'number' });
     countInput.addClass('workout-input');
     countInput.setAttribute('step', 'any');
     countInput.setAttribute('inputmode', 'numeric');
     countInput.min = '1';
     countInput.max = '99';
     countInput.value = String(this.muscleLevels.length);
-    countInput.style.width = '70px';
+    countInput.setCssStyles({ width: '70px' });
     countInput.addEventListener('input', () => {
       let n = parseInt(countInput.value, 10);
       if (isNaN(n)) n = 1;
@@ -370,12 +369,12 @@ export class MuscleEditModal extends Modal {
       row.addClass('workout-scale-row');
 
       // 色块：原生拾色器兼作预览小圆点
-      const swatch = row.createEl('input', { type: 'color' }) as HTMLInputElement;
+      const swatch = row.createEl('input', { type: 'color' });
       swatch.value = this.normalizeHex(level.color);
       swatch.addClass('workout-scale-swatch');
 
       // 十六进制颜色代码输入框
-      const hexInput = row.createEl('input', { type: 'text' }) as HTMLInputElement;
+      const hexInput = row.createEl('input', { type: 'text' });
       hexInput.addClass('workout-input', 'workout-scale-hex');
       hexInput.value = level.color;
       hexInput.placeholder = '#3b82f6';
@@ -395,14 +394,14 @@ export class MuscleEditModal extends Modal {
       });
 
       // ≤ 分隔符（末档为无穷大，不显示阈值输入框）
-      const le = row.createEl('span', { text: '≤' });
+      const le = row.createSpan({ text: '≤' });
       le.addClass('workout-scale-sep');
 
       if (isLast) {
-        const unbounded = row.createEl('span', { text: t('modal.muscleManager.scaleUnbounded') });
+        const unbounded = row.createSpan({ text: t('modal.muscleManager.scaleUnbounded') });
         unbounded.addClass('workout-scale-unbounded');
       } else {
-        const maxInput = row.createEl('input', { type: 'number' }) as HTMLInputElement;
+        const maxInput = row.createEl('input', { type: 'number' });
         maxInput.addClass('workout-input', 'workout-scale-max');
         maxInput.setAttribute('step', 'any');
         maxInput.setAttribute('inputmode', 'decimal');
@@ -514,7 +513,7 @@ export class MuscleEditModal extends Modal {
       }
       new Notice(t('modal.muscleManager.saved'));
       this.close();
-    } catch (error) {
+    } catch {
       new Notice(t('modal.muscleManager.saveFailed'));
     }
   }

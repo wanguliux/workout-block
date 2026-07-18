@@ -1,6 +1,6 @@
 import { Modal, Notice } from 'obsidian';
 import { DataManager } from '../data/DataManager';
-import { Exercise, FieldDef, TrainingPlanInstance, PlanItem, PlanSet, TimeRule, TrainingType } from '../data/types';
+import { Exercise, TrainingPlanInstance, TimeRule, TrainingType } from '../data/types';
 import { getExerciseName, getFieldLabel, getFieldUnit, formatTimeRule, getTrainingTypeName } from '../data/display';
 import { t } from '../i18n';
 import { parseDuration, secondsToParts } from '../util/duration';
@@ -154,7 +154,7 @@ export class NewPlanModal extends Modal {
     cancelBtn.addEventListener('click', () => this.close());
     const saveBtn = btnRow.createEl('button', { text: t('common.save') });
     saveBtn.addClass('mod-cta');
-    saveBtn.addEventListener('click', () => this.save());
+    saveBtn.addEventListener('click', () => { void this.save(); });
 
     this.renderItems();
   }
@@ -180,7 +180,7 @@ export class NewPlanModal extends Modal {
       const match = notes.find((n) => n.name === this.sourceNote);
       if (match) this.schemeSelect.value = match.path;
     }
-    this.schemeSelect.addEventListener('change', () => this.onSchemeChange());
+    this.schemeSelect.addEventListener('change', () => { void this.onSchemeChange(); });
   }
 
   private async onSchemeChange(): Promise<void> {
@@ -241,7 +241,7 @@ export class NewPlanModal extends Modal {
           this.renderTimeControls();
         });
       });
-      const hint = this.timeControlsEl.createEl('div', { text: formatTimeRule(this.timeRule) });
+      const hint = this.timeControlsEl.createDiv({ text: formatTimeRule(this.timeRule) });
       hint.addClass('workout-hint');
     }
   }

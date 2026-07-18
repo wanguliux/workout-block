@@ -1,6 +1,6 @@
 import { Modal, Notice } from 'obsidian';
 import { DataManager } from '../data/DataManager';
-import { FieldDef, TrainingType } from '../data/types';
+import { TrainingType } from '../data/types';
 import { getFieldLabel, getFieldUnit } from '../data/display';
 import { t } from '../i18n';
 import { secondsToParts, parseDuration } from '../util/duration';
@@ -54,7 +54,7 @@ export class PlanSetEditModal extends Modal {
     cancelBtn.addEventListener('click', () => this.close());
     const saveBtn = btnRow.createEl('button', { text: t('common.save') });
     saveBtn.addClass('mod-cta');
-    saveBtn.addEventListener('click', () => this.save());
+    saveBtn.addEventListener('click', () => { void this.save(); });
   }
 
   // 与 RecordModal.renderFields 一致的字段渲染（不渲染时间/计划字段）

@@ -51,14 +51,14 @@ export function confirmWithModal(
     const confirmBtn = new ButtonComponent(btnRow)
       .setButtonText(opts.confirmText ?? t('common.ok'))
       .setCta();
-    if (opts.warning !== false) confirmBtn.setWarning();
+    if (opts.warning !== false) confirmBtn.setDestructive();
     confirmBtn.onClick(() => finish(true));
 
     // 打开后把焦点放到「取消」按钮（应用内 DOM，不会触发原生焦点 bug）。
     // 默认聚焦取消可避免误删；且确认弹窗本身不会把焦点拽出 webview。
     modal.onOpen = () => {
       const first = btnRow.querySelector('button');
-      if (first) (first as HTMLElement).focus();
+      if (first) first.focus();
     };
 
     modal.open();

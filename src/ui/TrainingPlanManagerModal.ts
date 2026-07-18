@@ -45,7 +45,7 @@ export class TrainingPlanManagerModal extends Modal {
     // 顶部工具栏：新增训练计划。
     const topToolbar = contentEl.createDiv();
     topToolbar.addClass('workout-btn-row');
-    topToolbar.style.justifyContent = 'flex-start';
+    topToolbar.setCssStyles({ justifyContent: 'flex-start' });
     const addTop = topToolbar.createEl('button', { text: t('settings.trainingPlans.add') });
     addTop.addClass('mod-cta');
     addTop.addEventListener('click', () => this.openAddPlan());
@@ -94,7 +94,7 @@ export class TrainingPlanManagerModal extends Modal {
       const infoCol = row.createDiv();
       infoCol.addClass('workout-card-info');
 
-      infoCol.createEl('div', { text: plan.name, cls: 'workout-card-title' });
+      infoCol.createDiv({ text: plan.name, cls: 'workout-card-title' });
 
       const detailLines = [
         `${t('settings.trainingPlans.schedule')}: ${formatTimeRule(plan.timeRule)}`,
@@ -102,7 +102,7 @@ export class TrainingPlanManagerModal extends Modal {
         `${t('settings.trainingPlans.source')}: ${plan.sourceNote || t('settings.trainingPlans.manual')}`,
       ];
       for (const detail of detailLines) {
-        infoCol.createEl('div', { text: detail, cls: 'workout-card-meta' });
+        infoCol.createDiv({ text: detail, cls: 'workout-card-meta' });
       }
 
       const btnCol = row.createDiv();
@@ -112,20 +112,20 @@ export class TrainingPlanManagerModal extends Modal {
       editBtn.addClass('workout-action-btn');
       editBtn.addEventListener('click', () => {
         const modal = new NewPlanModal(this.dataManager, { editPlan: plan });
-        modal.onClose = () => this.refresh();
+        modal.onClose = () => { void this.refresh(); };
         modal.open();
       });
 
       const deleteBtn = btnCol.createEl('button', { text: t('settings.trainingPlans.delete') });
       deleteBtn.addClass('workout-danger-btn');
-      deleteBtn.addEventListener('click', () => this.deletePlan(plan));
+      deleteBtn.addEventListener('click', () => { void this.deletePlan(plan); });
     }
   }
 
   // 打开"新增训练计划"弹窗，关闭后刷新列表。
   private openAddPlan(): void {
     const modal = new NewPlanModal(this.dataManager);
-    modal.onClose = () => this.refresh();
+    modal.onClose = () => { void this.refresh(); };
     modal.open();
   }
 
@@ -136,7 +136,7 @@ export class TrainingPlanManagerModal extends Modal {
     }
     await this.dataManager.deletePlan(plan.name);
     new Notice(`${plan.name} ${t('common.delete')}`);
-    this.refresh();
+    await this.refresh();
   }
 
   // 重新读取配置并刷新列表。

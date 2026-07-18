@@ -1,4 +1,4 @@
-import { getLocale, t } from '../i18n';
+import { t } from '../i18n';
 
 /*
  * duration.ts —— 时长工具
@@ -25,7 +25,6 @@ export function formatDuration(seconds: number): string {
 
   // parts 收集要显示的各段文字，最后拼到一起
   const parts: string[] = [];
-  const locale = getLocale();
 
   // 只有该部分大于 0 才显示，避免出现 "0时0分15秒"
   if (hours > 0) {

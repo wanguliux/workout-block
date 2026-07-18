@@ -73,7 +73,7 @@ export class StatModal extends Modal {
     const nameRow = contentEl.createDiv();
     nameRow.addClass('workout-field');
     nameRow.createEl('label', { text: t('modal.statManager.name') });
-    const nameInput = nameRow.createEl('input', { type: 'text' }) as HTMLInputElement;
+    const nameInput = nameRow.createEl('input', { type: 'text' });
     nameInput.addClass('workout-input');
     nameInput.value = this.name;
     nameInput.addEventListener('input', () => { this.name = nameInput.value; });
@@ -89,7 +89,7 @@ export class StatModal extends Modal {
     const modeRow = contentEl.createDiv();
     modeRow.addClass('workout-field');
     modeRow.createEl('label', { text: t('modal.statManager.mode') });
-    const modeSelect = modeRow.createEl('select') as HTMLSelectElement;
+    const modeSelect = modeRow.createEl('select');
     modeSelect.addClass('workout-select');
     for (const m of ['builder', 'expression'] as const) {
       const opt = modeSelect.createEl('option', {
@@ -123,7 +123,7 @@ export class StatModal extends Modal {
     const granRow = granEnableCol.createDiv();
     granRow.addClass('workout-field');
     granRow.createEl('label', { text: t('modal.statManager.granularity') });
-    const granSelect = granRow.createEl('select') as HTMLSelectElement;
+    const granSelect = granRow.createEl('select');
     granSelect.addClass('workout-select');
     for (const g of ['daily', 'weekly', 'monthly'] as const) {
       const opt = granSelect.createEl('option', {
@@ -139,10 +139,10 @@ export class StatModal extends Modal {
     // 启用（布尔开关）
     const enabledToggleWrap = granEnableCol.createDiv();
     enabledToggleWrap.addClass('workout-toggle');
-    const enabledToggle = enabledToggleWrap.createEl('input', { type: 'checkbox', cls: 'workout-switch' }) as HTMLInputElement;
+    const enabledToggle = enabledToggleWrap.createEl('input', { type: 'checkbox', cls: 'workout-switch' });
     enabledToggle.checked = this.enabled;
     enabledToggle.addEventListener('change', () => { this.enabled = enabledToggle.checked; });
-    enabledToggleWrap.createEl('span', { text: t('modal.statManager.showInStats') });
+    enabledToggleWrap.createSpan({ text: t('modal.statManager.showInStats') });
 
     // 底部按钮
     const btnRow = contentEl.createDiv();
@@ -152,7 +152,7 @@ export class StatModal extends Modal {
     cancelBtn.addEventListener('click', () => this.close());
     const saveBtn = btnRow.createEl('button', { text: t('common.save') });
     saveBtn.addClass('mod-cta');
-    saveBtn.addEventListener('click', () => this.save());
+    saveBtn.addEventListener('click', () => { void this.save(); });
   }
 
   // 当前关联类型下的可用字段交集（供字段下拉与校验使用）
@@ -174,7 +174,7 @@ export class StatModal extends Modal {
     for (const type of this.config.trainingTypes) {
       const row = this.typesContainer.createDiv();
       row.addClass('workout-check-item');
-      const checkbox = row.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+      const checkbox = row.createEl('input', { type: 'checkbox' });
       checkbox.checked = this.associatedTypes.includes(type.id);
       checkbox.addEventListener('change', () => {
         if (checkbox.checked) {
@@ -209,7 +209,7 @@ export class StatModal extends Modal {
       const opRow = this.formulaContainer.createDiv();
       opRow.addClass('workout-field');
       opRow.createEl('label', { text: t('modal.statManager.op') });
-      const opSelect = opRow.createEl('select') as HTMLSelectElement;
+      const opSelect = opRow.createEl('select');
       opSelect.addClass('workout-select');
       const ops: StatAggregation['kind'][] = ['sum', 'productSum', 'oneRepMax', 'avg', 'max', 'min', 'count'];
       for (const op of ops) {
@@ -243,7 +243,7 @@ export class StatModal extends Modal {
         const wfRow = this.formulaContainer.createDiv();
         wfRow.addClass('workout-field');
         wfRow.createEl('label', { text: t('modal.statManager.weightField') });
-        const wfSelect = wfRow.createEl('select') as HTMLSelectElement;
+        const wfSelect = wfRow.createEl('select');
         wfSelect.addClass('workout-select');
         if (allowed.length === 0) {
           wfSelect.createEl('option', { value: '', text: t('modal.statManager.selectField') });
@@ -259,7 +259,7 @@ export class StatModal extends Modal {
         const rfRow = this.formulaContainer.createDiv();
         rfRow.addClass('workout-field');
         rfRow.createEl('label', { text: t('modal.statManager.repsField') });
-        const rfSelect = rfRow.createEl('select') as HTMLSelectElement;
+        const rfSelect = rfRow.createEl('select');
         rfSelect.addClass('workout-select');
         if (allowed.length === 0) {
           rfSelect.createEl('option', { value: '', text: t('modal.statManager.selectField') });
@@ -275,7 +275,7 @@ export class StatModal extends Modal {
         const fieldRow = this.formulaContainer.createDiv();
         fieldRow.addClass('workout-field');
         fieldRow.createEl('label', { text: t('modal.statManager.field') });
-        const fieldSelect = fieldRow.createEl('select') as HTMLSelectElement;
+        const fieldSelect = fieldRow.createEl('select');
         fieldSelect.addClass('workout-select');
         if (allowed.length === 0) {
           fieldSelect.createEl('option', { value: '', text: t('modal.statManager.selectField') });
@@ -299,7 +299,7 @@ export class StatModal extends Modal {
           const fieldBRow = this.formulaContainer.createDiv();
           fieldBRow.addClass('workout-field');
           fieldBRow.createEl('label', { text: t('modal.statManager.fieldB') });
-          const fieldBSelect = fieldBRow.createEl('select') as HTMLSelectElement;
+          const fieldBSelect = fieldBRow.createEl('select');
           fieldBSelect.addClass('workout-select');
           if (allowed.length === 0) {
             fieldBSelect.createEl('option', { value: '', text: t('modal.statManager.selectField') });
@@ -314,7 +314,7 @@ export class StatModal extends Modal {
       }
     } else {
       // 表达式模式
-      const ta = this.formulaContainer.createEl('textarea') as HTMLTextAreaElement;
+      const ta = this.formulaContainer.createEl('textarea');
       ta.addClass('workout-input');
       ta.value = this.expression;
       ta.placeholder = t('modal.statManager.exprPlaceholder');
@@ -326,7 +326,7 @@ export class StatModal extends Modal {
 
       const errEl = this.formulaContainer.createEl('p', { cls: 'workout-manager-detail' });
       errEl.addClass('workout-stat-error');
-      errEl.style.color = 'var(--text-error)';
+      errEl.setCssStyles({ color: 'var(--text-error)' });
       (this.formulaContainer as any)._errEl = errEl;
       this.updateExprError(allowed);
     }

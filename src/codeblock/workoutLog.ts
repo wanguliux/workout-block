@@ -1,4 +1,4 @@
-import { Component, MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian';
 import { LogRow, FieldDef, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
 import { getFieldLabel, getFieldUnit, renderFieldValue, resolveLogExerciseName, resolveExerciseIdByName } from '../data/display';
@@ -95,12 +95,13 @@ function groupLogs(logs: LogRow[], groupBy: 'date' | 'week'): Map<string, LogRow
         // timestamp 形如 "2026-07-10 18:30"，按空格切，取第 0 段就是日期
         key = log.timestamp.split(' ')[0];
         break;
-      case 'week':
+      case 'week': {
         // 按「第几周」分组：用年份-周号作为 key
         const date = new Date(log.timestamp);
         const weekNum = getWeekNumber(date);
         key = `${date.getFullYear()}-W${weekNum}`;
         break;
+      }
       default:
         key = log.timestamp.split(' ')[0];
     }
@@ -324,7 +325,7 @@ export async function renderWorkoutLog(
       // 按需求：单元格只显示纯数字，单位仅在表头体现；时长字段仍由 renderFieldValue 保持可读文本。
       for (const field of fields) {
         const value = log.fields[field.key];
-        const cell = row.createEl('td', { text: renderFieldValue(value, field, unit) });
+        row.createEl('td', { text: renderFieldValue(value, field, unit) });
       }
 
       // 备注列
@@ -332,7 +333,7 @@ export async function renderWorkoutLog(
 
       // 操作列：编辑按钮 + 删除按钮，样式与训练项管理保持一致（workout-action-btn / workout-danger-btn）
       const actionsCell = row.createEl('td');
-      const actionsWrap = actionsCell.createEl('div');
+      const actionsWrap = actionsCell.createDiv();
       actionsWrap.addClass('workout-card-actions');
       const editBtn = actionsWrap.createEl('button', { text: t('codeblock.edit') });
       editBtn.addClass('workout-action-btn');

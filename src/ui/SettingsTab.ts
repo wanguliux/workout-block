@@ -35,7 +35,7 @@ export class SettingsTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     // 页面大标题（文案来自多语言 i18n 的 t()）。
-    containerEl.createEl('h2', { text: t('pluginName') });
+    new Setting(containerEl).setName(t('pluginName')).setHeading();
 
     // 配置是异步读取的（来自磁盘上的 JSON），拿到后再分段渲染各区块。
     this.dataManager.getConfig().then((config) => {
@@ -46,14 +46,14 @@ export class SettingsTab extends PluginSettingTab {
       // 联动开关区块（Dataview / Daily Notes / Templater）暂时隐藏，
       // 待第三方联动功能开发完成后再放开。保留 renderIntegrationSection 以便后续恢复。
       // this.renderIntegrationSection(containerEl);
-    });
+    }).catch(() => {});
   }
 
   // 区块一：数据文件路径。包含"CSV 目录"和"配置 JSON 目录"两项，
   // 既支持手动输入，也支持点"浏览"按钮用 VaultFolderSuggestModal 选文件夹。
   private renderDataPathSection(containerEl: HTMLElement): void {
-    const section = containerEl.createEl('div');
-    section.createEl('h3', { text: t('settings.dataPath') });
+    const section = containerEl.createDiv();
+    new Setting(section).setName(t('settings.dataPath')).setHeading();
 
     // CSV 目录设置项。Setting 构造 = 一行设置；setName 是标题，setDesc 是灰色说明。
     const csvSetting = new Setting(section)
@@ -70,24 +70,30 @@ export class SettingsTab extends PluginSettingTab {
         .setValue(this.dataManager.getSettings().csvDirectory);
 
       // VaultPathSuggest：输入时弹出 Vault 内文件夹的自动补全建议。
-      new VaultPathSuggest(this.app, text.inputEl, async (value: string) => {
-        this.dataManager.getSettings().csvDirectory = value;
-        await this.dataManager.saveSettings();
+      new VaultPathSuggest(this.app, text.inputEl, (value: string) => {
+        void (async () => {
+          this.dataManager.getSettings().csvDirectory = value;
+          await this.dataManager.saveSettings();
+        })();
       });
 
       // 用户每次改文字都即时保存（onChange）。
-      text.onChange(async (value) => {
-        this.dataManager.getSettings().csvDirectory = value;
-        await this.dataManager.saveSettings();
+      text.onChange((value) => {
+        void (async () => {
+          this.dataManager.getSettings().csvDirectory = value;
+          await this.dataManager.saveSettings();
+        })();
       });
     });
     // addButton() 在该设置项右侧加一个按钮；这里点"浏览"打开文件夹选择弹窗。
     csvSetting.addButton((btn) =>
       btn.setButtonText(t('settings.browse')).onClick(() => {
-        new VaultFolderSuggestModal(this.app, async (value) => {
-          csvInput?.setValue(value);
-          this.dataManager.getSettings().csvDirectory = value;
-          await this.dataManager.saveSettings();
+        new VaultFolderSuggestModal(this.app, (value) => {
+          void (async () => {
+            csvInput?.setValue(value);
+            this.dataManager.getSettings().csvDirectory = value;
+            await this.dataManager.saveSettings();
+          })();
         }).open();
       })
     );
@@ -104,22 +110,28 @@ export class SettingsTab extends PluginSettingTab {
         .setPlaceholder(t('settings.dataDirectoryPlaceholder'))
         .setValue(this.dataManager.getSettings().configDirectory);
 
-      new VaultPathSuggest(this.app, text.inputEl, async (value: string) => {
-        this.dataManager.getSettings().configDirectory = value;
-        await this.dataManager.saveSettings();
+      new VaultPathSuggest(this.app, text.inputEl, (value: string) => {
+        void (async () => {
+          this.dataManager.getSettings().configDirectory = value;
+          await this.dataManager.saveSettings();
+        })();
       });
 
-      text.onChange(async (value) => {
-        this.dataManager.getSettings().configDirectory = value;
-        await this.dataManager.saveSettings();
+      text.onChange((value) => {
+        void (async () => {
+          this.dataManager.getSettings().configDirectory = value;
+          await this.dataManager.saveSettings();
+        })();
       });
     });
     configSetting.addButton((btn) =>
       btn.setButtonText(t('settings.browse')).onClick(() => {
-        new VaultFolderSuggestModal(this.app, async (value) => {
-          configInput?.setValue(value);
-          this.dataManager.getSettings().configDirectory = value;
-          await this.dataManager.saveSettings();
+        new VaultFolderSuggestModal(this.app, (value) => {
+          void (async () => {
+            configInput?.setValue(value);
+            this.dataManager.getSettings().configDirectory = value;
+            await this.dataManager.saveSettings();
+          })();
         }).open();
       })
     );
@@ -129,8 +141,8 @@ export class SettingsTab extends PluginSettingTab {
   // 每行左侧有拖拽手柄，可用鼠标拖动改变显示顺序；新顺序存入 settings.managerOrder。
   // 说明：排序仅影响设置页里这些条目的显示顺序，不改变任何功能逻辑。
   private renderManagersSection(containerEl: HTMLElement, config: WorkoutConfig): void {
-    const section = containerEl.createEl('div');
-    section.createEl('h3', { text: t('settings.trainingSettings') });
+    const section = containerEl.createDiv();
+    new Setting(section).setName(t('settings.trainingSettings')).setHeading();
 
     // 五个管理条目：key 仅用于排序存储；name/desc 为文案；open 为按钮点击后弹出的管理弹窗。
     const managers: Record<string, { name: string; desc: string; open: () => void }> = {
@@ -165,7 +177,7 @@ export class SettingsTab extends PluginSettingTab {
     const order = this.normalizeManagerOrder(this.dataManager.getSettings().managerOrder);
 
     // 平铺容器：所有条目渲染于此，便于拖拽时直接重排 DOM（条目间纯间距分隔，无分隔线）。
-    const listEl = section.createEl('div', { cls: 'workout-manager-list' });
+    const listEl = section.createDiv({ cls: 'workout-manager-list' });
 
     // 拖拽中的源行引用。
     let dragEl: HTMLElement | null = null;
@@ -201,26 +213,36 @@ export class SettingsTab extends PluginSettingTab {
       };
       setting
         .addButton((btn) => {
-          btn.setIcon('arrow-up').setTooltip(t('settings.moveUp')).onClick(() => move(-1));
+          btn.setIcon('arrow-up').setTooltip(t('settings.moveUp')).onClick(() => { void move(-1); });
           btn.buttonEl.addClass('workout-manager-move');
         })
         .addButton((btn) => {
-          btn.setIcon('arrow-down').setTooltip(t('settings.moveDown')).onClick(() => move(1));
+          btn.setIcon('arrow-down').setTooltip(t('settings.moveDown')).onClick(() => { void move(1); });
           btn.buttonEl.addClass('workout-manager-move');
         });
 
       // 桌面端：拖拽手柄 + 拖拽事件；移动端不使用拖拽。
       if (!isMobile) {
-        const handle = row.createEl('div', {
+        const handle = row.createDiv({
           cls: 'workout-manager-handle',
           attr: { 'aria-label': t('settings.dragToReorder'), title: t('settings.dragToReorder') },
         });
         // 六个点的拖拽图标（内联 SVG，随主题 currentColor 着色）。
-        handle.innerHTML =
-          '<svg viewBox="0 0 12 16" width="12" height="16" fill="currentColor">' +
-          '<circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/>' +
-          '<circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/>' +
-          '<circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/></svg>';
+        // 用 createElementNS 构建，避免直接写 innerHTML（obsidianmd 规则禁止）。
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const dragSvg = document.createElementNS(svgNS, 'svg');
+        dragSvg.setAttribute('viewBox', '0 0 12 16');
+        dragSvg.setAttribute('width', '12');
+        dragSvg.setAttribute('height', '16');
+        dragSvg.setAttribute('fill', 'currentColor');
+        for (const [cx, cy] of [[3, 3], [9, 3], [3, 8], [9, 8], [3, 13], [9, 13]]) {
+          const dot = document.createElementNS(svgNS, 'circle');
+          dot.setAttribute('cx', String(cx));
+          dot.setAttribute('cy', String(cy));
+          dot.setAttribute('r', '1.5');
+          dragSvg.appendChild(dot);
+        }
+        handle.appendChild(dragSvg);
         // createEl 默认追加到行尾，把手柄移到行首。
         row.insertBefore(handle, row.firstChild);
         handle.draggable = true;
@@ -253,7 +275,8 @@ export class SettingsTab extends PluginSettingTab {
         row.addEventListener('dragleave', () => {
           row.classList.remove('workout-manager-row--over');
         });
-        row.addEventListener('drop', async (e: DragEvent) => {
+        row.addEventListener('drop', (e: DragEvent) => {
+          void (async () => {
           e.preventDefault();
           if (!dragEl || dragEl === row) return;
           const rect = row.getBoundingClientRect();
@@ -271,6 +294,7 @@ export class SettingsTab extends PluginSettingTab {
             .filter((k): k is string => !!k);
           this.dataManager.getSettings().managerOrder = newOrder;
           await this.dataManager.saveSettings();
+          })();
         });
       }
     };
@@ -289,8 +313,8 @@ export class SettingsTab extends PluginSettingTab {
   // 区块（数据维护）：压缩清理 CSV。删除记录采用软删除（仅标记、不重写），
   // 文件体积不会立即回收；本区块提供按钮，在用户主动触发时整文件压缩、彻底移除被删记录。
   private renderMaintenanceSection(containerEl: HTMLElement): void {
-    const section = containerEl.createEl('div');
-    section.createEl('h3', { text: t('settings.maintenance') });
+    const section = containerEl.createDiv();
+    new Setting(section).setName(t('settings.maintenance')).setHeading();
 
     new Setting(section)
       .setName(t('settings.compactCsv'))
@@ -298,7 +322,7 @@ export class SettingsTab extends PluginSettingTab {
       .addButton((btn) =>
         btn
           .setButtonText(t('settings.compactCsv'))
-          .setWarning()
+          .setDestructive()
           .onClick(async () => {
             if (!(await confirmWithModal(this.app, t('settings.confirmCompact')))) return;
             const removed = await this.dataManager.compactLogs();
@@ -309,8 +333,8 @@ export class SettingsTab extends PluginSettingTab {
 
   // 区块六：通用设置。提醒阈值、重量单位、语言、上次值记忆。
   private renderGeneralSection(containerEl: HTMLElement): void {
-    const section = containerEl.createEl('div');
-    section.createEl('h3', { text: t('settings.general') });
+    const section = containerEl.createDiv();
+    new Setting(section).setName(t('settings.general')).setHeading();
 
     // 重量单位：下拉框（addDropdown）。可选 kg / lb，改后保存并刷新所有代码块。
     new Setting(section)
@@ -359,8 +383,8 @@ export class SettingsTab extends PluginSettingTab {
 
   // 区块六：第三方联动开关。Dataview / Daily Notes / Templater 各自一个开关。
   private renderIntegrationSection(containerEl: HTMLElement): void {
-    const section = containerEl.createEl('div');
-    section.createEl('h3', { text: t('settings.integrations') });
+    const section = containerEl.createDiv();
+    new Setting(section).setName(t('settings.integrations')).setHeading();
 
     // 联动 Dataview 插件的开关。
     new Setting(section)

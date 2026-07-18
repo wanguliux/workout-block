@@ -51,7 +51,7 @@ export class ExerciseManagerModal extends Modal {
     // 顶部工具栏：新增训练项。
     const topToolbar = contentEl.createDiv();
     topToolbar.addClass('workout-btn-row');
-    topToolbar.style.justifyContent = 'flex-start';
+    topToolbar.setCssStyles({ justifyContent: 'flex-start' });
     const addTop = topToolbar.createEl('button', { text: t('modal.exerciseManager.add') });
     addTop.addClass('mod-cta');
     addTop.addEventListener('click', () => this.openAddExercise());
@@ -117,7 +117,7 @@ export class ExerciseManagerModal extends Modal {
       infoCol.addClass('workout-card-info');
 
       const exerciseName = getExerciseName(exercise) || exercise.name;
-      infoCol.createEl('div', { text: exerciseName, cls: 'workout-card-title' });
+      infoCol.createDiv({ text: exerciseName, cls: 'workout-card-title' });
 
       // 明细行：所属类型、主练肌肉、辅助肌肉。
       const detailLines = [
@@ -127,7 +127,7 @@ export class ExerciseManagerModal extends Modal {
       ];
 
       for (const detail of detailLines) {
-        infoCol.createEl('div', { text: detail, cls: 'workout-card-meta' });
+        infoCol.createDiv({ text: detail, cls: 'workout-card-meta' });
       }
 
       // 右侧按钮列：编辑 / 删除。
@@ -138,20 +138,20 @@ export class ExerciseManagerModal extends Modal {
       editBtn.addClass('workout-action-btn');
       editBtn.addEventListener('click', () => {
         const editModal = new ExerciseModal(this.dataManager, { editExercise: exercise });
-        editModal.onClose = () => this.refresh();
+        editModal.onClose = () => { void this.refresh(); };
         editModal.open();
       });
 
       const deleteBtn = btnCol.createEl('button', { text: t('modal.exerciseManager.delete') });
       deleteBtn.addClass('workout-danger-btn');
-      deleteBtn.addEventListener('click', () => this.deleteExercise(exercise));
+      deleteBtn.addEventListener('click', () => { void this.deleteExercise(exercise); });
     }
   }
 
   // 打开"新增训练项"弹窗，关闭后刷新列表。
   private openAddExercise(): void {
     const editModal = new ExerciseModal(this.dataManager);
-    editModal.onClose = () => this.refresh();
+    editModal.onClose = () => { void this.refresh(); };
     editModal.open();
   }
 
@@ -170,7 +170,7 @@ export class ExerciseManagerModal extends Modal {
 
     await this.dataManager.deleteExercise(exercise.id);
     new Notice(`${exerciseName} ${t('common.delete')}`);
-    this.refresh();
+    await this.refresh();
   }
 
   // 重新读取配置并刷新列表（同时刷新缓存的类型/肌肉，保证显示名最新）。

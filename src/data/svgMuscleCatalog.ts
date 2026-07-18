@@ -186,7 +186,7 @@ export const HIDDEN_SVG_GROUP_IDS = ['head', 'face'];
 // 例如：external_oblique_1_l -> "腹外斜肌 1（左）"
 //       rectus_abdominis_2_r -> "腹直肌 2（右）"
 //       pectoralis_major_l   -> "胸大肌（左）"
-export function formatSvgMuscleLabel(entry: SvgMuscleEntry, locale: 'zh' | 'en' | string): string {
+export function formatSvgMuscleLabel(entry: SvgMuscleEntry, locale: string): string {
   let base = locale === 'zh' ? entry.zh : entry.en;
   const segmentMatch = entry.id.match(/_(\d+)(?:_l|_r)?$/);
   if (segmentMatch) {

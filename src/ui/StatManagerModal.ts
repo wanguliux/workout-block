@@ -45,7 +45,7 @@ export class StatManagerModal extends Modal {
     // 顶部工具栏：新增统计。
     const topToolbar = contentEl.createDiv();
     topToolbar.addClass('workout-btn-row');
-    topToolbar.style.justifyContent = 'flex-start';
+    topToolbar.setCssStyles({ justifyContent: 'flex-start' });
     const addTop = topToolbar.createEl('button', { text: t('modal.statManager.add') });
     addTop.addClass('mod-cta');
     addTop.addEventListener('click', () => this.openAddStat());
@@ -102,7 +102,7 @@ export class StatManagerModal extends Modal {
 
       const infoCol = row.createDiv();
       infoCol.addClass('workout-card-info');
-      infoCol.createEl('div', { text: stat.name, cls: 'workout-card-title' });
+      infoCol.createDiv({ text: stat.name, cls: 'workout-card-title' });
 
       const btnCol = row.createDiv();
       btnCol.addClass('workout-card-actions');
@@ -118,17 +118,17 @@ export class StatManagerModal extends Modal {
         `${t('modal.statManager.granularity')}: ${this.granularityLabel(stat.granularity)}`,
       ];
       for (const detail of detailLines) {
-        infoCol.createEl('div', { text: detail, cls: 'workout-card-meta' });
+        infoCol.createDiv({ text: detail, cls: 'workout-card-meta' });
       }
 
       // 启用开关（列表内直接切换）—— 设计稿为普通勾选框，不使用 workout-switch 布尔滑块
       const toggleWrap = btnCol.createEl('label');
       toggleWrap.addClass('workout-inline-check');
-      const toggle = toggleWrap.createEl('input', { type: 'checkbox' }) as HTMLInputElement;
+      const toggle = toggleWrap.createEl('input', { type: 'checkbox' });
       toggle.checked = stat.enabled;
-      toggle.addEventListener('change', async () => {
+      toggle.addEventListener('change', () => {
         stat.enabled = toggle.checked;
-        await this.saveStats();
+        void this.saveStats();
       });
       toggleWrap.appendText(t('modal.statManager.enabled'));
 
@@ -136,20 +136,20 @@ export class StatManagerModal extends Modal {
       editBtn.addClass('workout-action-btn');
       editBtn.addEventListener('click', () => {
         const editModal = new StatModal(this.dataManager, { editStat: stat });
-        editModal.onClose = () => this.refresh();
+        editModal.onClose = () => { void this.refresh(); };
         editModal.open();
       });
 
       const deleteBtn = btnCol.createEl('button', { text: t('modal.statManager.delete') });
       deleteBtn.addClass('workout-danger-btn');
-      deleteBtn.addEventListener('click', () => this.deleteStat(stat));
+      deleteBtn.addEventListener('click', () => { void this.deleteStat(stat); });
     }
   }
 
   // 打开"新增统计"弹窗，关闭后刷新列表。
   private openAddStat(): void {
     const editModal = new StatModal(this.dataManager);
-    editModal.onClose = () => this.refresh();
+    editModal.onClose = () => { void this.refresh(); };
     editModal.open();
   }
 
@@ -164,7 +164,7 @@ export class StatManagerModal extends Modal {
     this.stats = this.stats.filter((s) => s.id !== stat.id);
     await this.saveStats();
     new Notice(`${stat.name} ${t('common.delete')}`);
-    this.refresh();
+    await this.refresh();
   }
 
   private async refresh(): Promise<void> {

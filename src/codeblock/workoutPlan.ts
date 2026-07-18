@@ -1,8 +1,8 @@
-import { Component, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, TFile } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, TFile } from 'obsidian';
 import { DataManager } from '../data/DataManager';
-import { FieldDef, PlanItem, PlanSet, TrainingPlanInstance, WorkoutConfig } from '../data/types';
+import { FieldDef, TrainingPlanInstance, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
-import { getExerciseNameById, getFieldLabel, getFieldUnit, getTrainingTypeName, renderFieldValue, formatTimeRule } from '../data/display';
+import { getExerciseNameById, getFieldUnit, getTrainingTypeName, renderFieldValue, formatTimeRule } from '../data/display';
 import { registerRenderedBlock, unregisterRenderedBlock, rerenderBlocksByType } from './registry';
 import { PlanSetEditModal } from '../ui/PlanSetEditModal';
 
@@ -89,7 +89,7 @@ function renderSelectPlan(el: HTMLElement, dataManager: DataManager, ctx: Markdo
   label.addClass('workout-plan-select-label');
 
   if (plans.length === 0) {
-    wrap.createEl('div', { text: t('codeblock.plan.noPlan') }).addClass('workout-hint');
+    wrap.createDiv({ text: t('codeblock.plan.noPlan') }).addClass('workout-hint');
     return;
   }
 
@@ -99,10 +99,12 @@ function renderSelectPlan(el: HTMLElement, dataManager: DataManager, ctx: Markdo
   for (const p of plans) {
     select.createEl('option', { value: p.name, text: p.name });
   }
-  select.addEventListener('change', async () => {
-    const name = select.value;
-    if (!name) return;
-    await writePlanToCodeBlock(dataManager, ctx, el, name);
+  select.addEventListener('change', () => {
+    void (async () => {
+      const name = select.value;
+      if (!name) return;
+      await writePlanToCodeBlock(dataManager, ctx, el, name);
+    })();
   });
 }
 
@@ -177,7 +179,7 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
 
     const itemEl = container.createDiv();
     itemEl.addClass('workout-plan-item');
-    itemEl.createEl('div', { text: `${exerciseName}${typeName ? ` [${typeName}]` : ''}` }).addClass('workout-plan-item-title');
+    itemEl.createDiv({ text: `${exerciseName}${typeName ? ` [${typeName}]` : ''}` }).addClass('workout-plan-item-title');
 
     const setsEl = itemEl.createDiv();
     setsEl.addClass('workout-plan-sets');
@@ -213,17 +215,19 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
         // 完成按钮（仅未完成显示）
         const completeBtn = row.createEl('button', { text: t('codeblock.plan.complete') });
         completeBtn.addClass('mod-cta', 'workout-plan-set-complete');
-        completeBtn.addEventListener('click', async () => {
-          // 1) 持久化「已完成」状态到计划配置（独立于训练记录，删除记录不影响）
-          await dataManager.markPlanSetCompleted(plan, item.exerciseId, set.id);
-          // 2) 同时往训练记录库写一条数据；plan 存稳定方案标识（sourceNote 或 id），而非可改的计划名
-          await dataManager.addLog({
-            exerciseId: item.exerciseId,
-            category: item.category,
-            fields: { ...set.fields, _planSet: set.id },
-            plan: plan.sourceNote || plan.id,
-          });
-          rerenderBlocksByType('workout-plan');
+        completeBtn.addEventListener('click', () => {
+          void (async () => {
+            // 1) 持久化「已完成」状态到计划配置（独立于训练记录，删除记录不影响）
+            await dataManager.markPlanSetCompleted(plan, item.exerciseId, set.id);
+            // 2) 同时往训练记录库写一条数据；plan 存稳定方案标识（sourceNote 或 id），而非可改的计划名
+            await dataManager.addLog({
+              exerciseId: item.exerciseId,
+              category: item.category,
+              fields: { ...set.fields, _planSet: set.id },
+              plan: plan.sourceNote || plan.id,
+            });
+            rerenderBlocksByType('workout-plan');
+          })();
         });
       }
     });

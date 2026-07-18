@@ -69,7 +69,7 @@ export class ExerciseModal extends Modal {
 
     // 轻量实时校验：ID 不能含逗号/引号/换行（会破坏 CSV 单元格与键引用）。
     // beforeinput 阶段直接拦截非法字符（光标不跳），input 阶段再兜底 strip（覆盖粘贴）。
-    this.idHint = contentEl.createEl('div', { cls: 'workout-id-hint' });
+    this.idHint = contentEl.createDiv({ cls: 'workout-id-hint' });
     this.idInput.addEventListener('beforeinput', (e: Event) => {
       const data = (e as InputEvent).data ?? '';
       if (data && INVALID_ID_RE.test(data)) {
@@ -128,7 +128,7 @@ export class ExerciseModal extends Modal {
 
     const saveBtn = btnRow.createEl('button', { text: t('common.save') });
     saveBtn.addClass('mod-cta');
-    saveBtn.addEventListener('click', () => this.save());
+    saveBtn.addEventListener('click', () => { void this.save(); });
   }
 
   // 渲染主练/辅助两组肌肉复选框。编辑模式下根据 editExercise.muscles 的 role 预勾选相应项。
@@ -156,7 +156,7 @@ export class ExerciseModal extends Modal {
       if (selectedPrimary.includes(muscle.id)) {
         primaryCheckbox.checked = true;
       }
-      primaryLabel.createEl('span', { text: muscleName });
+      primaryLabel.createSpan({ text: muscleName });
 
       // 辅助复选框：结构同上
       const secondaryLabel = this.secondaryMusclesContainer.createEl('label');
@@ -166,7 +166,7 @@ export class ExerciseModal extends Modal {
       if (selectedSecondary.includes(muscle.id)) {
         secondaryCheckbox.checked = true;
       }
-      secondaryLabel.createEl('span', { text: muscleName });
+      secondaryLabel.createSpan({ text: muscleName });
     }
   }
 
@@ -251,7 +251,7 @@ export class ExerciseModal extends Modal {
         new Notice(t('modal.newExercise.saved'));
       }
       this.close();
-    } catch (error) {
+    } catch {
       new Notice(t('modal.newExercise.saveFailed'));
     }
   }

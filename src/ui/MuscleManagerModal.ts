@@ -35,7 +35,7 @@ export class MuscleManagerModal extends Modal {
     // 顶部搜索框（吸顶）。首次引导阶段先隐藏，进入列表后再显示。
     this.searchWrap = contentEl.createDiv();
     this.searchWrap.addClass('workout-manager-search');
-    this.searchWrap.style.display = 'none';
+    this.searchWrap.setCssStyles({ display: 'none' });
     const search = this.searchWrap.createEl('input', { type: 'text', cls: 'workout-input' });
     search.placeholder = t('modal.muscleManager.search');
     search.addEventListener('input', () => {
@@ -55,7 +55,7 @@ export class MuscleManagerModal extends Modal {
 
   // 首次引导：三档选择
   private renderOnboarding(): void {
-    this.searchWrap.style.display = 'none';
+    this.searchWrap.setCssStyles({ display: 'none' });
     this.musclesContainer.empty();
 
     const card = this.musclesContainer.createDiv();
@@ -77,9 +77,9 @@ export class MuscleManagerModal extends Modal {
       row.addClass('workout-row');
       const btn = row.createEl('button', { text: t(labelKey) });
       btn.addClass('mod-cta');
-      btn.style.marginRight = '8px';
-      btn.addEventListener('click', () => this.applyTier(tier));
-      row.createEl('span', { text: t(descKey), cls: 'workout-manager-detail' });
+      btn.setCssStyles({ marginRight: '8px' });
+      btn.addEventListener('click', () => { void this.applyTier(tier); });
+      row.createSpan({ text: t(descKey), cls: 'workout-manager-detail' });
     }
   }
 
@@ -95,12 +95,12 @@ export class MuscleManagerModal extends Modal {
   }
 
   private renderMuscles(): void {
-    this.searchWrap.style.display = '';
+    this.searchWrap.setCssStyles({ display: '' });
     this.musclesContainer.empty();
 
     const toolbar = this.musclesContainer.createDiv();
     toolbar.addClass('workout-btn-row');
-    toolbar.style.justifyContent = 'flex-start';
+    toolbar.setCssStyles({ justifyContent: 'flex-start' });
 
     const addBtn = toolbar.createEl('button', { text: t('modal.muscleManager.add') });
     addBtn.addClass('mod-cta');
@@ -139,7 +139,7 @@ export class MuscleManagerModal extends Modal {
 
       const infoCol = row.createDiv();
       infoCol.addClass('workout-card-info');
-      infoCol.createEl('div', { text: muscleName, cls: 'workout-card-title' });
+      infoCol.createDiv({ text: muscleName, cls: 'workout-card-title' });
 
       // 注：side（部位）由 svgRegionIds 经目录派生，不再单列（§13）
       const detailLines = [
@@ -150,7 +150,7 @@ export class MuscleManagerModal extends Modal {
       ];
 
       for (const detail of detailLines) {
-        const detailEl = infoCol.createEl('div', { text: detail, cls: 'workout-card-meta' });
+        const detailEl = infoCol.createDiv({ text: detail, cls: 'workout-card-meta' });
         detailEl.title = detail;
       }
 
@@ -161,13 +161,13 @@ export class MuscleManagerModal extends Modal {
       editBtn.addClass('workout-action-btn');
       editBtn.addEventListener('click', () => {
         const editModal = new MuscleEditModal(this.dataManager, { muscle });
-        editModal.onClose = () => this.refresh();
+        editModal.onClose = () => { void this.refresh(); };
         editModal.open();
       });
 
       const deleteBtn = btnCol.createEl('button', { text: t('modal.muscleManager.delete') });
       deleteBtn.addClass('workout-danger-btn');
-      deleteBtn.addEventListener('click', () => this.deleteMuscle(muscle));
+      deleteBtn.addEventListener('click', () => { void this.deleteMuscle(muscle); });
     }
 
     // 底部工具栏：关闭（长列表时无需滚到顶部即可关闭；顶部已有「新增肌肉」按钮）。
@@ -180,7 +180,7 @@ export class MuscleManagerModal extends Modal {
 
   private openAddMuscle(): void {
     const editModal = new MuscleEditModal(this.dataManager);
-    editModal.onClose = () => this.refresh();
+    editModal.onClose = () => { void this.refresh(); };
     editModal.open();
   }
 
@@ -203,7 +203,7 @@ export class MuscleManagerModal extends Modal {
 
     await this.dataManager.deleteMuscle(muscle.id);
     new Notice(`${muscleName} ${t('modal.muscleManager.deleted')}`);
-    this.refresh();
+    await this.refresh();
   }
 
   private async refresh(): Promise<void> {

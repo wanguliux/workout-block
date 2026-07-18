@@ -97,7 +97,7 @@ export class RecordModal extends Modal {
     // 下拉候选列表（默认隐藏）
     this.exerciseDropdown = comboWrapper.createDiv();
     this.exerciseDropdown.addClass('workout-combo-dropdown');
-    this.exerciseDropdown.style.display = 'none';
+    this.exerciseDropdown.setCssStyles({ display: 'none' });
 
     // 初始化过滤后的列表为全部训练项
     this.filteredExercises = [...this.exercises];
@@ -119,7 +119,7 @@ export class RecordModal extends Modal {
       if (editEx) {
         this.exerciseInput.value = getExerciseName(editEx);
         this.exerciseInput.disabled = true;
-        exerciseField.createEl('span', { text: t('modal.recordSet.exerciseLocked'), cls: 'workout-hint' });
+        exerciseField.createSpan({ text: t('modal.recordSet.exerciseLocked'), cls: 'workout-hint' });
       }
     }
 
@@ -178,7 +178,7 @@ export class RecordModal extends Modal {
     const configForPlans = await this.dataManager.getConfig();
     const plans = configForPlans.plans ?? [];
     for (const p of plans) {
-      const opt = this.planInput.createEl('option', { value: p.name, text: p.name });
+      this.planInput.createEl('option', { value: p.name, text: p.name });
     }
 
     // 预选值：编辑模式取记录原 plan；新增模式优先用传入的 options.plan（如来自代码块）
@@ -187,7 +187,7 @@ export class RecordModal extends Modal {
       this.planInput.value = prefillPlan;
     } else if (prefillPlan) {
       // 传入的 plan 名不在现有计划列表中（可能已被删除或重命名），追加为临时选项
-      const fallbackOpt = this.planInput.createEl('option', { value: prefillPlan, text: `${prefillPlan} (${t('modal.recordSet.schemeNotFound') || '未找到'})` });
+      this.planInput.createEl('option', { value: prefillPlan, text: `${prefillPlan} (${t('modal.recordSet.schemeNotFound') || '未找到'})` });
       this.planInput.value = prefillPlan;
     }
 
@@ -213,7 +213,7 @@ export class RecordModal extends Modal {
     // 保存按钮：mod-cta 是 Obsidian 的主按钮（高亮）样式；点击执行 save()
     const saveBtn = btnRow.createEl('button', { text: t('common.save') });
     saveBtn.addClass('mod-cta');
-    saveBtn.addEventListener('click', () => this.save());
+    saveBtn.addEventListener('click', () => { void this.save(); });
 
     // 打开时根据初始状态立刻渲染字段：
     //  - 编辑模式：用已有记录预填（前面已设），且不加载「上次值」，避免覆盖正在编辑的值；
@@ -251,7 +251,7 @@ export class RecordModal extends Modal {
       this.filterExercises(input.value);
       this.dropdownHighlighted = -1;
       this.renderExerciseDropdown();
-      dropdown.style.display = 'block';
+      dropdown.setCssStyles({ display: 'block' });
     });
 
     // 聚焦时显示全部候选项
@@ -260,7 +260,7 @@ export class RecordModal extends Modal {
         this.filterExercises(input.value);
         this.dropdownHighlighted = -1;
         this.renderExerciseDropdown();
-        dropdown.style.display = 'block';
+        dropdown.setCssStyles({ display: 'block' });
       }
     });
 
@@ -282,17 +282,17 @@ export class RecordModal extends Modal {
           const exId = (items[this.dropdownHighlighted] as HTMLElement).dataset.id!;
           this.selectExerciseById(exId);
         }
-        dropdown.style.display = 'none';
+        dropdown.setCssStyles({ display: 'none' });
       } else if (e.key === 'Escape') {
-        dropdown.style.display = 'none';
+        dropdown.setCssStyles({ display: 'none' });
       }
     });
 
     // 点击页面其他区域时关闭下拉（用延迟避免点击候选项时先关闭）
     document.addEventListener('mousedown', (e) => {
-      if (!comboWrapper!.contains(e.target as Node)) {
-        dropdown.style.display = 'none';
-      }
+        if (!comboWrapper!.contains(e.target as Node)) {
+          dropdown.setCssStyles({ display: 'none' });
+        }
     });
     // comboWrapper 是闭包变量，引用上面创建的 comboWrapper DOM 元素
     let comboWrapper: HTMLElement | null = input.parentElement;
@@ -340,7 +340,7 @@ export class RecordModal extends Modal {
       // 点击选中
       item.addEventListener('click', () => {
         this.selectExerciseById(ex.id);
-        this.exerciseDropdown.style.display = 'none';
+        this.exerciseDropdown.setCssStyles({ display: 'none' });
       });
 
       // 鼠标悬停同步高亮索引

@@ -48,7 +48,7 @@ export class TypeManagerModal extends Modal {
     // 顶部工具栏：新增训练类型。
     const topToolbar = contentEl.createDiv();
     topToolbar.addClass('workout-btn-row');
-    topToolbar.style.justifyContent = 'flex-start';
+    topToolbar.setCssStyles({ justifyContent: 'flex-start' });
     const addTop = topToolbar.createEl('button', { text: t('modal.typeManager.add') });
     addTop.addClass('mod-cta');
     addTop.addEventListener('click', () => this.openAddType());
@@ -101,7 +101,7 @@ export class TypeManagerModal extends Modal {
 
       const infoCol = row.createDiv();
       infoCol.addClass('workout-card-info');
-      infoCol.createEl('div', { text: typeName, cls: 'workout-card-title' });
+      infoCol.createDiv({ text: typeName, cls: 'workout-card-title' });
 
       // 每条类型的明细行：字段列表 + 是否计入覆盖（开/关）。
       const detailLines = [
@@ -110,7 +110,7 @@ export class TypeManagerModal extends Modal {
       ];
 
       for (const detail of detailLines) {
-        infoCol.createEl('div', { text: detail, cls: 'workout-card-meta' });
+        infoCol.createDiv({ text: detail, cls: 'workout-card-meta' });
       }
 
       // 右侧按钮列：编辑 / 删除。
@@ -122,20 +122,20 @@ export class TypeManagerModal extends Modal {
       editBtn.addEventListener('click', () => {
         // 传入 editType 表示编辑这个已有类型，关闭后刷新列表。
         const editModal = new TypeModal(this.dataManager, { editType: type });
-        editModal.onClose = () => this.refresh();
+        editModal.onClose = () => { void this.refresh(); };
         editModal.open();
       });
 
       const deleteBtn = btnCol.createEl('button', { text: t('modal.typeManager.delete') });
       deleteBtn.addClass('workout-danger-btn');
-      deleteBtn.addEventListener('click', () => this.deleteType(type));
+      deleteBtn.addEventListener('click', () => { void this.deleteType(type); });
     }
   }
 
   // 打开"新增训练类型"弹窗，关闭后刷新列表。
   private openAddType(): void {
     const editModal = new TypeModal(this.dataManager);
-    editModal.onClose = () => this.refresh();
+    editModal.onClose = () => { void this.refresh(); };
     editModal.open();
   }
 
@@ -159,7 +159,7 @@ export class TypeManagerModal extends Modal {
 
     await this.dataManager.deleteTrainingType(type.id);
     new Notice(`${typeName} ${t('common.delete')}`);
-    this.refresh();
+    await this.refresh();
   }
 
   // 重新读取配置并刷新列表（编辑/删除后调用）。注意 onClose 钩子也会触发它。

@@ -1,4 +1,4 @@
-import { App, Component, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, TFile } from 'obsidian';
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, TFile } from 'obsidian';
 import { LogRow, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
 import { computeStat, formatStatValue } from '../data/statExpr';
@@ -54,11 +54,6 @@ function formatLocalDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
-}
-
-// 校验 'YYYY-MM-DD' 字面日期格式是否合法（仅做格式校验，不校验真实日历）。
-function isValidDateStr(s: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
 // 解析目标日期：返回 { target, live }

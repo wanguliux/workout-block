@@ -1,4 +1,4 @@
-import { Component, MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian';
 import { HeatmapLevel, LogRow, Muscle, StatDef, WorkoutConfig } from '../data/types';
 import { computeStat } from '../data/statExpr';
 import {
@@ -69,20 +69,16 @@ const RANGE_OPTIONS = ['7d', '30d', '90d'];
 // 缓存的是 <svg> 元素本身，cloneNode 后直接挂到容器下，渲染出的 DOM 结构与原来一致。
 let parsedFrontSvg: SVGElement | null = null;
 let parsedBackSvg: SVGElement | null = null;
+function parseSvgMarkup(markup: string): SVGElement {
+  const doc = new DOMParser().parseFromString(markup, 'image/svg+xml');
+  return doc.documentElement as unknown as SVGElement;
+}
 function getMuscleSvg(side: 'front' | 'back'): SVGElement {
   if (side === 'front') {
-    if (!parsedFrontSvg) {
-      const holder = document.createElement('div');
-      holder.innerHTML = frontSvg;
-      parsedFrontSvg = holder.firstElementChild as SVGElement;
-    }
+    if (!parsedFrontSvg) parsedFrontSvg = parseSvgMarkup(frontSvg);
     return parsedFrontSvg;
   }
-  if (!parsedBackSvg) {
-    const holder = document.createElement('div');
-    holder.innerHTML = backSvg;
-    parsedBackSvg = holder.firstElementChild as SVGElement;
-  }
+  if (!parsedBackSvg) parsedBackSvg = parseSvgMarkup(backSvg);
   return parsedBackSvg;
 }
 
@@ -93,10 +89,10 @@ function getMuscleSvg(side: 'front' | 'back'): SVGElement {
 let heatmapTooltipEl: HTMLElement | null = null;
 function ensureHeatmapTooltip(): HTMLElement {
   if (heatmapTooltipEl && document.body.contains(heatmapTooltipEl)) return heatmapTooltipEl;
-  const tip = document.createElement('div');
+  const tip = document.body.createDiv();
   tip.id = 'workout-heatmap-tooltip';
   tip.addClass('workout-heatmap-tooltip');
-  tip.style.display = 'none';
+  tip.setCssStyles({ display: 'none' });
   document.body.appendChild(tip);
   heatmapTooltipEl = tip;
   return tip;
@@ -129,14 +125,14 @@ function bindMuscleTooltips(wrap: HTMLElement, side: 'front' | 'back'): void {
     if (!entry) return;
     const me = ev as MouseEvent;
     tip.textContent = formatSvgMuscleLabel(entry, getLocale());
-    tip.style.display = 'block';
+    tip.setCssStyles({ display: 'block' });
     locate(me);
   });
   wrap.addEventListener('mousemove', (ev: Event) => {
     if (tip.style.display === 'block') locate(ev as MouseEvent);
   });
   wrap.addEventListener('mouseleave', () => {
-    tip.style.display = 'none';
+    tip.setCssStyles({ display: 'none' });
   });
 }
 
@@ -266,26 +262,23 @@ export async function renderWorkoutHeatmap(
   info.addClass('workout-heatmap-info');
   const metricName = metric?.name ?? t('modal.muscleManager.followDefaultMetric');
   const rangeText = codeRange ?? '7d';
-  info.createEl('span', { text: `${t('modal.muscleManager.heatmapMetric')}: ${metricName}` });
-  info.createEl('span', { text: `${t('modal.muscleManager.heatmapRange')}: ${rangeText}` });
+  info.createSpan({ text: `${t('modal.muscleManager.heatmapMetric')}: ${metricName}` });
+  info.createSpan({ text: `${t('modal.muscleManager.heatmapRange')}: ${rangeText}` });
 
   const legend = header.createDiv();
   legend.addClass('workout-heatmap-legend');
   // 阈值逐肌可配，单一图例无法呈现各肌不同刻度，故图例仅展示 4 色由轻→重，
   // 具体阈值在各肌肉编辑页查看。
-  legend.createEl('span', { text: t('codeblock.heatmap.legendLow'), cls: 'workout-heatmap-legend-end' });
+  legend.createSpan({ text: t('codeblock.heatmap.legendLow'), cls: 'workout-heatmap-legend-end' });
   const legendScale = [...DEFAULT_HEATMAP_SCALE].sort((a, b) => (a.max ?? Infinity) - (b.max ?? Infinity));
   for (let i = 0; i < legendScale.length; i++) {
     const level = legendScale[i];
     const item = legend.createDiv();
     item.addClass('workout-heatmap-legend-item');
-    const dot = item.createEl('span');
-    dot.style.width = '14px';
-    dot.style.height = '14px';
-    dot.style.borderRadius = '50%';
-    dot.style.background = colorToCss(level.color);
+    const dot = item.createSpan();
+    dot.setCssStyles({ width: '14px', height: '14px', borderRadius: '50%', background: colorToCss(level.color) });
   }
-  legend.createEl('span', { text: t('codeblock.heatmap.legendHigh'), cls: 'workout-heatmap-legend-end' });
+  legend.createSpan({ text: t('codeblock.heatmap.legendHigh'), cls: 'workout-heatmap-legend-end' });
 
   const viewsWrap = container.createDiv();
   viewsWrap.addClass('workout-heatmap-views');
@@ -296,14 +289,14 @@ export async function renderWorkoutHeatmap(
 
   const backWrap = viewsWrap.createDiv();
   backWrap.addClass('workout-heatmap-view');
-  backWrap.style.display = 'none';
+  backWrap.setCssStyles({ display: 'none' });
   backWrap.appendChild(getMuscleSvg('back').cloneNode(true));
 
   // 隐藏头部/面部轮廓（cloneNode 复用已解析 SVG，代价极低，骨架阶段即可完成）
   for (const wrap of [frontWrap, backWrap]) {
     for (const hid of HIDDEN_SVG_GROUP_IDS) {
-      const el2 = wrap.querySelector(`[id="${hid}"]`) as HTMLElement | null;
-      if (el2) el2.style.display = 'none';
+      const el2 = wrap.querySelector<HTMLElement>(`[id="${hid}"]`);
+      if (el2) el2.setCssStyles({ display: 'none' });
     }
   }
 
@@ -384,14 +377,13 @@ export async function renderWorkoutHeatmap(
       }
 
       for (const [id, info] of pathInfo) {
-        const pathEl = wrap.querySelector(`[id="${id}"]`) as SVGPathElement | SVGGElement | null;
+        const pathEl = wrap.querySelector<SVGPathElement | SVGGElement>(`[id="${id}"]`);
         if (!pathEl) {
           console.warn(`[workout-heatmap] SVG path not found: ${id}`);
           continue;
         }
         const colorName = colorForValue(info.value, info.scale);
-        pathEl.style.fill = colorToCss(colorName);
-        pathEl.style.opacity = '0.85';
+        pathEl.setCssStyles({ fill: colorToCss(colorName), opacity: '0.85' });
       }
     }
 

@@ -2,7 +2,7 @@ import { Modal, setIcon, Notice, MarkdownView } from 'obsidian';
 import { DataManager } from '../data/DataManager';
 import { WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
-import { CodeBlockDef, CodeBlockParamDef, buildCodeBlock } from '../codeBlockDefs';
+import { CodeBlockDef, buildCodeBlock } from '../codeBlockDefs';
 
 /*
  * InsertCodeBlockParamModal —— 参数弹窗

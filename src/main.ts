@@ -58,8 +58,6 @@ export default class WorkoutPlugin extends Plugin {
     // 移动端适配：在 body 注入 .is-mobile 根类，供 styles.css 中所有 `.is-mobile` 作用域规则生效。
     // 弹窗 / 代码块 / 设置页 DOM 均在 body 之下，一处注入即可全局覆盖；桌面端不注入，零回归。
     if (this.app.isMobile) document.body.classList.add('is-mobile');
-
-    console.log('Workout plugin loaded');
   }
 
   // 旧版本兼容：为尚未初始化肌肉映射的存量配置自动套用默认映射。
@@ -80,13 +78,11 @@ export default class WorkoutPlugin extends Plugin {
     await this.dataManager.saveConfig(config);
     settings.muscleMappingInitialized = true;
     await this.dataManager.saveSettings();
-    console.log('[workout-block] 已自动套用默认肌肉映射（热力图开箱即用）');
   }
 
   // 插件卸载（禁用/重载）时调用。这里只需做简单的清理日志；子模块会在 Obsidian 内部被自动回收。
   onunload(): void {
     document.body.classList.remove('is-mobile');
-    console.log('Workout plugin unloaded');
   }
 
   // 注册命令面板中的命令。每个 addCommand 会在 Obsidian 命令面板（Ctrl/Cmd+P）里出现一条。
@@ -162,7 +158,7 @@ export default class WorkoutPlugin extends Plugin {
         };
 
         // 调用真正渲染代码块的函数，并传入若干回调（点击行时打开哪个弹窗）
-        renderWorkoutLog(
+        void renderWorkoutLog(
           source,
           el,
           ctx,
@@ -173,8 +169,8 @@ export default class WorkoutPlugin extends Plugin {
           (exercise, plan) => this.openRecordModal(exercise, plan), // 点击"记录"按钮
           (log) => this.openEditRecordModal(log),                   // 点击"编辑"
           (log) => this.deleteRecord(log)                          // 点击"删除"
-        );
-      });
+        ).catch(() => {});
+      }).catch(() => {});
     };
 
     // 把上面这个处理函数登记到代码块注册表（供后续 rerenderAllBlocks 统一重渲染使用）
@@ -189,8 +185,8 @@ export default class WorkoutPlugin extends Plugin {
     const dayHandler = (source: string, el: HTMLElement, ctx: any) => {
       const logs = this.dataManager.getLogs();
       this.dataManager.getConfig().then((config) => {
-        renderWorkoutDay(source, el, ctx, this.app, logs, config);
-      });
+        void renderWorkoutDay(source, el, ctx, this.app, logs, config).catch(() => {});
+      }).catch(() => {});
     };
     registerCodeBlock('workout-day', dayHandler);
     this.registerMarkdownCodeBlockProcessor('workout-day', async (source, el, ctx) => {
@@ -201,8 +197,8 @@ export default class WorkoutPlugin extends Plugin {
     const heatmapHandler = (source: string, el: HTMLElement, ctx: any) => {
       const logs = this.dataManager.getLogs();
       this.dataManager.getConfig().then((config) => {
-        renderWorkoutHeatmap(source, el, ctx, logs, config);
-      });
+        void renderWorkoutHeatmap(source, el, ctx, logs, config).catch(() => {});
+      }).catch(() => {});
     };
     registerCodeBlock('workout-heatmap', heatmapHandler);
     this.registerMarkdownCodeBlockProcessor('workout-heatmap', async (source, el, ctx) => {
@@ -212,7 +208,7 @@ export default class WorkoutPlugin extends Plugin {
     // 注册 workout-plan 代码块（训练计划完成面板）。无 plan 参数时渲染「选择计划」下拉，
     // 选中后写回代码块；有 plan 时渲染完成面板（每组 [编辑][完成] + 进度）。
     const planHandler = (source: string, el: HTMLElement, ctx: any) => {
-      renderWorkoutPlan(source, el, ctx, this.dataManager);
+      void renderWorkoutPlan(source, el, ctx, this.dataManager).catch(() => {});
     };
     registerCodeBlock('workout-plan', planHandler);
     this.registerMarkdownCodeBlockProcessor('workout-plan', async (source, el, ctx) => {
@@ -232,19 +228,21 @@ export default class WorkoutPlugin extends Plugin {
     // 否则（如批量导入）退化为全量重渲染。这样添加一条记录就不会重建所有表格。
     // 传入 config 是为了让 rerenderBlocksForExercise 按稳定的 exerciseId 匹配代码块，
     // 避免多语言下源码写中文名、记录存英文显示名时重渲染不到对应表格。
-    this.dataManager.on('data-changed', async (data) => {
-      const row = data?.row;
-      if (row) {
-        const config = await this.dataManager.getConfig();
-        const name = row.exerciseId ? getExerciseNameById(config.exercises, row.exerciseId) : '';
-        rerenderBlocksForExercise(config, row.exerciseId, name);
-      } else {
-        rerenderAllBlocks();
-      }
-      // workout-day 按日聚合所有训练项，任何一条记录变化都可能改变某日的展示，统一重渲染
-      rerenderBlocksByType('workout-day');
-      // 训练记录变化影响热力图数据，统一重渲染
-      rerenderBlocksByType('workout-heatmap');
+    this.dataManager.on('data-changed', (data) => {
+      void (async () => {
+        const row = data?.row;
+        if (row) {
+          const config = await this.dataManager.getConfig();
+          const name = row.exerciseId ? getExerciseNameById(config.exercises, row.exerciseId) : '';
+          rerenderBlocksForExercise(config, row.exerciseId, name);
+        } else {
+          rerenderAllBlocks();
+        }
+        // workout-day 按日聚合所有训练项，任何一条记录变化都可能改变某日的展示，统一重渲染
+        rerenderBlocksByType('workout-day');
+        // 训练记录变化影响热力图数据，统一重渲染
+        rerenderBlocksByType('workout-heatmap');
+      })().catch(() => {});
     });
 
     // 配置（训练项/类型/语言）变化后，标签与字段都可能变，需要全量重渲染
