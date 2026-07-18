@@ -7,7 +7,7 @@
  */
 
 export const en = {
-  pluginName: 'Workout Block',
+  pluginName: '训练块 Workout Block',
   pluginDescription: 'Lightweight, data-owning, customizable workout tracking plugin',
 
   command: {

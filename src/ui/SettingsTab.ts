@@ -35,7 +35,7 @@ export class SettingsTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     // 页面大标题（文案来自多语言 i18n 的 t()）。
-    containerEl.createEl('h2', { text: t('settings.title') });
+    containerEl.createEl('h2', { text: t('pluginName') });
 
     // 配置是异步读取的（来自磁盘上的 JSON），拿到后再分段渲染各区块。
     this.dataManager.getConfig().then((config) => {
