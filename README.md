@@ -41,6 +41,9 @@
 - 改一个类型，所有「新建训练项 / 记录」的录入界面随之改变（字段由类型的 `fields` 动态渲染）。
 
 **自定义示例**：新建「敏捷训练」类型，字段设为 `组数`(数字) + `距离`(数字，单位「公里」) + `组间休息`(下拉：30s / 60s / 90s)。—— 换作力量训练，也可以只有 `重量` + `次数`。没有限制。
+<img width="837" height="803" alt="image" src="https://github.com/user-attachments/assets/aa00c94f-d809-4a3e-9d4c-7a66da97c898" />
+<img width="840" height="825" alt="image" src="https://github.com/user-attachments/assets/ac374b25-2250-4d4d-b245-05e5ecbe16f8" />
+
 
 ### 2. 记录任何你想训练的数据 —— 自由度落到「每一组」
 
@@ -49,6 +52,8 @@
 - **上次值记忆**：录入下一组时自动带出该训练项上一次的数值，省去重复输入（可在设置关闭）。
 - **模糊匹配**：训练项搜索支持子串匹配，随手输入即可命中。
 - 所有数据落盘为纯文本，字段以 JSON 存于 `fields` 列，表结构与类型定义解耦——新增类型 / 字段不会破坏历史记录。
+<img width="830" height="1113" alt="image" src="https://github.com/user-attachments/assets/56a99a1a-7d57-45f9-b360-6f196ebe81f8" />
+<img width="818" height="1131" alt="image" src="https://github.com/user-attachments/assets/52c418b6-a84a-4f83-9c24-01d148033eff" />
 
 ### 3. 对记录字段做任意衍生计算 —— 你想要的指标，自己算
 
@@ -60,6 +65,9 @@
 - **关联训练类型**：一条统计可关联一个或多个类型，只在对应类型的代码块里出现（如「总训练量」同时关联力量与自重）。
 - **安全**：内置受限求值器，禁用 `eval` / `Function`，函数白名单 + 字段引用 + 四则运算，保存前做语法与合法性校验，非法公式拦截保存。
 - 统计结果**渲染时实时计算**，不写回 CSV、不污染原始数据。
+<img width="825" height="787" alt="image" src="https://github.com/user-attachments/assets/bb0b6959-2871-4575-a1c4-789a31373aa6" />
+<img width="830" height="868" alt="image" src="https://github.com/user-attachments/assets/633c36d8-0b22-43a7-86d7-de8cc654706c" />
+
 
 ### 4. 极高自由度的训练计划 —— 排你自己的练法
 
@@ -70,6 +78,8 @@
 - **基于方案快速建计划**：扫描含 `workout-plan` 代码块的笔记作为来源，一键合并训练项；也支持手动添加方案外的项目、单独增删任意训练组。
 - **笔记即方案**：含 `workout-plan` 代码块的笔记天然就是训练方案，无需额外实体。
 - **完成态独立持久化**：在代码块里逐组点「完成」即写入记录；完成状态存于配置、独立于训练记录，**完成即完成，不做按日 / 周重置**，删除记录不影响完成态。
+<img width="829" height="992" alt="image" src="https://github.com/user-attachments/assets/5da46faf-ca00-4ef6-bb0e-e91b9ce336f7" />
+<img width="820" height="1042" alt="image" src="https://github.com/user-attachments/assets/78369009-e21f-4d78-8d62-b36f5b53bb4e" />
 
 ### 5. 任意颗粒度的肌肉管理 —— 从「一大块肩膀」到「前/中/后束」
 
@@ -82,6 +92,10 @@
   - **手动**：映射留空，由你逐个勾选。
 - 导入后随时在编辑弹窗增删映射，「想改就改，不被预设绑架」。
 - 双语肌肉目录（中文 / 英文解剖名）共 **143 条**可映射路径，配搜索框应对规模。
+
+<img width="807" height="1036" alt="image" src="https://github.com/user-attachments/assets/9e431ca2-8f03-421f-bddd-28b8fdf74573" />
+<img width="805" height="1713" alt="image" src="https://github.com/user-attachments/assets/27e109f3-c0f5-453a-b7aa-a17f37049201" />
+
 
 ### 6. 医学解剖级的肌肉热力图 —— 看见身体的强弱
 
@@ -166,6 +180,8 @@ exercise: 深蹲
 limit: 20
 ```
 ````
+<img width="1062" height="833" alt="image" src="https://github.com/user-attachments/assets/24f51cbe-f731-42e5-8e74-71eab135e39a" />
+
 
 ### `workout-day` —— 当日训练总览
 
@@ -182,6 +198,7 @@ limit: 20
 day: 2026-07-12
 ```
 ````
+<img width="1075" height="161" alt="image" src="https://github.com/user-attachments/assets/40ba7a4c-097e-44e9-ac89-c61e5e07bf39" />
 
 ### `workout-heatmap` —— 肌肉热力图
 
@@ -198,6 +215,7 @@ metric: 次数
 range: 7d
 ```
 ````
+<img width="1061" height="1193" alt="image" src="https://github.com/user-attachments/assets/7467dd79-38b1-4f4f-8efd-af337e858f4a" />
 
 ### `workout-plan` —— 训练计划完成面板
 
@@ -212,6 +230,7 @@ range: 7d
 plan: 推日 A
 ```
 ````
+<img width="1060" height="674" alt="image" src="https://github.com/user-attachments/assets/56d35395-d952-4f11-bf62-dfb4def6fe3f" />
 
 ---
 
