@@ -17,11 +17,10 @@ import { confirmWithModal } from './Confirm';
 /* SettingsTab —— 插件的设置页面。
  * 它继承 Obsidian 的 PluginSettingTab，是 Obsidian「设置」里本插件的专属页面。
  *
- * 渲染采用「双轨」策略以兼容不同 Obsidian 版本：
- *  - ≥ 1.13.0：用声明式 getSettingDefinitions() 渲染（支持设置搜索、拖拽排序、文件夹建议器等原生控件），
- *    本文件的 display() 在该版本下不会被调用。
- *  - < 1.13.0（minAppVersion = 1.5.0）：回退到命令式 display()，保持一致的设置体验。
- * 两套渲染的内容与行为一致，仅实现方式不同。
+ * 渲染采用声明式设置 API（Obsidian ≥ 1.13.0，即本插件声明的 minAppVersion）：
+ * 通过 getSettingDefinitions() 声明式渲染，支持设置搜索、拖拽排序、文件夹建议器等原生控件，
+ * 本文件的 display() 在该版本下不会被调用。
+ * 为兼容更低版本保留命令式 display() 回退路径（仅当未来下调 minAppVersion 时才会生效）。
  *
  * 这里负责：数据文件路径、训练类型/训练项/肌肉的管理入口、单位/语言/阈值等通用项、
  * 以及 Dataview / Daily Notes / Templater 的联动开关（暂隐藏，待功能完成）。 */
@@ -34,8 +33,8 @@ export class SettingsTab extends PluginSettingTab {
     super(app, plugin);
     this.dataManager = dataManager;
     // 设置页左侧导航里本插件的显示名（随语言切换）。
-    // 注：1.13.0+ 的 PluginSettingTab 类型已移除 name 字段，但运行时
-    // （尤其 < 1.13.0 回退路径）仍依赖该字段作为侧栏显示名，故保留赋值。
+    // 注：1.13.0+ 的 PluginSettingTab 类型已移除 name 字段，但运行时侧栏
+    // 仍可能依赖该字段作为显示名，故保留赋值以兼容。
     (this as unknown as { name: string }).name = t('pluginName');
   }
 
