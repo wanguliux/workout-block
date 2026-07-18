@@ -271,3 +271,98 @@ export class TFolder {
 export function normalizePath(value: string): string {
   return value.replace(/\\/g, '/');
 }
+
+// ───────────────────────── DOM 扩展（Obsidian 运行时提供，测试桩补齐） ─────────────────────────
+// 生产代码依赖 Obsidian 对 HTMLElement 扩展的方法（createDiv/createEl/createSpan/setCssStyles 等）
+// 以及全局 helper（createDiv/createSpan/createEl），jsdom 原生没有这些，故在此补齐，使依赖弹窗的测试可运行。
+
+function applyElProps(el: HTMLElement, props?: Record<string, unknown>): void {
+  if (!props) return;
+  for (const [k, v] of Object.entries(props)) {
+    if (v == null) continue;
+    if (k === 'cls') {
+      el.classList.add(...String(v).split(/\s+/).filter(Boolean));
+    } else if (k === 'text') {
+      el.textContent = String(v);
+    } else if (['type', 'href', 'placeholder', 'value', 'title', 'id'].includes(k)) {
+      (el as unknown as Record<string, unknown>)[k] = v;
+    } else {
+      el.setAttribute(k, String(v));
+    }
+  }
+}
+
+const createDivImpl = (props?: Record<string, unknown>): HTMLDivElement => {
+  const el = document.createElement('div');
+  applyElProps(el, props);
+  return el;
+};
+const createSpanImpl = (props?: Record<string, unknown>): HTMLSpanElement => {
+  const el = document.createElement('span');
+  applyElProps(el, props);
+  return el;
+};
+const createElImpl = (tag: string, props?: Record<string, unknown>): HTMLElement => {
+  const el = document.createElement(tag);
+  applyElProps(el, props);
+  return el;
+};
+
+// 全局 helper（Obsidian 运行时挂到 window/globalThis）
+(globalThis as Record<string, unknown>).createDiv = createDivImpl;
+(globalThis as Record<string, unknown>).createSpan = createSpanImpl;
+(globalThis as Record<string, unknown>).createEl = createElImpl;
+
+// 同时作为具名导出，供 `import { createDiv } from 'obsidian'` 的写法使用。
+export const createDiv = createDivImpl;
+export const createSpan = createSpanImpl;
+export const createEl = createElImpl;
+
+// HTMLElement 原型扩展（生产代码用 el.createDiv() 等链式调用）
+if (typeof HTMLElement !== 'undefined') {
+  const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+  if (typeof proto.createDiv !== 'function') {
+    proto.createDiv = function (this: HTMLElement, props?: Record<string, unknown>) {
+      const el = createDivImpl(props);
+      this.appendChild(el);
+      return el;
+    };
+  }
+  if (typeof proto.createSpan !== 'function') {
+    proto.createSpan = function (this: HTMLElement, props?: Record<string, unknown>) {
+      const el = createSpanImpl(props);
+      this.appendChild(el);
+      return el;
+    };
+  }
+  if (typeof proto.createEl !== 'function') {
+    proto.createEl = function (this: HTMLElement, tag: string, props?: Record<string, unknown>) {
+      const el = createElImpl(tag, props);
+      this.appendChild(el);
+      return el;
+    };
+  }
+  if (typeof proto.setCssStyles !== 'function') {
+    proto.setCssStyles = function (this: HTMLElement, styles: Record<string, string>) {
+      for (const [k, v] of Object.entries(styles)) this.style.setProperty(k, v);
+    };
+  }
+  if (typeof proto.setCssProps !== 'function') {
+    proto.setCssProps = function (this: HTMLElement, props: Record<string, string>) {
+      for (const [k, v] of Object.entries(props)) {
+        this.style.setProperty(k.startsWith('--') ? k : `--${k}`, v);
+      }
+    };
+  }
+  if (typeof proto.empty !== 'function') {
+    proto.empty = function (this: HTMLElement) {
+      while (this.firstChild) this.removeChild(this.firstChild);
+    };
+  }
+  if (typeof proto.addClass !== 'function') {
+    proto.addClass = function (this: HTMLElement, ...cls: string[]) {
+      this.classList.add(...cls);
+      return this;
+    };
+  }
+}
