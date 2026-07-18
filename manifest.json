@@ -3,7 +3,7 @@
   "name": "Workout Block",
   "version": "1.0.0",
   "minAppVersion": "1.5.0",
-  "description": "以「极致自由度」为核心的 Obsidian 训练记录插件：训练类型、记录字段、衍生统计、肌肉热力图与训练计划，全部由你自定义。An Obsidian workout tracking plugin built on ultimate flexibility: customize everything from workout types and log fields to derived stats, muscle heatmaps, and training plans.",
+  "description": "极致自由度的训练记录工具：训练类型、记录字段、衍生统计、肌肉热力图与训练计划全部可由你自定义。A flexible workout tracker: customize workout types, log fields, derived stats, muscle heatmaps, and training plans.",
   "author": "wanguliux",
   "authorUrl": "https://github.com/wanguliux",
   "isDesktopOnly": false
