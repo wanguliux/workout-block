@@ -163,7 +163,7 @@ export interface PluginSettings {
   // 肌肉管理首次引导是否已完成（v2.3）
   muscleMappingInitialized: boolean;
   // 设置页「训练设置」区块下五个管理条目的显示顺序（仅影响设置页排序，不影响功能逻辑）
-  managerOrder: string[];            // 取值见 renderManagersSection：['types','exercises','muscles','statistics','plans']
+  managerOrder: string[];            // 管理入口显示顺序：['types','exercises','muscles','statistics','plans']
 }
 
 // 默认设置：首次安装时使用。之后用户改过的设置会覆盖其中对应项。

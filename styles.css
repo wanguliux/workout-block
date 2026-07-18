@@ -699,7 +699,6 @@ input[type="checkbox"].workout-switch {
   border: none;
   border-radius: 11px;
   background: var(--background-modifier-border);
-  background-image: none !important;
   outline: none;
   cursor: pointer;
   transition: background 0.2s ease;
@@ -717,7 +716,6 @@ input[type="checkbox"].workout-switch::after {
 }
 input[type="checkbox"].workout-switch:checked {
   background: var(--workout-accent, var(--interactive-accent));
-  background-image: none !important;
 }
 input[type="checkbox"].workout-switch:checked::after {
   transform: translateX(18px);

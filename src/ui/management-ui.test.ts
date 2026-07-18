@@ -94,7 +94,7 @@ function installDomHelpers() {
   }
 }
 
-// 等待所有 microtask / 宏任务刷新（用于 display() 内部 getConfig().then() 的异步渲染链）。
+// 等待所有 microtask / 宏任务刷新（用于异步渲染链）。
 function flush(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -115,7 +115,7 @@ describe('management UI regressions', async () => {
   // 动态导入被测模块（用 await import 以便在 describe 内按需加载）
   const { DEFAULT_SETTINGS } = await import('../data/types');
   const { getDefaultConfig } = await import('../data/seed');
-  const { setLocale } = await import('../i18n');
+  const { setLocale, getLocale } = await import('../i18n');
   const { RecordModal } = await import('./RecordModal');
   const { ExerciseManagerModal } = await import('./ExerciseManagerModal');
   const { MuscleManagerModal } = await import('./MuscleManagerModal');
@@ -142,6 +142,7 @@ describe('management UI regressions', async () => {
     return {
       app: createApp(),
       getConfig: vi.fn(async () => config),
+      getConfigSync: vi.fn(() => config),
       getSettings: vi.fn(() => settings),
       saveSettings: vi.fn(async () => undefined),
       addExercise: vi.fn(async () => undefined),
@@ -239,21 +240,19 @@ describe('management UI regressions', async () => {
     expect(actionButtons).toEqual(['Edit', 'Delete']);
   });
 
-  // 用例：设置页应同时提供两个"数据目录"的 Browse 浏览按钮
-  it('provides browse buttons for both data directory settings', async () => {
+  // 用例：声明式设置定义应为两个"数据目录"各提供一个 folder 控件（等价原 Browse 浏览按钮）
+  it('provides folder controls for both data directory settings', async () => {
     setLocale('en');
     const dataManager = createDataManager();
     const tab = new SettingsTab(dataManager.app as any, {} as any, dataManager as any);
 
-    tab.display();
-    // display() 在 getConfig().then() 中异步渲染各 section，需冲刷宏任务确保渲染完成
-    await flush();
-
-    const buttonTexts = Array.from(tab.containerEl.querySelectorAll('button')).map((button) =>
-      button.textContent?.trim()
-    );
-
-    expect(buttonTexts.filter((text) => text === 'Browse')).toHaveLength(2);
+    const defs = tab.getSettingDefinitions() as any[];
+    const dataPathGroup = defs.find((d) => d.type === 'group' && d.heading === 'Data File Locations');
+    expect(dataPathGroup).toBeDefined();
+    const folderKeys = (dataPathGroup!.items as any[])
+      .map((item) => item.control?.key)
+      .filter((key: string) => key === 'csvDirectory' || key === 'configDirectory');
+    expect(folderKeys.sort()).toEqual(['configDirectory', 'csvDirectory']);
   });
 
   // 用例：训练类型管理列表应把明细拆成单独行，并带 Edit/Delete 按钮
@@ -278,34 +277,24 @@ describe('management UI regressions', async () => {
     expect(actionButtons).toEqual(['Edit', 'Delete']);
   });
 
-  // 用例：在下拉里切换语言后，设置页与新打开的管理弹窗都应同步切换为对应语言
-  it('switches the settings UI and newly opened manager modals when language changes from the dropdown', async () => {
+  // 用例：声明式语言下拉变更（setControlValue）应即时切换语言
+  it('switches locale when language is changed via setControlValue', async () => {
     setLocale('zh');
     const dataManager = createDataManager();
     const tab = new SettingsTab(dataManager.app as any, {} as any, dataManager as any);
 
-    tab.display();
-    await flush();
+    // 声明式定义应包含 language 下拉（zh/en 两个选项）
+    const defs = tab.getSettingDefinitions() as any[];
+    const languageControl = defs
+      .flatMap((d) => (d.items ? d.items : []))
+      .map((item: any) => item.control)
+      .find((c: any) => c && c.key === 'language');
+    expect(languageControl).toBeDefined();
+    expect(Object.keys(languageControl.options).sort()).toEqual(['en', 'zh']);
 
-    // 找到含 zh/en 两个选项的语言下拉框
-    const languageSelect = Array.from(tab.containerEl.querySelectorAll('select')).find(
-      (select) =>
-        Array.from(select.options).some((option) => option.value === 'zh') &&
-        Array.from(select.options).some((option) => option.value === 'en')
-    ) as HTMLSelectElement;
-
-    // 把它改成英文并触发 change 事件，再冲刷异步渲染
-    languageSelect.value = 'en';
-    languageSelect.dispatchEvent(new Event('change'));
-    await flush();
-
-    expect(tab.containerEl.textContent).toContain('Training Plan Settings');
-
-    const modal = new ExerciseManagerModal(dataManager as any);
-    await modal.onOpen();
-
-    expect(modal.contentEl.textContent).toContain('Exercise Manager');
-    expect(modal.contentEl.textContent).toContain('Running');
+    // 模拟 Obsidian 在声明式下拉变更时调用 setControlValue，应即时切换语言
+    await tab.setControlValue('language', 'en');
+    expect(getLocale()).toBe('en');
   });
 
   // 用例 M1：保存一个"字段只用 labelKey、没有纯文本 label"的内置训练类型（旧逻辑会误拦保存，这里验证能通过）

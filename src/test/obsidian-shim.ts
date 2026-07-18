@@ -78,6 +78,9 @@ export class PluginSettingTab {
     this.plugin = plugin;
     this.containerEl = document.createElement('div');
   }
+
+  // 1.13.0+ 声明式设置 API：通知 Obsidian 重渲染设置定义（测试中为 no-op）。
+  update(): void {}
 }
 
 // 模拟"按钮"UI 组件：自动创建一个 <button> 并挂到容器里
