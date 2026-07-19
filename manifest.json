@@ -1,8 +1,8 @@
 {
   "id": "workout-block",
   "name": "Workout Block",
-  "version": "1.0.0",
-  "minAppVersion": "1.13.0",
+  "version": "1.0.2",
+  "minAppVersion": "1.12.7",
   "description": "极致自由度的训练记录工具：训练类型、记录字段、衍生统计、肌肉热力图与训练计划全部可由你自定义。A flexible workout tracker: customize workout types, log fields, derived stats, muscle heatmaps, and training plans.",
   "author": "wanguliux",
   "authorUrl": "https://github.com/wanguliux",

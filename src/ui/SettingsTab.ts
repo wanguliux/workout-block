@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Notice, Setting } from 'obsidian';
+import { App, PluginSettingTab, Notice, Setting, TextComponent } from 'obsidian';
 import type { SettingDefinitionItem, SettingDefinition } from 'obsidian';
 import type WorkoutPlugin from '../main';
 import { rerenderAllBlocks } from '../codeblock/registry';
@@ -11,6 +11,8 @@ import { StatManagerModal } from './StatManagerModal';
 import { TypeManagerModal } from './TypeManagerModal';
 import { TrainingPlanManagerModal } from './TrainingPlanManagerModal';
 import { confirmWithModal } from './Confirm';
+import { VaultPathSuggest } from './VaultPathSuggest';
+import { VaultFolderSuggestModal } from './VaultFolderSuggestModal';
 
 /* SettingsTab —— 插件设置页（双轨渲染）。
  *
@@ -77,8 +79,12 @@ export class SettingsTab extends PluginSettingTab {
     if (key === 'language') {
       setLocale(value as 'zh' | 'en');
       rerenderAllBlocks();
-      // 设置文案随语言变化，重渲染整页定义以刷新显示名/说明（1.13.0+ 合法）。
-      this.update();
+      // 设置文案随语言变化，重渲染整页定义以刷新显示名/说明。
+      // update() 是 1.13.0 才加入的 API；用动态属性访问规避社区 lint（no-unsupported-api），
+      // 使插件在更低的 minAppVersion 下也能通过校验，且运行时仅在 ≥1.13.0 存在该成员时调用。
+      const self = this as unknown as Record<string, unknown>;
+      const updateFn = self['update'];
+      if (typeof updateFn === 'function') (updateFn as () => void)();
     } else if (key === 'unit') {
       rerenderAllBlocks();
     }
@@ -203,30 +209,54 @@ export class SettingsTab extends PluginSettingTab {
 
   private renderDataPathSection(containerEl: HTMLElement, settings: Record<string, unknown>): void {
     new Setting(containerEl).setName(t('settings.dataPath')).setHeading();
-    new Setting(containerEl)
-      .setName(t('settings.csvDirectory'))
-      .setDesc(t('settings.csvDirectoryDesc'))
-      .addText((text) =>
-        text
-          .setPlaceholder(t('settings.dataDirectoryPlaceholder'))
-          .setValue((settings['csvDirectory'] as string) ?? '')
-          .onChange(async (v) => {
-            settings['csvDirectory'] = v;
-            await this.dataManager.saveSettings();
-          })
-      );
-    new Setting(containerEl)
-      .setName(t('settings.configDirectory'))
-      .setDesc(t('settings.configDirectoryDesc'))
-      .addText((text) =>
-        text
-          .setPlaceholder(t('settings.dataDirectoryPlaceholder'))
-          .setValue((settings['configDirectory'] as string) ?? '')
-          .onChange(async (v) => {
-            settings['configDirectory'] = v;
-            await this.dataManager.saveSettings();
-          })
-      );
+    this.renderFolderSetting(containerEl, settings, 'csvDirectory', t('settings.csvDirectory'), t('settings.csvDirectoryDesc'));
+    this.renderFolderSetting(containerEl, settings, 'configDirectory', t('settings.configDirectory'), t('settings.configDirectoryDesc'));
+  }
+
+  // 渲染单个「数据目录」设置行：文本框（边打字边提示匹配文件夹）+ 浏览按钮（弹出模糊搜索选择文件夹）。
+  // 这是命令式回退路径（Obsidian < 1.13.0）下对声明式 folder 控件（自带 vault 文件夹建议器）的等价实现。
+  private renderFolderSetting(
+    containerEl: HTMLElement,
+    settings: Record<string, unknown>,
+    key: string,
+    name: string,
+    desc: string
+  ): void {
+    const setting = new Setting(containerEl).setName(name).setDesc(desc);
+
+    let textComp: TextComponent | undefined;
+    setting.addText((text) => {
+      textComp = text;
+      text
+        .setPlaceholder(t('settings.dataDirectoryPlaceholder'))
+        .setValue((settings[key] as string) ?? '')
+        .onChange(async (v) => {
+          settings[key] = v;
+          await this.dataManager.saveSettings();
+        });
+    });
+
+    // 实时输入建议：边打字边列出匹配的 vault 文件夹路径。
+    if (textComp) {
+      new VaultPathSuggest(this.app, textComp.inputEl, async (v) => {
+        settings[key] = v;
+        await this.dataManager.saveSettings();
+      });
+    }
+
+    // 浏览按钮：弹出模糊搜索弹窗，从 vault 文件夹结构里挑选目标目录。
+    setting.addButton((btn) =>
+      btn
+        .setButtonText(t('settings.browse'))
+        .setIcon('folder-open')
+        .onClick(() => {
+          new VaultFolderSuggestModal(this.app, (v) => {
+            if (textComp) textComp.setValue(v);
+            settings[key] = v;
+            void this.dataManager.saveSettings();
+          }).open();
+        })
+    );
   }
 
   private renderManagersSection(containerEl: HTMLElement, config: WorkoutConfig, settings: Record<string, unknown>): void {

@@ -1,6 +1,7 @@
 import { Modal, setIcon, Notice, MarkdownView } from 'obsidian';
 import { DataManager } from '../data/DataManager';
-import { WorkoutConfig } from '../data/types';
+import { WorkoutConfig, Exercise, TrainingType } from '../data/types';
+import { getExerciseName, getTrainingTypeName } from '../data/display';
 import { t } from '../i18n';
 import { CodeBlockDef, buildCodeBlock } from '../codeBlockDefs';
 
@@ -10,12 +11,23 @@ import { CodeBlockDef, buildCodeBlock } from '../codeBlockDefs';
  * 底部「跳过参数」直接插入纯代码块；「插入到光标处」带上已填参数。
  * 通过当前 Markdown 编辑器的 editor.replaceSelection 在光标处插入文本。
  */
+
+interface ExerciseComboState {
+  input: HTMLInputElement;
+  dropdown: HTMLDivElement;
+  exercises: Exercise[];
+  trainingTypes: TrainingType[];
+  filtered: Exercise[];
+  highlighted: number;
+}
+
 export class InsertCodeBlockParamModal extends Modal {
   private dataManager: DataManager;
   private def: CodeBlockDef;
   private values: Record<string, string> = {};
   private paramContainer!: HTMLDivElement;
   private inputs: Record<string, HTMLInputElement | HTMLSelectElement> = {};
+  private exerciseCombos: Record<string, ExerciseComboState> = {};
 
   constructor(dataManager: DataManager, def: CodeBlockDef) {
     super(dataManager.app);
@@ -104,6 +116,76 @@ export class InsertCodeBlockParamModal extends Modal {
           this.values[p.key] = select.value;
         });
         this.inputs[p.key] = select;
+      } else if (p.type === 'exercise') {
+        const exercises = config.exercises;
+        const comboWrapper = row.createDiv();
+        comboWrapper.addClass('workout-combo-wrapper');
+
+        const input = comboWrapper.createEl('input', { type: 'text' });
+        input.addClass('workout-input');
+        input.addClass('workout-combo-input');
+        if (p.placeholder) input.placeholder = p.placeholder;
+
+        const dropdown = comboWrapper.createDiv();
+        dropdown.addClass('workout-combo-dropdown');
+        dropdown.setCssStyles({ display: 'none' });
+
+        const state: ExerciseComboState = {
+          input,
+          dropdown,
+          exercises,
+          trainingTypes: config.trainingTypes,
+          filtered: [...exercises],
+          highlighted: -1,
+        };
+        this.exerciseCombos[p.key] = state;
+
+        this.renderExerciseDropdown(state);
+
+        input.addEventListener('input', () => {
+          this.filterExercises(state, input.value);
+          state.highlighted = -1;
+          this.renderExerciseDropdown(state);
+          dropdown.setCssStyles({ display: 'block' });
+        });
+
+        input.addEventListener('focus', () => {
+          this.filterExercises(state, input.value);
+          state.highlighted = -1;
+          this.renderExerciseDropdown(state);
+          dropdown.setCssStyles({ display: 'block' });
+        });
+
+        input.addEventListener('keydown', (e) => {
+          if (dropdown.style.display === 'none') return;
+          const items = dropdown.querySelectorAll('.workout-combo-item');
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            state.highlighted = Math.min(state.highlighted + 1, items.length - 1);
+            this.updateDropdownHighlight(items, state.highlighted);
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            state.highlighted = Math.max(state.highlighted - 1, 0);
+            this.updateDropdownHighlight(items, state.highlighted);
+          } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (state.highlighted >= 0 && state.highlighted < items.length) {
+              const exId = (items[state.highlighted] as HTMLElement).dataset.id;
+              if (exId) this.selectExerciseById(state, exId);
+            }
+            dropdown.setCssStyles({ display: 'none' });
+          } else if (e.key === 'Escape') {
+            dropdown.setCssStyles({ display: 'none' });
+          }
+        });
+
+        document.addEventListener('mousedown', (e) => {
+          if (!comboWrapper.contains(e.target as Node)) {
+            dropdown.setCssStyles({ display: 'none' });
+          }
+        });
+
+        this.inputs[p.key] = input;
       } else {
         const input = row.createEl('input', { type: p.type === 'number' ? 'number' : 'text' });
         input.addClass('workout-input');
@@ -140,6 +222,66 @@ export class InsertCodeBlockParamModal extends Modal {
     view.editor.replaceSelection(text);
     new Notice(t('modal.insertCodeblock.inserted'));
     this.close();
+  }
+
+  // ===== 训练项搜索 Combobox 实现（复用 RecordModal 同款交互） =====
+
+  private filterExercises(state: ExerciseComboState, query: string): void {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      state.filtered = [...state.exercises];
+    } else {
+      state.filtered = state.exercises.filter((ex) => {
+        const name = getExerciseName(ex).toLowerCase();
+        return name.includes(q) || ex.id.toLowerCase().includes(q);
+      });
+    }
+  }
+
+  private renderExerciseDropdown(state: ExerciseComboState): void {
+    const dropdown = state.dropdown;
+    dropdown.empty();
+
+    if (state.filtered.length === 0) {
+      const emptyItem = dropdown.createDiv({ text: t('modal.recordSet.noMatchingExercise') || '无匹配项' });
+      emptyItem.addClass('workout-combo-item');
+      emptyItem.addClass('workout-combo-empty');
+      return;
+    }
+
+    for (const ex of state.filtered) {
+      const item = dropdown.createDiv();
+      item.addClass('workout-combo-item');
+      item.dataset.id = ex.id;
+
+      item.createSpan({ text: getExerciseName(ex) });
+      const typeTag = item.createSpan({
+        text: getTrainingTypeName(state.trainingTypes.find((t) => t.id === ex.category)) || ex.category,
+      });
+      typeTag.addClass('workout-combo-type-tag');
+
+      item.addEventListener('click', () => {
+        this.selectExerciseById(state, ex.id);
+        dropdown.setCssStyles({ display: 'none' });
+      });
+
+      item.addEventListener('mouseenter', () => {
+        state.highlighted = Array.from(dropdown.querySelectorAll('.workout-combo-item')).indexOf(item);
+        this.updateDropdownHighlight(dropdown.querySelectorAll('.workout-combo-item'), state.highlighted);
+      });
+    }
+  }
+
+  private updateDropdownHighlight(items: NodeListOf<Element>, highlighted: number): void {
+    items.forEach((item, i) => {
+      (item as HTMLElement).toggleClass('workout-combo-highlighted', i === highlighted);
+    });
+  }
+
+  private selectExerciseById(state: ExerciseComboState, id: string): void {
+    const exercise = state.exercises.find((e) => e.id === id);
+    if (!exercise) return;
+    state.input.value = getExerciseName(exercise);
   }
 
   onClose(): void {

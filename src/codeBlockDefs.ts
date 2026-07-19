@@ -9,7 +9,7 @@
  * 否则生成的参数不会被解析器识别而失效。
  */
 
-export type ParamType = 'text' | 'number' | 'select';
+export type ParamType = 'text' | 'number' | 'select' | 'exercise';
 
 export interface CodeBlockParamDef {
   key: string;                          // 写入代码块正文、解析器可识别的参数名（下划线风格）
@@ -38,7 +38,7 @@ export const CODE_BLOCK_DEFS: CodeBlockDef[] = [
     title: '训练记录表',
     desc: '按训练项/时间筛选，展示历史训练记录明细表格',
     params: [
-      { key: 'exercise', label: '训练项', type: 'text', placeholder: '如：卧推（留空显示全部）' },
+      { key: 'exercise', label: '训练项', type: 'exercise', placeholder: '如：卧推（留空显示全部）' },
       { key: 'day', label: '最近天数', type: 'number', placeholder: '如 30，只显示最近 N 天' },
       { key: 'group_by', label: '分组方式', type: 'select', options: ['date', 'week'], optionLabels: { date: '按日期', week: '按周' } },
       { key: 'sort', label: '排序', type: 'select', options: ['desc', 'asc'], optionLabels: { desc: '最新在前', asc: '最早在前' } },

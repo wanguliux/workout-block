@@ -167,11 +167,13 @@ describe('management UI regressions', async () => {
 
     await modal.onOpen();
 
-    const optionTexts = Array.from(modal.contentEl.querySelectorAll('select option')).map((option) =>
-      option.textContent?.trim()
-    );
+    // 训练项用 combobox（input + 下拉 div），不是 <select>；候选训练项名渲染在各
+    // .workout-combo-item 的首个 span 中（第二个 span 才是类型标签）。
+    const exerciseNameTexts = Array.from(
+      modal.contentEl.querySelectorAll('.workout-combo-item > span:first-child')
+    ).map((span) => span.textContent?.trim());
 
-    expect(optionTexts).toContain('Running');
+    expect(exerciseNameTexts).toContain('Running');
   });
 
   // 用例：训练项管理列表应直接渲染出完整明细（类型/主练肌群/次练肌群）以及 Edit/Delete 按钮
