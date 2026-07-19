@@ -8,7 +8,7 @@ An Obsidian workout-tracking plugin built on **"ultimate flexibility."** It impo
 
 > **Core proposition**: No "fixed fields," no "standard exercise library," no "official templates." The plugin only provides an endlessly customizable skeleton — how you use it is entirely up to you.
 
-> Plugin ID: `workout-block` ｜ Minimum Obsidian version: `1.5.0` ｜ License: MIT ｜ Languages: 中文 / English
+> Plugin ID: `workout-block` ｜ Minimum Obsidian version: `1.12.7` ｜ License: MIT ｜ Languages: 中文 / English
 
 ---
 

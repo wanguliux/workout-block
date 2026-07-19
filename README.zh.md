@@ -8,7 +8,7 @@
 
 > **核心主张**：没有「固定字段」、没有「标准动作库」、没有「官方模板」。插件只提供一套可无限自定义的骨架，怎么用完全由你决定。
 
-> 插件 ID：`workout-block` ｜ 最低 Obsidian 版本：`1.5.0` ｜ 许可证：MIT ｜ 语言：中文 / English
+> 插件 ID：`workout-block` ｜ 最低 Obsidian 版本：`1.12.7` ｜ 许可证：MIT ｜ 语言：中文 / English
 
 ---
 
