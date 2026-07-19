@@ -1,6 +1,6 @@
 {
   "name": "workout-block",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "训练块 Workout Block —— 高度可自定义的 Obsidian 训练记录插件",
   "main": "main.js",
   "scripts": {

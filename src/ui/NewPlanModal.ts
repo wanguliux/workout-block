@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { parseDuration, secondsToParts } from '../util/duration';
 import { formatMass, parseMass } from '../util/units';
 import { generateId } from '../util/id';
-import { findSchemeNotes, extractSchemeExercises, invalidateSchemeCache, SchemeNote } from '../data/planScanner';
+import { ensureSchemeIndex, getSchemeNotes, extractSchemeExercises, invalidateSchemeCache, onSchemeIndexChanged, SchemeNote } from '../data/planScanner';
 
 /*
  * NewPlanModal.ts —— 「新增训练计划」弹窗（配置形态）
@@ -43,6 +43,7 @@ export class NewPlanModal extends Modal {
   private timeTypeSelect!: HTMLSelectElement;
   private timeControlsEl!: HTMLDivElement;
   private schemeSelect!: HTMLSelectElement;
+  private unsubScheme?: () => void; // 方案索引变化订阅的退订函数
   private selectAllCheckbox!: HTMLInputElement;
   private selectLabel!: HTMLSpanElement;
   private itemsContainer!: HTMLDivElement;
@@ -121,7 +122,12 @@ export class NewPlanModal extends Modal {
     schemeField.createEl('label', { text: t('modal.newPlan.selectPlan') });
     this.schemeSelect = schemeField.createEl('select');
     this.schemeSelect.addClass('workout-select');
-    await this.populateSchemeSelect();
+    // change 监听只挂一次（populateSchemeSelect 会反复重建 option，但 select 自身监听不丢）
+    this.schemeSelect.addEventListener('change', () => { void this.onSchemeChange(); });
+    // 构建方案索引（首次全量扫描，之后增量维护）并填充下拉
+    await this.refreshSchemeList();
+    // 订阅索引变化：笔记里新增/删除 workout-log 代码块时即时刷新下拉，无需重载插件
+    this.unsubScheme = onSchemeIndexChanged(() => { void this.refreshSchemeList(); });
 
     // 全选行
     const selectAllRow = contentEl.createDiv();
@@ -164,23 +170,29 @@ export class NewPlanModal extends Modal {
     return `${t('modal.newPlan.defaultPrefix')} ${this.todayStr()}`;
   }
 
-  private async populateSchemeSelect(): Promise<void> {
+  // 构建/维护方案索引（首次全量扫描 + 注册增量监听），随后刷新下拉。
+  private async refreshSchemeList(): Promise<void> {
+    await ensureSchemeIndex(this.app);
+    this.populateSchemeSelect();
+  }
+
+  // 重建「选择训练方案」下拉选项（同步；索引已由 ensureSchemeIndex 构建/维护）。
+  // 反复填充时尽量保留当前选中项，避免索引刷新打断用户已做的选择。
+  private populateSchemeSelect(): void {
+    const prev = this.schemeSelect.value;
     this.schemeSelect.empty();
     this.schemeSelect.createEl('option', { value: '', text: t('modal.newPlan.noScheme') });
-    let notes: SchemeNote[] = [];
-    try {
-      notes = await findSchemeNotes(this.app);
-    } catch {
-      notes = [];
-    }
+    const notes = getSchemeNotes();
     for (const note of notes) {
       this.schemeSelect.createEl('option', { value: note.path, text: note.name });
     }
-    if (this.sourceNote) {
+    // 优先恢复上次选中的 path；否则尝试用已有的 sourceNote 反查
+    if (prev && notes.some((n) => n.path === prev)) {
+      this.schemeSelect.value = prev;
+    } else if (this.sourceNote) {
       const match = notes.find((n) => n.name === this.sourceNote);
       if (match) this.schemeSelect.value = match.path;
     }
-    this.schemeSelect.addEventListener('change', () => { void this.onSchemeChange(); });
   }
 
   private async onSchemeChange(): Promise<void> {
@@ -481,6 +493,8 @@ export class NewPlanModal extends Modal {
   }
 
   onClose(): void {
+    this.unsubScheme?.();
+    this.unsubScheme = undefined;
     this.contentEl.empty();
   }
 }
