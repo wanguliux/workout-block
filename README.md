@@ -42,6 +42,8 @@ Workout types (e.g. "Strength," "Cardio," "Bodyweight") are only seed defaults. 
 
 **Custom example**: Create an "Agility" type with fields `sets` (number) + `distance` (number, unit "km") + `rest between sets` (select: 30s / 60s / 90s). For strength, you could have just `weight` + `reps`. No limits.
 
+<img width="40%" height="803" alt="image" src="https://github.com/user-attachments/assets/aa00c94f-d809-4a3e-9d4c-7a66da97c898" /> <img width="40%" height="825" alt="image" src="https://github.com/user-attachments/assets/ac374b25-2250-4d4d-b245-05e5ecbe16f8" />
+
 ### 2. Log Any Training Data You Want — Freedom Down to "Each Set"
 
 The smallest log granularity is **"one set"** (e.g. "Bench press 60kg × 8 reps" = one CSV row). The fields you fill in are **entirely determined by the selected workout type**, so you can log as many kinds of data as you have defined types and fields.
@@ -49,6 +51,8 @@ The smallest log granularity is **"one set"** (e.g. "Bench press 60kg × 8 reps"
 - **Last-value memory**: entering the next set auto-fills the previous value for that exercise, saving re-typing (toggleable in settings).
 - **Fuzzy match**: exercise search supports substring matching — type a fragment and hit it.
 - All data lands as plain text; fields are stored as JSON in the `fields` column, decoupling table structure from type definitions — adding types / fields never breaks historical logs.
+
+<img width="40%" height="1113" alt="image" src="https://github.com/user-attachments/assets/56a99a1a-7d57-45f9-b360-6f196ebe81f8" /> <img width=40% height="1131" alt="image" src="https://github.com/user-attachments/assets/52c418b6-a84a-4f83-9c24-01d148033eff" />
 
 ### 3. Arbitrary Derived Calculations on Log Fields — Compute the Metrics You Care About
 
@@ -61,6 +65,9 @@ The built-in "total sets" is just one ordinary, pre-seeded stat. You can delete 
 - **Safe**: a sandboxed evaluator disables `eval` / `Function`, uses a function whitelist + field references + arithmetic, validates syntax and legality before saving, and blocks illegal formulas.
 - Stat results are **computed at render time** — never written back to CSV, never polluting raw data.
 
+<img width="40%" height="787" alt="image" src="https://github.com/user-attachments/assets/bb0b6959-2871-4575-a1c4-789a31373aa6" /> <img width="40%" height="998" alt="image" src="https://github.com/user-attachments/assets/bcfd0e43-0595-4ff9-bdbc-10d1320712b0" />
+
+
 ### 4. Highly Flexible Training Plans — Schedule Your Own Way
 
 A training plan isn't boxed in by a template; it's a fully configurable plan instance:
@@ -70,6 +77,8 @@ A training plan isn't boxed in by a template; it's a fully configurable plan ins
 - **Build plans from schemes**: scan notes containing `workout-plan` code blocks as sources and merge exercises in one click; also supports manually adding items outside the scheme, and adding/removing any training set individually.
 - **Note-as-scheme**: a note with a `workout-plan` code block is itself a training scheme — no extra entity needed.
 - **Completion state persisted independently**: tick "done" per set inside the code block to write the record; completion state lives in config, independent of training logs — **done means done, with no daily / weekly reset**, and deleting logs doesn't affect completion.
+
+<img width="40%" height="992" alt="image" src="https://github.com/user-attachments/assets/5da46faf-ca00-4ef6-bb0e-e91b9ce336f7" /> <img width="40%" height="1042" alt="image" src="https://github.com/user-attachments/assets/78369009-e21f-4d78-8d62-b36f5b53bb4e" />
 
 ### 5. Muscle Management at Any Granularity — From "One Big Shoulder" to "Front/Middle/Rear Delts"
 
@@ -82,6 +91,8 @@ The relationship between muscles and the body SVG is a configurable mapping of *
   - **Manual**: mappings left empty for you to tick one by one.
 - After import, add/remove mappings anytime in the edit popup — "change whenever you want, never held hostage by presets."
 - Bilingual muscle catalog (Chinese / English anatomical names) with **143** mappable paths, plus a search box to handle the scale.
+
+<img width="30%" height="1036" alt="image" src="https://github.com/user-attachments/assets/9e431ca2-8f03-421f-bddd-28b8fdf74573" /> <img width="30%" height="1022" alt="image" src="https://github.com/user-attachments/assets/da115383-8e41-4973-a80a-e5b5f3bb76d8" /> <img width="30%" height="627" alt="image" src="https://github.com/user-attachments/assets/a27ea6a8-fe3b-411f-a89b-45079128ca5d" />
 
 ### 6. Medical-Grade Muscle Heatmap — See Your Body's Strengths & Weaknesses
 
