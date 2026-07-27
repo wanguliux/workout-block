@@ -177,6 +177,7 @@ exercise: Squat
 limit: 20
 ```
 ````
+<img width="40%" height="833" alt="image" src="https://github.com/user-attachments/assets/24f51cbe-f731-42e5-8e74-71eab135e39a" />
 
 ### `workout-day` — That Day's Training Overview
 
@@ -193,7 +194,7 @@ Summarizes "what was trained" by day; columns: exercise / stat value / primary m
 day: 2026-07-12
 ```
 ````
-
+<img width="1075" height="161" alt="image" src="https://github.com/user-attachments/assets/40ba7a4c-097e-44e9-ac89-c61e5e07bf39" />
 ### `workout-heatmap` — Muscle Heatmap
 
 Renders the full-body muscle figure, colored by training volume. Above the code block is a **front / back** switch; the color tiers (default 4: blue / green / orange / red) — tier count, each tier's color and threshold — are all customizable per muscle in "Muscle management."
@@ -210,6 +211,9 @@ range: 7d
 ```
 ````
 
+<img width="1061" height="1193" alt="image" src="https://github.com/user-attachments/assets/7467dd79-38b1-4f4f-8efd-af337e858f4a" />
+
+
 ### `workout-plan` — Training Plan Completion Panel
 
 Tracks completion progress of a training scheme, ticking off sets one by one.
@@ -223,6 +227,8 @@ Tracks completion progress of a training scheme, ticking off sets one by one.
 plan: Push Day A
 ```
 ````
+
+<img width="1060" height="674" alt="image" src="https://github.com/user-attachments/assets/56d35395-d952-4f11-bf62-dfb4def6fe3f" />
 
 ---
 
