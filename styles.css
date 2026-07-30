@@ -1263,3 +1263,78 @@ input[type="checkbox"].workout-switch:checked::after {
   font-size: var(--font-ui-smaller);
   margin-top: 2px;
 }
+
+/* 跨插件分组样式 */
+.workout-insert-group {
+  margin-top: 0.8em;
+}
+
+.workout-insert-group:first-child {
+  margin-top: 0;
+}
+
+.workout-insert-group-label {
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.3em 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  display: block;
+  margin-bottom: 0.4em;
+}
+
+/* ── Tab 栏（跨插件切换） ──────────────────────────────────── */
+
+.workout-insert-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--background-modifier-border) transparent;
+  padding-bottom: 2px;
+}
+
+.workout-insert-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.workout-insert-tabs::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workout-insert-tabs::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+}
+
+.workout-insert-tab {
+  flex: 0 0 auto;
+  padding: 5px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller, 12px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  white-space: nowrap;
+}
+
+.workout-insert-tab:hover {
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.workout-insert-tab.is-active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent, #fff);
+  border-color: var(--interactive-accent);
+}

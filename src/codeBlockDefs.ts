@@ -1,6 +1,6 @@
 /*
  * codeBlockDefs.ts —— 快捷插入代码块的元数据与文本生成
- * 这是「插入代码块」功能的单一数据源：主弹窗（卡片列表）和参数弹窗（表单）
+ * 这是「插入代码块」功能的单个数据源：主弹窗（卡片列表）和参数弹窗（表单）
  * 都从这里读取定义，后续新增代码块只需在此追加一条，无需改弹窗逻辑。
  *
  * 重要：params[].key 必须使用各代码块解析器实际接受的「下划线风格」命名
@@ -77,10 +77,39 @@ export const CODE_BLOCK_DEFS: CodeBlockDef[] = [
   },
 ];
 
+/**
+ * 可构建代码块的通用接口（兼容 CodeBlockDef 与跨插件的 BlockDefinitionWithParams）。
+ * CodeBlockDef 用 id 标识语言，BlockDefinitionWithParams 用 language —— 两者均支持。
+ */
+export interface BuildableDef {
+  id?: string;
+  language?: string;
+  template?: string;
+  params: { key: string }[];
+}
+
 // 根据定义与用户填写的值，生成最终插入的代码块纯文本。
 // 值为空（或纯空白）的参数会被跳过，从而落到代码块的默认值逻辑上。
-export function buildCodeBlock(def: CodeBlockDef, values: Record<string, string>): string {
-  const lines = [def.id];
+// 支持两种生成模式：
+//   1. 模板模式（template 存在）：{{key}} 占位替换
+//   2. 键值模式（无 template）：生成 `key: value` 行
+export function buildCodeBlock(def: BuildableDef, values: Record<string, string>): string {
+  const language = def.language ?? def.id ?? '';
+
+  // 模板模式：{{key}} 占位替换
+  if (def.template) {
+    let result = '```' + language + '\n' + def.template + '\n```' + '\n';
+    for (const [key, val] of Object.entries(values)) {
+      if (val && val.trim() !== '') {
+        result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), val.trim());
+      }
+    }
+    result = result.replace(/\{\{[^}]+\}\}/g, '');
+    return result;
+  }
+
+  // 键值模式
+  const lines = [language];
   for (const p of def.params) {
     const v = values[p.key];
     if (v === undefined || v === null) continue;

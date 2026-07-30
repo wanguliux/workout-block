@@ -17,6 +17,7 @@ export const en = {
     newType: 'Training Plan: New Training Type',
     settings: 'Training Plan: Settings',
     insertCodeblock: 'Insert Code Block',
+    insertBlock: 'Insert Code Block',
   },
 
   type: {
@@ -178,7 +179,7 @@ export const en = {
       selectExercise: 'Please select a valid exercise',
     },
     insertCodeblock: {
-      title: 'Insert Workout Code Block',
+      title: 'Insert Code Block',
       searchPlaceholder: 'Search code blocks...',
       noMatch: 'No matching code block',
       paramTitle: 'Set parameters (all optional; blank = default)',

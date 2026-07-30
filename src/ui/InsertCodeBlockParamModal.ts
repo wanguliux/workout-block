@@ -1,15 +1,21 @@
 import { Modal, setIcon, Notice, MarkdownView } from 'obsidian';
+import type { App } from 'obsidian';
 import { DataManager } from '../data/DataManager';
 import { WorkoutConfig, Exercise, TrainingType } from '../data/types';
 import { getExerciseName, getTrainingTypeName } from '../data/display';
 import { t } from '../i18n';
-import { CodeBlockDef, buildCodeBlock } from '../codeBlockDefs';
+import { buildCodeBlock } from '../codeBlockDefs';
+import type { BlockDefinitionWithParams, BlockParamDef } from '../blockProvider';
 
 /*
- * InsertCodeBlockParamModal —— 参数弹窗
+ * InsertCodeBlockParamModal —— 参数弹窗（跨插件通用）
  * 选定某个代码块后弹出：展示该代码块说明 + 动态生成的参数表单（全部非必填）。
  * 底部「跳过参数」直接插入纯代码块；「插入到光标处」带上已填参数。
  * 通过当前 Markdown 编辑器的 editor.replaceSelection 在光标处插入文本。
+ *
+ * 跨插件兼容：接受 BlockDefinitionWithParams（来自 blockProvider 契约），
+ * 支持 workout 专有类型（exercise / dynamic select）以及其他插件的扩展类型
+ * （未知类型 fallback 为文本输入）。
  */
 
 interface ExerciseComboState {
@@ -23,16 +29,16 @@ interface ExerciseComboState {
 
 export class InsertCodeBlockParamModal extends Modal {
   private dataManager: DataManager;
-  private def: CodeBlockDef;
+  private block: BlockDefinitionWithParams;
   private values: Record<string, string> = {};
   private paramContainer!: HTMLDivElement;
   private inputs: Record<string, HTMLInputElement | HTMLSelectElement> = {};
   private exerciseCombos: Record<string, ExerciseComboState> = {};
 
-  constructor(dataManager: DataManager, def: CodeBlockDef) {
-    super(dataManager.app);
+  constructor(app: App, dataManager: DataManager, block: BlockDefinitionWithParams) {
+    super(app);
     this.dataManager = dataManager;
-    this.def = def;
+    this.block = block;
   }
 
   async onOpen(): Promise<void> {
@@ -42,64 +48,74 @@ export class InsertCodeBlockParamModal extends Modal {
     // 标题：图标 + 名称
     const header = contentEl.createDiv();
     header.addClass('workout-insert-param-header');
-    const iconEl = header.createSpan();
-    iconEl.addClass('workout-insert-card-icon');
-    setIcon(iconEl, this.def.icon);
-    header.createEl('h2', { text: this.def.title });
+    if (this.block.icon) {
+      const iconEl = header.createSpan();
+      iconEl.addClass('workout-insert-card-icon');
+      setIcon(iconEl, this.block.icon);
+    }
+    header.createEl('h2', { text: this.block.name });
 
-    contentEl.createDiv({ text: this.def.desc, cls: 'workout-insert-card-desc' });
+    if (this.block.description) {
+      contentEl.createDiv({ text: this.block.description, cls: 'workout-insert-card-desc' });
+    }
 
     // 参数区标题
-    const paramTitle = contentEl.createDiv();
-    paramTitle.addClass('workout-insert-param-subtitle');
-    paramTitle.setText(t('modal.insertCodeblock.paramTitle'));
+    if (this.block.params.length > 0) {
+      const paramTitle = contentEl.createDiv();
+      paramTitle.addClass('workout-insert-param-subtitle');
+      paramTitle.setText(t('modal.insertCodeblock.paramTitle'));
 
-    this.paramContainer = contentEl.createDiv();
-    this.paramContainer.addClass('workout-insert-params');
+      this.paramContainer = contentEl.createDiv();
+      this.paramContainer.addClass('workout-insert-params');
 
-    // 动态选项（plan/metric）需要先读 config
-    const config = await this.dataManager.getConfig();
-    this.renderParams(config);
+      // 动态选项（plan/metric）需要先读 config
+      const config = await this.dataManager.getConfig();
+      this.renderParams(config);
+    }
 
     // 底部按钮行
     const btnRow = contentEl.createDiv();
     btnRow.addClass('workout-btn-row');
 
-    const skipBtn = btnRow.createEl('button', { text: t('modal.insertCodeblock.skip') });
-    skipBtn.addClass('mod-muted');
-    skipBtn.addEventListener('click', () => {
-      this.insert(buildCodeBlock(this.def, {}));
-    });
+    if (this.block.params.length > 0) {
+      const skipBtn = btnRow.createEl('button', { text: t('modal.insertCodeblock.skip') });
+      skipBtn.addClass('mod-muted');
+      skipBtn.addEventListener('click', () => {
+        this.insert(buildCodeBlock(this.block, {}));
+      });
+    }
 
     const insertBtn = btnRow.createEl('button', { text: t('modal.insertCodeblock.insert') });
     insertBtn.addClass('mod-cta');
     insertBtn.addEventListener('click', () => {
       this.collectValues();
-      this.insert(buildCodeBlock(this.def, this.values));
+      this.insert(buildCodeBlock(this.block, this.values));
     });
   }
 
   // 渲染参数表单；config 用于填充 dynamic 的 select 选项（计划名 / 统计指标）
   private renderParams(config: WorkoutConfig): void {
     this.paramContainer.empty();
-    for (const p of this.def.params) {
+    for (const p of this.block.params) {
       const row = this.paramContainer.createDiv();
       row.addClass('workout-field');
 
       const labelRow = row.createDiv();
       labelRow.addClass('workout-insert-param-label');
       labelRow.createSpan({ text: p.label });
-      const optTag = labelRow.createSpan({ text: t('modal.insertCodeblock.optional') });
-      optTag.addClass('workout-insert-param-optional');
+      if (p.optional !== false) {
+        const optTag = labelRow.createSpan({ text: t('modal.insertCodeblock.optional') });
+        optTag.addClass('workout-insert-param-optional');
+      }
 
-      if (p.desc) {
-        row.createDiv({ text: p.desc, cls: 'workout-insert-param-hint' });
+      if (p.description) {
+        row.createDiv({ text: p.description, cls: 'workout-insert-param-hint' });
       }
 
       if (p.type === 'select') {
         const select = row.createEl('select');
         select.addClass('workout-select');
-        select.createEl('option', { value: '', text: '— 不设置 —' });
+        select.createEl('option', { value: '', text: '\u2014 \u4e0d\u8bbe\u7f6e \u2014' });
 
         let options: { value: string; label: string }[] = [];
         if (p.dynamic === 'plan') {
@@ -112,11 +128,13 @@ export class InsertCodeBlockParamModal extends Modal {
         for (const o of options) {
           select.createEl('option', { value: o.value, text: o.label });
         }
+        if (p.defaultValue) select.value = p.defaultValue;
         select.addEventListener('change', () => {
           this.values[p.key] = select.value;
         });
         this.inputs[p.key] = select;
       } else if (p.type === 'exercise') {
+        // workout 专有：训练项搜索 combobox
         const exercises = config.exercises;
         const comboWrapper = row.createDiv();
         comboWrapper.addClass('workout-combo-wrapper');
@@ -186,14 +204,28 @@ export class InsertCodeBlockParamModal extends Modal {
         });
 
         this.inputs[p.key] = input;
-      } else {
-        const input = row.createEl('input', { type: p.type === 'number' ? 'number' : 'text' });
+      } else if (p.type === 'date') {
+        // 跨插件兼容：date 类型渲染为 HTML date input
+        const input = row.createEl('input', { type: 'date' });
         input.addClass('workout-input');
-        if (p.type === 'number') {
+        // 默认填入今日
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        input.value = `${y}-${m}-${d}`;
+        this.inputs[p.key] = input;
+      } else {
+        // text / number / 以及未知类型（如跨插件的 'account' 等）均 fallback 为文本输入
+        const isNumber = p.type === 'number';
+        const input = row.createEl('input', { type: isNumber ? 'number' : 'text' });
+        input.addClass('workout-input');
+        if (isNumber) {
           input.setAttribute('step', 'any');
           input.setAttribute('inputmode', 'numeric');
         }
         if (p.placeholder) input.placeholder = p.placeholder;
+        if (p.defaultValue) input.value = p.defaultValue;
         input.addEventListener('change', () => {
           this.values[p.key] = input.value;
         });
@@ -204,7 +236,7 @@ export class InsertCodeBlockParamModal extends Modal {
 
   // 收集各控件当前值（兜底：覆盖用户未触发 change 的情况）
   private collectValues(): void {
-    for (const p of this.def.params) {
+    for (const p of this.block.params) {
       const el = this.inputs[p.key];
       if (!el) continue;
       this.values[p.key] = el.value;
@@ -243,7 +275,7 @@ export class InsertCodeBlockParamModal extends Modal {
     dropdown.empty();
 
     if (state.filtered.length === 0) {
-      const emptyItem = dropdown.createDiv({ text: t('modal.recordSet.noMatchingExercise') || '无匹配项' });
+      const emptyItem = dropdown.createDiv({ text: t('modal.recordSet.noMatchingExercise') || '\u65e0\u5339\u914d\u9879' });
       emptyItem.addClass('workout-combo-item');
       emptyItem.addClass('workout-combo-empty');
       return;
@@ -256,7 +288,7 @@ export class InsertCodeBlockParamModal extends Modal {
 
       item.createSpan({ text: getExerciseName(ex) });
       const typeTag = item.createSpan({
-        text: getTrainingTypeName(state.trainingTypes.find((t) => t.id === ex.category)) || ex.category,
+        text: getTrainingTypeName(state.trainingTypes.find((tt) => tt.id === ex.category)) || ex.category,
       });
       typeTag.addClass('workout-combo-type-tag');
 

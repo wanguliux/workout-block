@@ -16,6 +16,8 @@ import { ExerciseModal } from './ui/ExerciseModal';
 import { TypeModal } from './ui/TypeModal';
 import { SettingsTab } from './ui/SettingsTab';
 import { InsertCodeBlockModal } from './ui/InsertCodeBlockModal';
+import { tryRegisterInsertCommand, type BlockDefinitionWithParams } from './blockProvider';
+import { CODE_BLOCK_DEFS } from './codeBlockDefs';
 
 /*
  * main.ts —— 插件入口文件（核心枢纽）
@@ -30,6 +32,8 @@ export default class WorkoutPlugin extends Plugin {
   private dataManager!: DataManager;
   // 设置页对象（Obsidian 的 SettingTab），可能为空（尚未创建）。
   private settingsTab: SettingsTab | null = null;
+  // 是否为通用插入命令的宿主（first-claim wins）
+  private ownsUniversalInsert = false;
 
   // 插件加载时由 Obsidian 自动调用。这是初始化所有功能的入口。
   async onload(): Promise<void> {
@@ -86,7 +90,7 @@ export default class WorkoutPlugin extends Plugin {
   }
 
   // 注册命令面板中的命令。每个 addCommand 会在 Obsidian 命令面板（Ctrl/Cmd+P）里出现一条。
-  // callback 指定点击该命令时执行的函数（这里都转发给对应的 openXxx 方法）。
+  // callback 指定点击该命令时执行的功能（这里都转发给对应的 openXxx 方法）。
   private registerCommands(): void {
     // "记录一组"命令：打开单条记录录入弹窗
     this.addCommand({
@@ -127,37 +131,41 @@ export default class WorkoutPlugin extends Plugin {
       icon: 'settings',
       callback: () => this.openSettings(),
     });
+
+    // 跨插件通用插入器：first-claim wins 宿主策略。
+    // 第一个注册 insert-block 命令的插件成为宿主；其余插件自动跳过、仅作为
+    // BlockProvider 被合并展示。单插件独立装也可用，多插件合并也不写死任何一对。
+    this.ownsUniversalInsert = tryRegisterInsertCommand(this, () => this.openInsertCodeBlockModal());
   }
 
-  // 注册左侧边栏（ribbon）的图标按钮。点击后同样打开单条记录录入弹窗。
+  // 注册左侧边栏（ribbon）的图标按钮。
   private registerRibbon(): void {
     this.addRibbonIcon('dumbbell', t('command.recordSet'), () => {
       this.openRecordModal();
     });
-    this.addRibbonIcon('code', t('command.insertCodeblock'), () => {
-      this.openInsertCodeBlockModal();
-    });
+
+    // 仅当本插件是通用插入命令宿主时才显示「插入代码块」ribbon。
+    // 多插件共存时只有宿主显示 ribbon（避免重复按钮）；单插件独立装时自动成为宿主、显示 ribbon。
+    if (this.ownsUniversalInsert) {
+      this.addRibbonIcon('code', t('command.insertBlock'), () => {
+        this.openInsertCodeBlockModal();
+      });
+    }
   }
 
   // 注册 ```workout-log 代码块的接管渲染逻辑。
   // 当用户笔记里出现 ```workout-log ... ``` 代码块时，Obsidian 会把代码块内容
   // 交给这里的处理函数，由插件渲染成带交互（点击记录/编辑/删除）的表格。
   private registerCodeBlocks(): void {
-    // codeBlockHandler 是真正的渲染逻辑：读取所有记录、单位、配置，然后交给 renderWorkoutLog 渲染。
-    //   source: 代码块的原始文本（用户写在 ``` 之间的内容）
-    //   el:     插件用来往页面里插入渲染结果的 DOM 容器
-    //   ctx:    Obsidian 的渲染上下文（一般无需关心）
     const codeBlockHandler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
       const logs = this.dataManager.getLogs();
       const unit = this.dataManager.getSettings().unit;
       this.dataManager.getConfig().then((config) => {
-        // 根据训练类型(category)找到该类型下定义的所有字段(FieldDef[])，用于表格列展示
         const getTrainingTypeFields = (category: string): FieldDef[] => {
           const type = config.trainingTypes.find((tt) => tt.id === category);
           return type?.fields || [];
         };
 
-        // 调用真正渲染代码块的函数，并传入若干回调（点击行时打开哪个弹窗）
         void renderWorkoutLog(
           source,
           el,
@@ -166,22 +174,18 @@ export default class WorkoutPlugin extends Plugin {
           getTrainingTypeFields,
           unit,
           config,
-          (exercise, plan) => this.openRecordModal(exercise, plan), // 点击"记录"按钮
-          (log) => this.openEditRecordModal(log),                   // 点击"编辑"
-          (log) => void this.deleteRecord(log)                     // 点击"删除"
+          (exercise, plan) => this.openRecordModal(exercise, plan),
+          (log) => this.openEditRecordModal(log),
+          (log) => void this.deleteRecord(log)
         ).catch(() => {});
       }).catch(() => {});
     };
 
-    // 把上面这个处理函数登记到代码块注册表（供后续 rerenderAllBlocks 统一重渲染使用）
     registerCodeBlock('workout-log', codeBlockHandler);
-
-    // 官方方式：告诉 Obsidian，workout-log 这个代码块类型由我们接管渲染
     this.registerMarkdownCodeBlockProcessor('workout-log', async (source, el, ctx) => {
       codeBlockHandler(source, el, ctx);
     });
 
-    // 同样的模式注册 workout-day 代码块（当日训练总览表）。
     const dayHandler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
       const logs = this.dataManager.getLogs();
       this.dataManager.getConfig().then((config) => {
@@ -193,7 +197,6 @@ export default class WorkoutPlugin extends Plugin {
       dayHandler(source, el, ctx);
     });
 
-    // 注册 workout-heatmap 代码块（全身肌肉热力图）
     const heatmapHandler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
       const logs = this.dataManager.getLogs();
       this.dataManager.getConfig().then((config) => {
@@ -205,8 +208,6 @@ export default class WorkoutPlugin extends Plugin {
       heatmapHandler(source, el, ctx);
     });
 
-    // 注册 workout-plan 代码块（训练计划完成面板）。无 plan 参数时渲染「选择计划」下拉，
-    // 选中后写回代码块；有 plan 时渲染完成面板（每组 [编辑][完成] + 进度）。
     const planHandler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
       void renderWorkoutPlan(source, el, ctx, this.dataManager).catch(() => {});
     };
@@ -216,18 +217,12 @@ export default class WorkoutPlugin extends Plugin {
     });
   }
 
-  // 注册设置页（Settings → 找到本插件）。SettingsTab 负责插件的可视化配置界面。
   private registerSettingsTab(): void {
     this.settingsTab = new SettingsTab(this.app, this, this.dataManager);
     this.addSettingTab(this.settingsTab);
   }
 
-  // 注册事件监听：当数据或配置变化时，自动重渲染相关 workout-log 代码块，保证页面显示最新数据。
   private registerEventListeners(): void {
-    // 数据（记录）变化后：若知道是哪条记录变了，只重渲染显示该训练项的表格；
-    // 否则（如批量导入）退化为全量重渲染。这样添加一条记录就不会重建所有表格。
-    // 传入 config 是为了让 rerenderBlocksForExercise 按稳定的 exerciseId 匹配代码块，
-    // 避免多语言下源码写中文名、记录存英文显示名时重渲染不到对应表格。
     this.dataManager.on('data-changed', (data) => {
       void (async () => {
         const row = data?.row;
@@ -238,34 +233,22 @@ export default class WorkoutPlugin extends Plugin {
         } else {
           rerenderAllBlocks();
         }
-        // workout-day 按日聚合所有训练项，任何一条记录变化都可能改变某日的展示，统一重渲染
         rerenderBlocksByType('workout-day');
-        // 训练记录变化影响热力图数据，统一重渲染
         rerenderBlocksByType('workout-heatmap');
       })().catch(() => {});
     });
 
-    // 配置（训练项/类型/语言）变化后，标签与字段都可能变，需要全量重渲染
     this.dataManager.on('config-changed', () => {
       rerenderAllBlocks();
-      // 训练项/肌肉/统计配置变化同样影响 workout-day 的展示，统一重渲染
       rerenderBlocksByType('workout-day');
-      // 肌肉映射与统计配置变化影响热力图，统一重渲染
       rerenderBlocksByType('workout-heatmap');
     });
 
-    // 单位/语言等设置变化后，单位相关的代码块（完成面板、记录表）需刷新以反映新单位
     this.dataManager.on('settings-changed', () => {
       rerenderBlocksByType('workout-plan');
       rerenderBlocksByType('workout-log');
     });
 
-    // 监听仓库文件被修改的事件：仅当用户「在插件之外」手动改了 CSV / 配置文件时才需要
-    // 整体重读 + 重渲染。插件自身写盘期间（或刚写完后很短窗口内）selfWriting / wasSelfWrittenRecently
-    // 为真，此时 data-changed 已经做了精准重渲染，这里直接跳过，避免重复开销与卡顿。
-    // 注意：vault.on('modify') 在写盘完成后才异步派发，届时 selfWriting 已被复位为 false，
-    // 故必须叠加 wasSelfWrittenRecently 时间戳兜底，否则自身删除/编辑写盘会触发整文件重读 +
-    // 全量重渲染（含 320KB 肌肉 SVG 热力图），导致删除记录后 Obsidian 主线程卡死、无法立即编辑。
     this.app.vault.on('modify', async (file) => {
       const selfWritten = this.dataManager.isSelfWriting() || this.dataManager.wasSelfWrittenRecently();
       if (file.path === this.dataManager.getCsvPath()) {
@@ -283,49 +266,66 @@ export default class WorkoutPlugin extends Plugin {
     });
   }
 
-  // 打开"插入代码块"弹窗：列出全部训练代码块，选择后带参插入到光标处。
-  private openInsertCodeBlockModal(): void {
-    new InsertCodeBlockModal(this.dataManager).open();
+  /**
+   * BlockProvider 契约：暴露本插件可插入的 block 定义列表。
+   * 其他 block 插件的通用插入器通过 app.plugins.plugins 扫描此方法，
+   * 实现跨插件动态发现与合并展示（无需模块级注册表）。
+   */
+  getBlockRegistry(): BlockDefinitionWithParams[] {
+    return CODE_BLOCK_DEFS.map((def) => ({
+      language: def.id,
+      name: def.title,
+      description: def.desc,
+      icon: def.icon,
+      params: def.params.map((p) => ({
+        key: p.key,
+        label: p.label,
+        description: p.desc,
+        type: p.type,
+        optional: !p.required,
+        placeholder: p.placeholder,
+        options: p.options,
+        optionLabels: p.optionLabels,
+        dynamic: p.dynamic,
+      })),
+    }));
   }
 
-  // 打开"记录一组"弹窗。可选传入 exercise（预选训练项）和 plan（所属训练方案名）。
+  // 打开"插入代码块"弹窗：跨插件通用（合并所有 BlockProvider 的定义，按插件分组展示）。
+  private openInsertCodeBlockModal(): void {
+    new InsertCodeBlockModal(this.app, this.dataManager).open();
+  }
+
   private openRecordModal(exercise?: string, plan?: string): void {
     new RecordModal(this.dataManager, { exercise, plan }).open();
   }
 
-  // 打开"新增训练计划"弹窗（配置形态：选择方案 / 手动添加、预设每组字段、设定计划时间）
   private openNewPlanModal(): void {
     new NewPlanModal(this.dataManager).open();
   }
 
-  // 打开"新建训练项"弹窗
   private openNewExerciseModal(): void {
     new ExerciseModal(this.dataManager).open();
   }
 
-  // 打开"新建训练类型"弹窗
   private openNewTypeModal(): void {
     new TypeModal(this.dataManager).open();
   }
 
-  // 打开设置页：先打开 Obsidian 设置，再定位到本插件对应的标签页
   private openSettings(): void {
     this.app.setting.open();
     this.app.setting.openTabById(this.manifest.id);
   }
 
-  // 打开"编辑已有记录"弹窗：把要编辑的记录 editLog 传给 RecordModal
   private openEditRecordModal(log: LogRow): void {
     new RecordModal(this.dataManager, { editLog: log }).open();
   }
 
-  // 删除一条记录：先用浏览器原生 confirm 确认，再调用 dataManager 删除（dataManager 会触发 data-changed 重渲染）
   private async deleteRecord(log: LogRow): Promise<void> {
     if (!(await confirmWithModal(this.app, t('codeblock.confirmDelete')))) {
       return;
     }
     await this.dataManager.deleteLog(log.id);
-    // 软删除：记录已即时从界面移除，但磁盘文件需到设置页「压缩清理 CSV」才真正回收体积。
     new Notice(t('settings.softDeleteHint'));
   }
 }

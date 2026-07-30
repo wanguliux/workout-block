@@ -18,6 +18,7 @@ export const zh = {
     newType: '新建训练类型',
     settings: '设置',
     insertCodeblock: '插入代码块',
+    insertBlock: '插入代码块',
   },
 
   type: {
@@ -179,7 +180,7 @@ export const zh = {
       selectExercise: '请选择有效的训练项',
     },
     insertCodeblock: {
-      title: '插入训练代码块',
+      title: '插入代码块',
       searchPlaceholder: '搜索代码块...',
       noMatch: '无匹配的代码块',
       paramTitle: '设置参数（全部可选，留空即用默认）',
