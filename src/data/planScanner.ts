@@ -1,4 +1,4 @@
-import { App, TFile } from 'obsidian';
+import { App, TAbstractFile, TFile } from 'obsidian';
 import { WorkoutConfig } from './types';
 import { resolveExerciseByName } from './display';
 
@@ -93,8 +93,8 @@ async function buildSchemeIndex(app: App): Promise<void> {
 function hookVault(app: App): void {
   if (vaultHooked) return;
   vaultHooked = true;
-  const onFileChanged = (file: TFile) => {
-    if (file.extension !== 'md') return;
+  const onFileChanged = (file: TAbstractFile) => {
+    if (!(file instanceof TFile) || file.extension !== 'md') return;
     void updateFileIndex(app, file);
   };
   app.vault.on('create', onFileChanged);

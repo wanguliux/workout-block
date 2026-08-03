@@ -42,10 +42,13 @@ function parseParams(source: string): WorkoutLogParams {
   // 按换行把代码块正文切成多行，逐行读取参数
   const lines = source.split('\n');
   for (const line of lines) {
-    // 每行按冒号切成 [key, value]，并去掉首尾空格
-    const [key, value] = line.split(':').map((s) => s.trim());
+    // 每行按第一个冒号切成 key / value（值中可能含冒号，不能 split 全部）
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    const key = line.slice(0, colonIdx).trim();
+    const value = line.slice(colonIdx + 1).trim();
     // key 为空或没有 value 的行跳过（比如空行）
-    if (!key || value === undefined) continue;
+    if (!key || !value) continue;
 
     // 根据 key 名字分别赋值；switch 让每个参数各走各的处理分支
     switch (key) {
@@ -162,9 +165,10 @@ export async function renderWorkoutLog(
 
   // 先解析代码块参数
   const params = parseParams(source);
-  // 没写 exercise 就没法展示，给个提示并登记后返回
+  // 没写 exercise 就没法展示：给出「必填参数缺失」的明确提示并登记后返回。
+  // （exercise 实际为必填——旧占位文案「留空显示全部」与实现不符，已废弃。）
   if (!params.exercise) {
-    el.createDiv({ text: t('codeblock.noRecords', { exercise: t('codeblock.notSpecified') }) });
+    el.createDiv({ text: t('codeblock.exerciseRequired') });
     return;
   }
 

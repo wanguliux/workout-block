@@ -267,6 +267,14 @@ export class DataManager {
     }, 200);
   }
 
+  // 插件卸载时调用：清除悬挂的防抖定时器，防止卸载后仍触发写盘。
+  dispose(): void {
+    if (this.logsFlushTimer !== null) {
+      window.clearTimeout(this.logsFlushTimer);
+      this.logsFlushTimer = null;
+    }
+  }
+
   // 实际整文件写盘（防抖到点后执行）。写盘期间 selfWriting=true，避免 vault modify 监听重复刷新。
   // 仅由 updateLog 触发（edit 需改中间行）。软删除走 appendTombstone，不经过此处。
   private async flushLogsToDisk(): Promise<void> {

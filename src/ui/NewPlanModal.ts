@@ -6,7 +6,7 @@ import { t } from '../i18n';
 import { parseDuration, secondsToParts } from '../util/duration';
 import { formatMass, parseMass } from '../util/units';
 import { generateId } from '../util/id';
-import { ensureSchemeIndex, getSchemeNotes, extractSchemeExercises, invalidateSchemeCache, onSchemeIndexChanged, SchemeNote } from '../data/planScanner';
+import { ensureSchemeIndex, getSchemeNotes, extractSchemeExercises, invalidateSchemeCache, onSchemeIndexChanged } from '../data/planScanner';
 
 /*
  * NewPlanModal.ts —— 「新增训练计划」弹窗（配置形态）

@@ -34,6 +34,7 @@ export class InsertCodeBlockParamModal extends Modal {
   private paramContainer!: HTMLDivElement;
   private inputs: Record<string, HTMLInputElement | HTMLSelectElement> = {};
   private exerciseCombos: Record<string, ExerciseComboState> = {};
+  private docMousedownHandlers: Array<(e: MouseEvent) => void> = []; // document 级监听器（onClose 移除）
 
   constructor(app: App, dataManager: DataManager, block: BlockDefinitionWithParams) {
     super(app);
@@ -113,26 +114,11 @@ export class InsertCodeBlockParamModal extends Modal {
       }
 
       if (p.type === 'select') {
-        const select = row.createEl('select');
-        select.addClass('workout-select');
-        select.createEl('option', { value: '', text: '\u2014 \u4e0d\u8bbe\u7f6e \u2014' });
-
-        let options: { value: string; label: string }[] = [];
-        if (p.dynamic === 'plan') {
-          options = (config.plans ?? []).map((pl) => ({ value: pl.name, label: pl.name }));
-        } else if (p.dynamic === 'metric') {
-          options = (config.statistics ?? []).map((m) => ({ value: m.id, label: m.name ?? m.id }));
-        } else {
-          options = (p.options ?? []).map((o) => ({ value: o, label: p.optionLabels?.[o] ?? o }));
-        }
-        for (const o of options) {
-          select.createEl('option', { value: o.value, text: o.label });
-        }
-        if (p.defaultValue) select.value = p.defaultValue;
-        select.addEventListener('change', () => {
-          this.values[p.key] = select.value;
-        });
-        this.inputs[p.key] = select;
+        // 可编辑下拉框（combobox）：既可从候选列表选择，也可直接手打任意值。
+        // options 已由提供方在 getBlockRegistry 时物化（含跨插件场景），
+        // 与 main.ts.resolveDynamicOptions 同源、单一真相，杜绝两处解析漂移（Pitfall #7）。
+        const options = (p.options ?? []).map((o) => ({ value: o, label: p.optionLabels?.[o] ?? o }));
+        this.renderSelectCombobox(row, p, options);
       } else if (p.type === 'exercise') {
         // workout 专有：训练项搜索 combobox
         const exercises = config.exercises;
@@ -197,11 +183,13 @@ export class InsertCodeBlockParamModal extends Modal {
           }
         });
 
-        document.addEventListener('mousedown', (e) => {
+        const mousedownHandler1 = (e: MouseEvent) => {
           if (!comboWrapper.contains(e.target as Node)) {
             dropdown.setCssStyles({ display: 'none' });
           }
-        });
+        };
+        this.docMousedownHandlers.push(mousedownHandler1);
+        document.addEventListener('mousedown', mousedownHandler1);
 
         this.inputs[p.key] = input;
       } else if (p.type === 'date') {
@@ -232,6 +220,101 @@ export class InsertCodeBlockParamModal extends Modal {
         this.inputs[p.key] = input;
       }
     }
+  }
+
+  // 通用可编辑下拉框（combobox）：input + 过滤下拉。
+  // 用于 type:'select' 参数（含跨插件的账户 / 计划 / 指标等），
+  // 既能从候选列表点选，也能直接手打任意新值。复用 workout-combo-* 样式。
+  private renderSelectCombobox(
+    row: HTMLElement,
+    p: BlockParamDef,
+    options: { value: string; label: string }[],
+  ): void {
+    const wrapper = row.createDiv();
+    wrapper.addClass('workout-combo-wrapper');
+
+    const input = wrapper.createEl('input', { type: 'text' });
+    input.addClass('workout-input');
+    input.addClass('workout-combo-input');
+    if (p.placeholder) input.placeholder = p.placeholder;
+
+    const dropdown = wrapper.createDiv();
+    dropdown.addClass('workout-combo-dropdown');
+    dropdown.setCssStyles({ display: 'none' });
+
+    // 预填：优先 defaultValue，其次第一个选项
+    if (p.defaultValue) {
+      input.value = p.defaultValue;
+    } else if (options.length > 0) {
+      input.value = options[0].value;
+    }
+
+    const render = () => {
+      dropdown.empty();
+      const q = input.value.trim().toLowerCase();
+      const list = q
+        ? options.filter(
+            (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
+          )
+        : options;
+      if (list.length === 0) {
+        const empty = dropdown.createDiv({
+          text: t('modal.recordSet.noMatchingExercise'),
+        });
+        empty.addClass('workout-combo-item');
+        empty.addClass('workout-combo-empty');
+        return;
+      }
+      list.forEach((o) => {
+        const item = dropdown.createDiv({ text: o.label });
+        item.addClass('workout-combo-item');
+        item.addEventListener('click', () => {
+          input.value = o.value;
+          dropdown.setCssStyles({ display: 'none' });
+        });
+        item.addEventListener('mouseenter', () => {
+          dropdown
+            .querySelectorAll('.workout-combo-item')
+            .forEach((el) => el.removeClass('workout-combo-highlighted'));
+          item.addClass('workout-combo-highlighted');
+        });
+      });
+    };
+
+    input.addEventListener('input', () => {
+      render();
+      dropdown.setCssStyles({ display: 'block' });
+    });
+    input.addEventListener('focus', () => {
+      render();
+      dropdown.setCssStyles({ display: 'block' });
+    });
+    input.addEventListener('keydown', (e) => {
+      if (dropdown.style.display === 'none') {
+        if (e.key === 'ArrowDown' || e.key === 'Enter') {
+          e.preventDefault();
+          render();
+          dropdown.setCssStyles({ display: 'block' });
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        dropdown.setCssStyles({ display: 'none' });
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const first = dropdown.querySelector('.workout-combo-item') as HTMLElement | null;
+        if (first) first.click();
+      }
+    });
+    const mousedownHandler2 = (e: MouseEvent) => {
+      if (!wrapper.contains(e.target as Node)) {
+        dropdown.setCssStyles({ display: 'none' });
+      }
+    };
+    this.docMousedownHandlers.push(mousedownHandler2);
+    document.addEventListener('mousedown', mousedownHandler2);
+
+    this.inputs[p.key] = input;
   }
 
   // 收集各控件当前值（兜底：覆盖用户未触发 change 的情况）
@@ -275,7 +358,7 @@ export class InsertCodeBlockParamModal extends Modal {
     dropdown.empty();
 
     if (state.filtered.length === 0) {
-      const emptyItem = dropdown.createDiv({ text: t('modal.recordSet.noMatchingExercise') || '\u65e0\u5339\u914d\u9879' });
+      const emptyItem = dropdown.createDiv({ text: t('modal.recordSet.noMatchingExercise') });
       emptyItem.addClass('workout-combo-item');
       emptyItem.addClass('workout-combo-empty');
       return;
@@ -317,6 +400,10 @@ export class InsertCodeBlockParamModal extends Modal {
   }
 
   onClose(): void {
+    for (const handler of this.docMousedownHandlers) {
+      document.removeEventListener('mousedown', handler);
+    }
+    this.docMousedownHandlers.length = 0;
     this.contentEl.empty();
   }
 }

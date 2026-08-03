@@ -2,12 +2,12 @@ import { Plugin, Notice, MarkdownPostProcessorContext } from 'obsidian';
 import { DataManager } from './data/DataManager';
 import { getExerciseNameById } from './data/display';
 import { setLocale, t } from './i18n';
-import { registerCodeBlock, rerenderAllBlocks, rerenderBlocksForExercise, rerenderBlocksByType, setRegistryApp } from './codeblock/registry';
+import { registerCodeBlock, rerenderAllBlocks, rerenderBlocksForExercise, rerenderBlocksByType, setRegistryApp, resetRegistry } from './codeblock/registry';
 import { renderWorkoutLog } from './codeblock/workoutLog';
 import { renderWorkoutDay } from './codeblock/workoutDay';
 import { renderWorkoutHeatmap } from './codeblock/workoutHeatmap';
 import { renderWorkoutPlan } from './codeblock/workoutPlan';
-import { LogRow, FieldDef } from './data/types';
+import { LogRow, FieldDef, WorkoutConfig } from './data/types';
 import { applyMappingTier } from './data/muscleMapping';
 import { RecordModal } from './ui/RecordModal';
 import { confirmWithModal } from './ui/Confirm';
@@ -84,9 +84,11 @@ export default class WorkoutPlugin extends Plugin {
     await this.dataManager.saveSettings();
   }
 
-  // 插件卸载（禁用/重载）时调用。这里只需做简单的清理日志；子模块会在 Obsidian 内部被自动回收。
+  // 插件卸载（禁用/重载）时调用。清理模块级状态，防止热重载残留。
   onunload(): void {
     document.body.classList.remove('is-mobile');
+    resetRegistry();
+    this.dataManager.dispose();
   }
 
   // 注册命令面板中的命令。每个 addCommand 会在 Obsidian 命令面板（Ctrl/Cmd+P）里出现一条。
@@ -249,21 +251,27 @@ export default class WorkoutPlugin extends Plugin {
       rerenderBlocksByType('workout-log');
     });
 
-    this.app.vault.on('modify', async (file) => {
-      const selfWritten = this.dataManager.isSelfWriting() || this.dataManager.wasSelfWrittenRecently();
-      if (file.path === this.dataManager.getCsvPath()) {
-        if (!selfWritten) {
-          await this.dataManager.reloadLogs();
-          rerenderAllBlocks();
+    this.registerEvent(
+      this.app.vault.on('modify', async (file) => {
+        try {
+          const selfWritten = this.dataManager.isSelfWriting() || this.dataManager.wasSelfWrittenRecently();
+          if (file.path === this.dataManager.getCsvPath()) {
+            if (!selfWritten) {
+              await this.dataManager.reloadLogs();
+              rerenderAllBlocks();
+            }
+          }
+          if (file.path === this.dataManager.getConfigPath()) {
+            if (!selfWritten) {
+              await this.dataManager.reloadConfig();
+              rerenderAllBlocks();
+            }
+          }
+        } catch (e) {
+          console.error('[workout] vault modify handler error:', e);
         }
-      }
-      if (file.path === this.dataManager.getConfigPath()) {
-        if (!selfWritten) {
-          await this.dataManager.reloadConfig();
-          rerenderAllBlocks();
-        }
-      }
-    });
+      })
+    );
   }
 
   /**
@@ -272,23 +280,50 @@ export default class WorkoutPlugin extends Plugin {
    * 实现跨插件动态发现与合并展示（无需模块级注册表）。
    */
   getBlockRegistry(): BlockDefinitionWithParams[] {
+    const config = this.dataManager.getConfigSync();
     return CODE_BLOCK_DEFS.map((def) => ({
       language: def.id,
       name: def.title,
       description: def.desc,
       icon: def.icon,
-      params: def.params.map((p) => ({
-        key: p.key,
-        label: p.label,
-        description: p.desc,
-        type: p.type,
-        optional: !p.required,
-        placeholder: p.placeholder,
-        options: p.options,
-        optionLabels: p.optionLabels,
-        dynamic: p.dynamic,
-      })),
+      params: def.params.map((p) => {
+        // 跨插件联动关键：把 dynamic 数据源「物化」成静态 options/optionLabels。
+        // 任何宿主插件（含 finance-block 等其它 block 插件）拿到后都能直接渲染下拉，
+        // 无需访问本插件配置。否则其它宿主会因无法解析 dynamic，把 select 渲染成空选项
+        // （表现为「— 不设置 —」或纯文本框）。
+        const resolved = p.dynamic ? this.resolveDynamicOptions(config, p.dynamic) : undefined;
+        return {
+          key: p.key,
+          label: p.label,
+          description: p.desc,
+          type: p.type,
+          optional: !p.required,
+          placeholder: p.placeholder,
+          options: resolved?.options ?? p.options,
+          optionLabels: resolved?.labels ?? p.optionLabels,
+          dynamic: p.dynamic,
+        };
+      }),
     }));
+  }
+
+  /** 把 dynamic 数据源解析为具体 options（供 getBlockRegistry 跨插件暴露时物化）。 */
+  private resolveDynamicOptions(
+    config: WorkoutConfig,
+    dynamic: 'exercise' | 'plan' | 'metric',
+  ): { options: string[]; labels: Record<string, string> } | undefined {
+    let values: string[] = [];
+    if (dynamic === 'plan') {
+      values = (config.plans ?? []).map((pl) => pl.name);
+    } else if (dynamic === 'metric') {
+      values = (config.statistics ?? []).map((m) => m.id);
+    } else {
+      return undefined;
+    }
+    if (values.length === 0) return undefined;
+    const labels: Record<string, string> = {};
+    for (const v of values) labels[v] = v;
+    return { options: values, labels };
   }
 
   // 打开"插入代码块"弹窗：跨插件通用（合并所有 BlockProvider 的定义，按插件分组展示）。

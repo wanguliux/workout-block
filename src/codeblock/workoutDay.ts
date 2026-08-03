@@ -1,4 +1,4 @@
-import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, TFile } from 'obsidian';
+import { App, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, Notice, TFile } from 'obsidian';
 import { LogRow, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
 import { computeStat, formatStatValue } from '../data/statExpr';
@@ -38,8 +38,11 @@ interface WorkoutDayParams {
 function parseParams(source: string): WorkoutDayParams {
   const params: WorkoutDayParams = { hasDayParam: false };
   for (const line of source.split('\n')) {
-    const [key, value] = line.split(':').map((s) => s.trim());
-    if (!key || value === undefined) continue;
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    const key = line.slice(0, colonIdx).trim();
+    const value = line.slice(colonIdx + 1).trim();
+    if (!key) continue;
     if (key === 'day') {
       params.hasDayParam = true;
       params.dayValue = value || undefined;
@@ -98,6 +101,10 @@ export async function renderWorkoutDay(
   const { target } = resolveTargetDate(params);
 
   // 点击「固定为当日」：把今天的日期写进代码块源码的 day 参数，使表格固定为该日。
+  // 写回机制（与 workoutPlan.writePlanToCodeBlock 同一套「修复机制 B」）：
+  // 若当前文件正在 Markdown 编辑器（Live Preview/源码）中打开，优先用 editor.replaceRange
+  // 做局部替换——编辑器内部事务，不触发整文件 reload，焦点/光标/撤销栈得以保留；
+  // 只有拿不到编辑器（阅读模式/在别的文件里）时才退回 vault.modify 兜底（该场景无光标可丢）。
   async function pinDayToToday(): Promise<void> {
     const file = ctx.sourcePath ? app.vault.getAbstractFileByPath(ctx.sourcePath) : null;
     if (!file || !(file instanceof TFile)) {
@@ -110,21 +117,27 @@ export async function renderWorkoutDay(
       return;
     }
     const today = formatLocalDate(new Date());
+    // 固定当日：无 day 参数（按钮仅在此时显示），在闭围栏前插入 `day: today` 行即可。
+    // 用整块替换实现（原块 body 只有可选的 day 行，此刻不存在），行号计算最简单且不会越界。
+    const newBlock = '```workout-day\nday: ' + today + '\n```';
+
+    // 优先：正在编辑该文件的 Markdown 视图 → 编辑器局部替换
+    const mdView = app.workspace
+      .getLeavesOfType('markdown')
+      .map((leaf) => leaf.view)
+      .find((v): v is MarkdownView => v instanceof MarkdownView && v.file?.path === ctx.sourcePath);
+    if (mdView && mdView.editor) {
+      const editor = mdView.editor;
+      const from = { line: info.lineStart, ch: 0 };
+      const to = { line: info.lineEnd, ch: editor.getLine(info.lineEnd).length };
+      editor.replaceRange(newBlock, from, to);
+      return;
+    }
+
+    // 兜底：笔记未在可编辑视图打开（如阅读模式），整文件改写；此场景不存在可丢失的光标。
     const content = await app.vault.read(file);
     const lines = content.split('\n');
-    let found = false;
-    // 在代码块体内（开围栏之后、闭围栏之前）查找是否已有 day: 行
-    for (let i = info.lineStart + 1; i < info.lineEnd; i++) {
-      if (/^\s*day\s*:/.test(lines[i])) {
-        lines[i] = `day: ${today}`;
-        found = true;
-        break;
-      }
-    }
-    // 没有就插在闭围栏之前
-    if (!found) {
-      lines.splice(info.lineEnd, 0, `day: ${today}`);
-    }
+    lines.splice(info.lineStart, info.lineEnd - info.lineStart + 1, newBlock);
     await app.vault.modify(file, lines.join('\n'));
   }
 

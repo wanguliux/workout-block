@@ -120,6 +120,7 @@ export const en = {
     maxWeight: 'Max Weight',
     noRecords: 'No records for "{exercise}" yet. Click the button above to start adding.',
     notSpecified: 'Not specified',
+    exerciseRequired: 'Missing required "exercise" parameter — nothing to display (write e.g. exercise: Squat)',
     plan: {
       select: 'Select plan',
       noPlan: 'No training plan yet. Create one via "New Training Plan".',
@@ -299,7 +300,6 @@ export const en = {
       svgMapping: 'SVG Muscle Mapping',
       searchPaths: 'Search id / zh / en',
       clearMapping: 'Clear',
-      applyGroupPreset: 'Apply group preset',
       selectedCount: 'Selected {count}',
       noPaths: 'No matching paths',
       heatmapSettings: 'Heatmap Settings',

@@ -1,5 +1,6 @@
 import { Exercise, Muscle, StatDef, TrainingType, WorkoutConfig, PlanItem, TrainingPlanInstance } from './types';
 import { buildMappings } from './muscleMapping';
+import { DEFAULT_HEATMAP_SCALE } from './heatmapDefaults';
 
 /*
  * seed.ts —— 默认配置数据（"种子数据"）。
@@ -71,12 +72,7 @@ export const DEFAULT_COUNT_STAT: StatDef = {
   granularity: 'daily',
   enabled: true,
   heatmapDefault: true,
-  heatmapScale: [
-    { color: '#3b82f6', max: 5 },
-    { color: '#22c55e', max: 10 },
-    { color: '#f97316', max: 20 },
-    { color: '#ef4444', max: 40 },
-  ],
+  heatmapScale: DEFAULT_HEATMAP_SCALE,
 };
 
 // 力量训练「训练总量」：每日 Σ(次数 × 重量)，衡量训练负荷。

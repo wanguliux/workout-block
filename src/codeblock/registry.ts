@@ -30,16 +30,6 @@ export function registerCodeBlock(type: string, handler: CodeBlockHandler): void
   registry.set(type, handler);
 }
 
-// 根据类型名取出对应的渲染函数；没有就返回 undefined
-export function getCodeBlockHandler(type: string): CodeBlockHandler | undefined {
-  return registry.get(type);
-}
-
-// 返回所有已注册的类型名列表（例如 ['workout-log']），用于初始化时告诉 Obsidian 要接管哪些代码块
-export function getAllRegisteredTypes(): string[] {
-  return Array.from(registry.keys());
-}
-
 // 登记一个「已经渲染完」的代码块，把它记进 renderedBlocks，供后续重渲染使用
 // 注意：同一个 el 只允许存在一条记录，避免数据变化时重复渲染同一个 DOM。
 export function registerRenderedBlock(el: HTMLElement, type: string, source: string, ctx: MarkdownPostProcessorContext): void {
@@ -182,4 +172,16 @@ export function rerenderBlocksForExercise(config: WorkoutConfig | null, exercise
 // 只重渲染指定类型的代码块（保留以兼容旧调用，已并入 scheduleRerender）。
 export function rerenderBlocksByType(type: string): void {
   scheduleRerender((_source, blockType) => blockType === type);
+}
+
+// 插件卸载时清理模块级状态，防止热重载时残留旧 handler / 旧 App 引用 / 悬挂定时器。
+export function resetRegistry(): void {
+  registry.clear();
+  renderedBlocks.length = 0;
+  appRef = null;
+  if (rerenderTimer !== null) {
+    window.clearTimeout(rerenderTimer);
+    rerenderTimer = null;
+  }
+  pendingRerenderFilters.length = 0;
 }

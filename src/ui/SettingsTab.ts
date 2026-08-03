@@ -1,5 +1,5 @@
 import { App, PluginSettingTab, Notice, Setting, TextComponent } from 'obsidian';
-import type { SettingDefinitionItem, SettingDefinition } from 'obsidian';
+import type { SettingDefinitionItem, SettingGroupItem } from 'obsidian';
 import type WorkoutPlugin from '../main';
 import { rerenderAllBlocks } from '../codeblock/registry';
 import { DataManager } from '../data/DataManager';
@@ -97,14 +97,18 @@ export class SettingsTab extends PluginSettingTab {
     const settings = this.dataManager.getSettings();
 
     const order = this.normalizeManagerOrder(settings.managerOrder);
-    const managerItems: SettingDefinition[] = order.map((key) => ({
-      name: managers[key].name,
-      desc: managers[key].desc(config),
-      // 整行可点击打开对应管理弹窗（等价原「打开管理」按钮）。
-      action: () => {
-        managers[key].open();
-      },
-    }));
+    // 仿 finance-block：行内显式「打开管理」按钮（而非整行点击 action）。
+    // 拖拽手柄由 onReorder 触发 Obsidian 渲染，CSS 把它钉到行最左侧（见 styles.css）。
+    const managerItems: SettingGroupItem[] = order.map((key) => {
+      const m = managers[key];
+      return {
+        name: m.name,
+        desc: m.desc(config),
+        render: (setting: Setting) => {
+          setting.addButton((btn) => btn.setButtonText(t('settings.openManager')).onClick(() => m.open()));
+        },
+      };
+    });
 
     return [
       // 区块一：数据文件路径（folder 控件自带 vault 文件夹建议器，等价原 VaultPathSuggest + 浏览按钮）。

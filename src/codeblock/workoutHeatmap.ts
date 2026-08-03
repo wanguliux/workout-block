@@ -11,13 +11,7 @@ import { registerRenderedBlock, unregisterRenderedBlock } from './registry';
 import { getLocale, t } from '../i18n';
 import frontSvg from '../assets/muscle_layer_front.svg';
 import backSvg from '../assets/muscle_layer_back.svg';
-
-const DEFAULT_HEATMAP_SCALE: HeatmapLevel[] = [
-  { color: '#3b82f6', max: 5 },
-  { color: '#22c55e', max: 10 },
-  { color: '#f97316', max: 20 },
-  { color: '#ef4444', max: 40 },
-];
+import { DEFAULT_HEATMAP_SCALE, colorToCss, dateWithinRange } from '../data/heatmapDefaults';
 
 /* workoutHeatmap.ts —— 把 ```workout-heatmap 代码块渲染成全身肌肉热力图。
  * 精细度自动跟随肌肉管理里的 svgRegionIds 配置；支持正/背切换、指标与时间窗参数。 */
@@ -30,38 +24,16 @@ interface HeatmapParams {
 function parseParams(source: string): HeatmapParams {
   const params: HeatmapParams = {};
   for (const line of source.split('\n')) {
-    const [key, value] = line.split(':').map((s) => s.trim());
-    if (!key || value === undefined) continue;
+    const colonIdx = line.indexOf(':');
+    if (colonIdx === -1) continue;
+    const key = line.slice(0, colonIdx).trim();
+    const value = line.slice(colonIdx + 1).trim();
+    if (!key || !value) continue;
     if (key === 'metric') params.metric = value;
     if (key === 'range') params.range = value;
   }
   return params;
 }
-
-function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function dateWithinRange(dateStr: string, range?: string): boolean {
-  if (!range) return true;
-  if (range === 'all') return true;
-  if (RANGE_OPTIONS.includes(range)) {
-    const days = parseInt(range);
-    const today = new Date(`${todayStr()}T00:00:00`);
-    const cutoff = new Date(today);
-    cutoff.setDate(cutoff.getDate() - (days - 1));
-    const d = new Date(`${dateStr}T00:00:00`);
-    return d >= cutoff && d <= today;
-  }
-  if (range.includes('..')) {
-    const [start, end] = range.split('..').map((s) => s.trim());
-    return dateStr >= start && dateStr <= end;
-  }
-  return true;
-}
-
-const RANGE_OPTIONS = ['7d', '30d', '90d'];
 
 // 静态 SVG 解析缓存：frontSvg / backSvg 是固定字符串（约 320KB），每次重渲染都 innerHTML 解析
 // 会在主线程做昂贵的 HTML 词法分析。改为「模块内只解析一次、之后 cloneNode 复用」，重渲染代价
@@ -193,17 +165,6 @@ function colorForValue(value: number, scale?: HeatmapLevel[]): string {
     if (value <= (level.max ?? Infinity)) return level.color;
   }
   return sorted[sorted.length - 1]?.color ?? '#ef4444';
-}
-
-function colorToCss(color: string): string {
-  const map: Record<string, string> = {
-    blue: '#3b82f6',
-    green: '#22c55e',
-    orange: '#f97316',
-    red: '#ef4444',
-  };
-  if (color.startsWith('#')) return color; // 十六进制直接返回（自定义颜色）
-  return map[color] ?? color;
 }
 
 const registeredComponents = new WeakMap<HTMLElement, boolean>();

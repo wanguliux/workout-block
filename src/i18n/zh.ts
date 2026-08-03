@@ -121,6 +121,7 @@ export const zh = {
     maxWeight: '最高重量',
     noRecords: '“{exercise}”暂无记录，点击上方按钮开始添加。',
     notSpecified: '未指定',
+    exerciseRequired: '代码块缺少必填的 exercise 参数，无法展示训练记录（请写上训练项名，如 exercise: 深蹲）',
     plan: {
       select: '选择计划',
       noPlan: '暂无训练计划，请先通过「新增训练计划」创建',
@@ -300,7 +301,6 @@ export const zh = {
       svgMapping: 'SVG 肌肉映射',
       searchPaths: '搜索 id / 中文 / 英文',
       clearMapping: '清空',
-      applyGroupPreset: '套用健身群预设',
       selectedCount: '已选 {count} 块',
       noPaths: '没有匹配的路径',
       heatmapSettings: '热力图设置',

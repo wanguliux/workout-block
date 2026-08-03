@@ -38,8 +38,8 @@ export const CODE_BLOCK_DEFS: CodeBlockDef[] = [
     title: '训练记录表',
     desc: '按训练项/时间筛选，展示历史训练记录明细表格',
     params: [
-      { key: 'exercise', label: '训练项', type: 'exercise', placeholder: '如：卧推（留空显示全部）' },
-      { key: 'day', label: '最近天数', type: 'number', placeholder: '如 30，只显示最近 N 天' },
+      { key: 'exercise', label: '训练项', type: 'exercise', placeholder: '如：卧推（必填，缺失时提示未指定）' },
+      { key: 'day', label: '最近训练日', type: 'number', placeholder: '如 30，显示最近 N 个有记录的日' },
       { key: 'group_by', label: '分组方式', type: 'select', options: ['date', 'week'], optionLabels: { date: '按日期', week: '按周' } },
       { key: 'sort', label: '排序', type: 'select', options: ['desc', 'asc'], optionLabels: { desc: '最新在前', asc: '最早在前' } },
       { key: 'number', label: '最近条数', type: 'number', placeholder: '只显示最新 N 条' },

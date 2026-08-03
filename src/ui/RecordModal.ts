@@ -53,6 +53,7 @@ export class RecordModal extends Modal {
   private trainingTypes: TrainingType[] = [];
   private filteredExercises: Exercise[] = []; // 搜索过滤后的训练项列表
   private dropdownHighlighted = -1;          // 下拉列表高亮索引（键盘导航用）
+  private docMousedownHandler: ((e: MouseEvent) => void) | null = null; // document 级监听器引用（onClose 移除）
 
   // 构造函数：在 new RecordModal(...).open() 之前被调用，仅做字段初始化。
   constructor(dataManager: DataManager, options: RecordModalOptions = {}) {
@@ -92,7 +93,7 @@ export class RecordModal extends Modal {
     this.exerciseInput = comboWrapper.createEl('input', { type: 'text' });
     this.exerciseInput.addClass('workout-input');
     this.exerciseInput.addClass('workout-combo-input');
-    this.exerciseInput.placeholder = t('modal.recordSet.searchExercisePlaceholder') || '搜索训练项...';
+    this.exerciseInput.placeholder = t('modal.recordSet.searchExercisePlaceholder');
 
     // 下拉候选列表（默认隐藏）
     this.exerciseDropdown = comboWrapper.createDiv();
@@ -125,7 +126,6 @@ export class RecordModal extends Modal {
 
     // —— 预选训练项模式：根据 options.exercise 在搜索框里预填名称并选中对应项 ——
     if (this.options.exercise && !this.options.editLog) {
-      const config = await this.dataManager.getConfig();
       const matched = resolveExerciseByName(config, this.options.exercise);
       if (matched) {
         this.exerciseInput.value = getExerciseName(matched);
@@ -171,12 +171,11 @@ export class RecordModal extends Modal {
     // 空选项：不关联任何方案
     this.planInput.createEl('option', {
       value: '',
-      text: t('modal.recordSet.noSchemeOption') || '— 不关联方案 —',
+      text: t('modal.recordSet.noSchemeOption'),
     });
 
     // 填入已有训练计划作为候选项
-    const configForPlans = await this.dataManager.getConfig();
-    const plans = configForPlans.plans ?? [];
+    const plans = config.plans ?? [];
     for (const p of plans) {
       this.planInput.createEl('option', { value: p.name, text: p.name });
     }
@@ -187,7 +186,7 @@ export class RecordModal extends Modal {
       this.planInput.value = prefillPlan;
     } else if (prefillPlan) {
       // 传入的 plan 名不在现有计划列表中（可能已被删除或重命名），追加为临时选项
-      this.planInput.createEl('option', { value: prefillPlan, text: `${prefillPlan} (${t('modal.recordSet.schemeNotFound') || '未找到'})` });
+      this.planInput.createEl('option', { value: prefillPlan, text: `${prefillPlan} (${t('modal.recordSet.schemeNotFound')})` });
       this.planInput.value = prefillPlan;
     }
 
@@ -289,13 +288,13 @@ export class RecordModal extends Modal {
     });
 
     // 点击页面其他区域时关闭下拉（用延迟避免点击候选项时先关闭）
-    document.addEventListener('mousedown', (e) => {
-        if (!comboWrapper!.contains(e.target as Node)) {
+    const comboWrapper: HTMLElement | null = input.parentElement;
+    this.docMousedownHandler = (e: MouseEvent) => {
+        if (!comboWrapper?.contains(e.target as Node)) {
           dropdown.setCssStyles({ display: 'none' });
         }
-    });
-    // comboWrapper 是闭包变量，引用上面创建的 comboWrapper DOM 元素
-    let comboWrapper: HTMLElement | null = input.parentElement;
+    };
+    document.addEventListener('mousedown', this.docMousedownHandler);
   }
 
   // 按输入文字过滤训练项列表（模糊匹配：名称/ID 包含即命中）
@@ -317,7 +316,7 @@ export class RecordModal extends Modal {
     dropdown.empty();
 
     if (this.filteredExercises.length === 0) {
-      const emptyItem = dropdown.createDiv({ text: t('modal.recordSet.noMatchingExercise') || '无匹配项' });
+      const emptyItem = dropdown.createDiv({ text: t('modal.recordSet.noMatchingExercise') });
       emptyItem.addClass('workout-combo-item');
       emptyItem.addClass('workout-combo-empty');
       return;
@@ -534,7 +533,7 @@ export class RecordModal extends Modal {
   private async save(): Promise<void> {
     // 必须先确定训练项（exerciseId），否则不知道该保存哪些字段
     if (!this.exerciseId || !this.exercises.find(e => e.id === this.exerciseId)) {
-      new Notice(t('modal.recordSet.selectExercise') || '请选择有效的训练项');
+      new Notice(t('modal.recordSet.selectExercise'));
       return;
     }
 
@@ -588,8 +587,12 @@ export class RecordModal extends Modal {
     }
   }
 
-  // onClose：弹窗关闭时清空内容容器，释放 DOM。Obsidian 会在关闭后自动移除弹窗本身。
+  // onClose：弹窗关闭时移除 document 级监听器并清空内容容器，释放 DOM。
   onClose(): void {
+    if (this.docMousedownHandler) {
+      document.removeEventListener('mousedown', this.docMousedownHandler);
+      this.docMousedownHandler = null;
+    }
     this.contentEl.empty();
   }
 }

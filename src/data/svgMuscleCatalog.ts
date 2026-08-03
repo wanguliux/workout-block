@@ -191,7 +191,7 @@ export function formatSvgMuscleLabel(entry: SvgMuscleEntry, locale: string): str
   const segmentMatch = entry.id.match(/_(\d+)(?:_l|_r)?$/);
   if (segmentMatch) {
     const segment = segmentMatch[1];
-    base += locale === 'zh' ? ` ${segment}` : ` ${segment}`;
+    base += ` ${segment}`;
   }
   if (entry.id.endsWith('_l')) {
     base += locale === 'zh' ? '（左）' : ' (L)';

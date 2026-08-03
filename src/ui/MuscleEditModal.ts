@@ -1,8 +1,8 @@
 import { Modal, Notice } from 'obsidian';
 import { DataManager } from '../data/DataManager';
 import { getMuscleName } from '../data/display';
-import { MUSCLE_FITNESS_GROUP } from '../data/muscleMapping';
 import { FITNESS_GROUPS, formatSvgMuscleLabel, SVG_MUSCLE_CATALOG, SvgMuscleEntry } from '../data/svgMuscleCatalog';
+import { DEFAULT_HEATMAP_SCALE, colorToCss } from '../data/heatmapDefaults';
 import { HeatmapLevel, Muscle, StatDef, WorkoutConfig } from '../data/types';
 import { getLocale, t } from '../i18n';
 
@@ -12,13 +12,6 @@ import { getLocale, t } from '../i18n';
 interface MuscleEditModalOptions {
   muscle?: Muscle;
 }
-
-const DEFAULT_HEATMAP_SCALE: HeatmapLevel[] = [
-  { color: '#3b82f6', max: 5 },
-  { color: '#22c55e', max: 10 },
-  { color: '#f97316', max: 20 },
-  { color: '#ef4444', max: 40 },
-];
 
 // 生成"轻→重"渐变色：蓝(220)→红(0) 的 HSL 插值，作为分级数的默认配色。
 function hslToHex(h: number, s: number, l: number): string {
@@ -182,26 +175,10 @@ export class MuscleEditModal extends Modal {
       this.selectedIds.clear();
       this.renderMappingList();
     });
-
-    const presetBtn = header.createEl('button', { text: t('modal.muscleManager.applyGroupPreset') });
-    presetBtn.addClass('mod-cta');
-    presetBtn.addEventListener('click', () => this.applyGroupPreset());
   }
 
   private countText(): string {
     return t('modal.muscleManager.selectedCount', { count: String(this.selectedIds.size) });
-  }
-
-  private applyGroupPreset(): void {
-    const muscleId = this.options.muscle?.id ?? this.idInput.value.trim();
-    const group = MUSCLE_FITNESS_GROUP[muscleId];
-    if (!group) return;
-    for (const entry of SVG_MUSCLE_CATALOG) {
-      if (entry.fitnessGroup === group) {
-        this.selectedIds.add(entry.id);
-      }
-    }
-    this.renderMappingList();
   }
 
   // SVG 路径显示标签：复用目录层格式化，自动区分段号与左右。
@@ -423,22 +400,11 @@ export class MuscleEditModal extends Modal {
     return this.config.statistics.find((s) => s.heatmapDefault) ?? this.config.statistics[0];
   }
 
-  private colorCss(color: string): string {
-    const map: Record<string, string> = {
-      blue: '#3b82f6',
-      green: '#22c55e',
-      orange: '#f97316',
-      red: '#ef4444',
-    };
-    if (color.startsWith('#')) return color; // 十六进制直接返回
-    return map[color] ?? color;
-  }
-
   // 把任意来源的分档规整为「可显示/可保存」形态：命名色→hex；缺失阈值补默认。
   private normalizeLevels(input?: HeatmapLevel[]): HeatmapLevel[] {
     const base = input && input.length ? input : DEFAULT_HEATMAP_SCALE;
     const levels = base.map((l) => ({
-      color: this.colorCss(l.color),
+      color: colorToCss(l.color),
       max: l.max,
     }));
     for (let i = 0; i < levels.length; i++) {
@@ -458,7 +424,7 @@ export class MuscleEditModal extends Modal {
       }
       if (/^#[0-9a-fA-F]{6}$/.test(c)) return c;
     }
-    const mapped = this.colorCss(c);
+    const mapped = colorToCss(c);
     return mapped.startsWith('#') && /^#[0-9a-fA-F]{6}$/.test(mapped) ? mapped : '#3b82f6';
   }
 

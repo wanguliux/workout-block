@@ -136,7 +136,7 @@
 
 .workout-danger-btn:hover {
   background: var(--text-error, #e05656);
-  color: #fff;
+  color: var(--text-on-accent, #fff);
 }
 
 /* 按钮行里多个按钮靠右排列 */
@@ -337,6 +337,9 @@
   cursor: pointer;
   font-size: var(--font-ui-small, 13px);
 }
+.workout-heatmap-switch button:hover {
+  background: var(--background-modifier-hover);
+}
 
 .workout-heatmap-switch button.mod-cta {
   background: var(--interactive-accent);
@@ -520,6 +523,9 @@
   color: var(--text-normal);
   cursor: pointer;
   font-size: var(--font-ui-small, 13px);
+}
+.workout-plan-weekday:hover {
+  background: var(--background-modifier-hover);
 }
 .workout-plan-weekday.is-active {
   background: var(--interactive-accent);
@@ -973,7 +979,7 @@ input[type="checkbox"].workout-switch:checked::after {
   gap: 4px;
 }
 .workout-plan-set-field > label {
-  font-size: 11px;
+  font-size: var(--font-ui-smaller, 12px);
   color: var(--text-muted);
 }
 .workout-plan-set-field .workout-input,
@@ -1337,4 +1343,31 @@ input[type="checkbox"].workout-switch:checked::after {
   background: var(--interactive-accent);
   color: var(--text-on-accent, #fff);
   border-color: var(--interactive-accent);
+}
+
+/* ── 设置页「管理」列表：拖拽手柄钉到行最左侧（Obsidian ≥1.13 声明式 list） ──
+ * 与 finance-block 同款。关键坑：Obsidian 默认 .setting-group .setting-item:not(.setting-item-heading)
+ * 的 padding 简写特异性 (0,2,0) 且 cascade 更靠后，padding-left 必须用 .setting-group 前缀 (0,3,0)
+ * + !important 兜底，否则被覆盖回 --setting-items-padding-x，手柄压进文字（真实踩过）。
+ * 手柄是 clickable-icon 按钮自带内边距，padding-left 给足 48px；仅命中带手柄的设置行。 */
+.setting-group .setting-item:has(.mod-drag-handle) {
+  position: relative;
+  padding-left: 48px !important;
+}
+.setting-group .setting-item:has(.mod-drag-handle) .mod-drag-handle {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+}
+.setting-group .setting-item:has(.mod-drag-handle) .mod-drag-handle:active {
+  cursor: grabbing;
 }
