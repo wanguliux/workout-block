@@ -68,8 +68,10 @@ export class InsertCodeBlockModal extends Modal {
     this.tabBarEl.empty();
     this.tabButtons = [];
 
+    // 单插件时隐藏 Tab 栏：用 CSS class 驱动显隐，避免 style.display 静态赋值
+    // （obsidianmd/no-static-styles-assignment）。toggleClass 在 >1 时自动移除，幂等安全。
+    this.tabBarEl.toggleClass('is-hidden', this.groups.length <= 1);
     if (this.groups.length <= 1) {
-      this.tabBarEl.style.display = 'none';
       return;
     }
 

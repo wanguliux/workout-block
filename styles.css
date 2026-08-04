@@ -1305,6 +1305,12 @@ input[type="checkbox"].workout-switch:checked::after {
   padding-bottom: 2px;
 }
 
+/* 单插件时隐藏 Tab 栏：由 TS 用 toggleClass('is-hidden') 驱动，
+   避免 style.display 静态赋值（obsidianmd/no-static-styles-assignment）。 */
+.workout-insert-tabs.is-hidden {
+  display: none;
+}
+
 .workout-insert-tabs::-webkit-scrollbar {
   height: 4px;
 }

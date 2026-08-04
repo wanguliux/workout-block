@@ -87,8 +87,12 @@ function bindMuscleTooltips(wrap: HTMLElement, side: 'front' | 'back'): void {
   };
 
   const locate = (me: MouseEvent) => {
-    tip.style.left = `${me.clientX + 12}px`;
-    tip.style.top = `${me.clientY + 12}px`;
+    // 光标跟随定位：用 Obsidian 扩展的 setCssStyles 设置，避免 el.style.* 直接赋值
+    // （obsidianmd/no-static-styles-assignment）。
+    tip.setCssStyles({
+      left: `${me.clientX + 12}px`,
+      top: `${me.clientY + 12}px`,
+    });
   };
 
   // 进入肌肉即时显示（无延迟）；在肌肉间移动直接换名；移出隐藏。
@@ -354,8 +358,10 @@ export async function renderWorkoutHeatmap(
 
   // 视图切换按钮（骨架阶段就可点，不依赖计算完成）
   function showSide(side: 'front' | 'back'): void {
-    frontWrap.style.display = side === 'front' ? 'block' : 'none';
-    backWrap.style.display = side === 'back' ? 'block' : 'none';
+    // 正/背面视图切换：用 setCssStyles 设置 display，避免 el.style.* 直接赋值
+    // （obsidianmd/no-static-styles-assignment）。
+    frontWrap.setCssStyles({ display: side === 'front' ? 'block' : 'none' });
+    backWrap.setCssStyles({ display: side === 'back' ? 'block' : 'none' });
     frontBtn.toggleClass('mod-cta', side === 'front');
     backBtn.toggleClass('mod-cta', side === 'back');
     frontBtn.toggleClass('mod-muted', side === 'back');
