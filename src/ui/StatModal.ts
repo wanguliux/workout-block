@@ -46,6 +46,7 @@ export class StatModal extends Modal {
   private config!: WorkoutConfig;
 
   private name = '';
+  private unit = '';
   private associatedTypes: string[] = [];
   private mode: 'builder' | 'expression' = 'builder';
   private builder: StatBuilder = { kind: 'sum', field: '' };
@@ -74,6 +75,7 @@ export class StatModal extends Modal {
     const edit = this.options.editStat;
     if (edit) {
       this.name = edit.name;
+      this.unit = edit.unit ?? '';
       this.associatedTypes = [...edit.associatedTypes];
       this.mode = edit.formula.mode;
       this.builder = edit.formula.builder ? { ...edit.formula.builder } : { kind: 'sum', field: '' };
@@ -92,6 +94,18 @@ export class StatModal extends Modal {
     nameInput.addClass('workout-input');
     nameInput.value = this.name;
     nameInput.addEventListener('input', () => { this.name = nameInput.value; });
+
+    // 统计单位（可选）：显示在代码块统计值后方，如「3,600 kg」。留空则不带单位。
+    const unitRow = contentEl.createDiv();
+    unitRow.addClass('workout-field');
+    unitRow.createEl('label', { text: t('modal.statManager.unit') });
+    const unitInput = unitRow.createEl('input', { type: 'text' });
+    unitInput.addClass('workout-input');
+    unitInput.placeholder = t('modal.statManager.unitPlaceholder');
+    unitInput.value = this.unit;
+    unitInput.addEventListener('input', () => { this.unit = unitInput.value; });
+    const unitHint = unitRow.createEl('p', { cls: 'workout-manager-detail' });
+    unitHint.textContent = t('modal.statManager.unitHint');
 
     // 关联训练类型（多选）
     contentEl.createEl('h3', { text: t('modal.statManager.types') });
@@ -406,6 +420,7 @@ export class StatModal extends Modal {
       formula,
       granularity: this.granularity,
       enabled: this.enabled,
+      unit: this.unit.trim() || undefined,
     };
 
     const config = await this.dataManager.getConfig();

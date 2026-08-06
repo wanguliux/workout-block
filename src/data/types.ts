@@ -135,6 +135,9 @@ export interface StatDef {
   };
   granularity: StatGranularity;
   enabled: boolean;
+  // 统计值单位（可选）：在代码块统计值后追加，如「3,600 kg」「95 kg」。
+  // 留空则纯数字不带单位。新增统计的编辑页提供文本框录入，旧数据无此字段时等同留空。
+  unit?: string;
   // 作为热力图指标时的【默认】颜色分档模板；每块肌肉可在编辑页基于此单独覆盖（见 §5.4.1）
   heatmapScale?: HeatmapLevel[];
   // 标记是否为热力图默认指标（种子置「次数」为 true）

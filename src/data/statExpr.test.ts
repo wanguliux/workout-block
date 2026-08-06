@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeStat,
+  formatStatValue,
   validateExpression,
   builderToExpr,
   exprToBuilder,
@@ -74,6 +75,32 @@ describe('computeStat 计算', () => {
   it('非法表达式返回 NaN（渲染时兜底）', () => {
     const s = stat({ formula: { mode: 'expression', expression: 'sum((' } });
     expect(Number.isNaN(computeStat(s, records))).toBe(true);
+  });
+});
+
+describe('formatStatValue 展示', () => {
+  it('纯数字不带单位', () => {
+    expect(formatStatValue(3600)).toBe('3600');
+  });
+
+  it('小数保留两位并规整', () => {
+    expect(formatStatValue(95)).toBe('95');
+    expect(formatStatValue(95.004)).toBe('95');
+  });
+
+  it('带单位时追加在数值后', () => {
+    expect(formatStatValue(3600, 'kg')).toBe('3600 kg');
+    expect(formatStatValue(95, 'kg')).toBe('95 kg');
+  });
+
+  it('单位空白/未传时等同不带单位', () => {
+    expect(formatStatValue(3600, '')).toBe('3600');
+    expect(formatStatValue(3600, '   ')).toBe('3600');
+    expect(formatStatValue(3600, undefined)).toBe('3600');
+  });
+
+  it('非法值显示 -', () => {
+    expect(formatStatValue(Number.NaN)).toBe('-');
   });
 });
 

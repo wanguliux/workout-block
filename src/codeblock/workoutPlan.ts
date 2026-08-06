@@ -1,4 +1,4 @@
-import { MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, TFile } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, TFile, setIcon } from 'obsidian';
 import { DataManager } from '../data/DataManager';
 import { FieldDef, TrainingPlanInstance, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
@@ -161,15 +161,29 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
     }
   }
 
-  // 计划头
+  // 计划头：计划名 + 时间规则（左），进度（右，含进度条）
   const header = container.createDiv();
   header.addClass('workout-plan-header');
-  header.createSpan({ text: plan.name }).addClass('workout-plan-name');
+  const headerMain = header.createDiv();
+  headerMain.addClass('workout-plan-header-main');
+  const titleWrap = headerMain.createDiv();
+  titleWrap.addClass('workout-plan-title-wrap');
+  titleWrap.createEl('h2', { text: plan.name, cls: 'workout-plan-name' });
   const timeText = formatTimeRule(plan.timeRule);
   if (timeText) {
-    header.createSpan({ text: timeText }).addClass('workout-plan-time');
+    titleWrap.createSpan({ text: timeText, cls: 'workout-plan-time' });
   }
-  header.createSpan({ text: t('codeblock.plan.progress', { done: String(doneSets), total: String(totalSets) }) }).addClass('workout-plan-progress');
+  const progress = header.createDiv();
+  progress.addClass('workout-plan-progress');
+  const pct = totalSets > 0 ? Math.round((doneSets / totalSets) * 100) : 0;
+  const progressMeta = progress.createDiv();
+  progressMeta.addClass('workout-plan-progress-meta');
+  progressMeta.createSpan({ text: t('codeblock.plan.progress', { done: String(doneSets), total: String(totalSets) }) });
+  const bar = progress.createDiv();
+  bar.addClass('workout-plan-progress-bar');
+  const barFill = bar.createDiv();
+  barFill.addClass('workout-plan-progress-fill');
+  barFill.setCssStyles({ width: `${pct}%` });
 
   // 训练项 + 组
   for (const item of enabledItems) {
@@ -179,7 +193,12 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
 
     const itemEl = container.createDiv();
     itemEl.addClass('workout-plan-item');
-    itemEl.createDiv({ text: `${exerciseName}${typeName ? ` [${typeName}]` : ''}` }).addClass('workout-plan-item-title');
+    const itemTitle = itemEl.createDiv();
+    itemTitle.addClass('workout-plan-item-title');
+    itemTitle.createSpan({ text: exerciseName });
+    if (typeName) {
+      itemTitle.createSpan({ text: typeName, cls: 'workout-cat-label' });
+    }
 
     const setsEl = itemEl.createDiv();
     setsEl.addClass('workout-plan-sets');
@@ -188,17 +207,23 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
       const isCompleted = completedKeys.has(`${item.exerciseId}#${set.id}`);
       const row = setsEl.createDiv();
       row.addClass('workout-row', 'workout-plan-set');
+      if (isCompleted) row.addClass('is-completed');
 
       row.createSpan({ text: t('modal.newPlan.setName', { n: String(sidx + 1) }) }).addClass('workout-plan-setno');
       const fieldsText = formatSetFields(set.fields, type?.fields ?? [], unit);
       row.createSpan({ text: fieldsText || t('codeblock.plan.emptyFields') }).addClass('workout-plan-setfields');
 
       if (isCompleted) {
-        row.createSpan({ text: t('codeblock.plan.completed') }).addClass('workout-plan-completed');
+        // 已完成态：绿色勾选标识（替代旧文字「已完成」）
+        const done = row.createEl('span', { cls: 'workout-plan-done', attr: { 'aria-label': t('codeblock.plan.completed') } });
+        setIcon(done, 'check');
+        done.createSpan({ text: t('codeblock.plan.completed') });
       } else {
+        // 操作区：图标化编辑 / 完成按钮
+        const actions = row.createEl('span', { cls: 'workout-plan-set-actions' });
         // 编辑按钮（仅未完成时显示：改该组计划预设值）
-        const editBtn = row.createEl('button', { text: t('codeblock.plan.edit') });
-        editBtn.addClass('mod-cta', 'workout-plan-set-edit');
+        const editBtn = actions.createEl('button', { cls: 'workout-icon-btn', attr: { 'aria-label': t('codeblock.plan.edit') } });
+        setIcon(editBtn, 'pencil');
         editBtn.addEventListener('click', () => {
           new PlanSetEditModal(dataManager, {
             exerciseId: item.exerciseId,
@@ -213,8 +238,8 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
         });
 
         // 完成按钮（仅未完成显示）
-        const completeBtn = row.createEl('button', { text: t('codeblock.plan.complete') });
-        completeBtn.addClass('mod-cta', 'workout-plan-set-complete');
+        const completeBtn = actions.createEl('button', { cls: 'workout-icon-btn workout-icon-btn-success', attr: { 'aria-label': t('codeblock.plan.complete') } });
+        setIcon(completeBtn, 'check');
         completeBtn.addEventListener('click', () => {
           void (async () => {
             // 1) 持久化「已完成」状态到计划配置（独立于训练记录，删除记录不影响）

@@ -278,10 +278,13 @@ export function computeStat(stat: StatDef, records: LogRow[]): number {
   return Math.round(result * 100) / 100;
 }
 
-// 把统计值规整成展示字符串（纯数字，不附加任何单位）；非法值显示 "-"。
-export function formatStatValue(n: number): string {
+// 把统计值规整成展示字符串（纯数字，非法值显示 "-"）；
+// 若传入 unit（非空），则在数值后追加单位文字，如 "3,600 kg""95 kg"。
+// unit 来自 StatDef.unit（在数据统计编辑页录入），旧数据无该字段时等同不传。
+export function formatStatValue(n: number, unit?: string): string {
   if (Number.isNaN(n)) return '-';
-  return String(Math.round(n * 100) / 100);
+  const value = String(Math.round(n * 100) / 100);
+  return unit && unit.trim() ? `${value} ${unit.trim()}` : value;
 }
 
 // ===== 引导式 ↔ 表达式 双向转换 =====

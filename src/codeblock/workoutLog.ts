@@ -1,7 +1,7 @@
-import { MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownRenderChild, setIcon } from 'obsidian';
 import { LogRow, FieldDef, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
-import { getFieldLabel, getFieldUnit, renderFieldValue, resolveLogExerciseName, resolveExerciseIdByName } from '../data/display';
+import { getFieldLabel, getFieldUnit, renderFieldValue, resolveLogExerciseName, resolveExerciseIdByName, getTrainingTypeName } from '../data/display';
 import { computeStat, formatStatValue } from '../data/statExpr';
 import { registerRenderedBlock, unregisterRenderedBlock } from './registry';
 
@@ -240,19 +240,6 @@ export async function renderWorkoutLog(
   const container = el.createDiv();
   container.addClass('workout-log-container');
 
-  // 顶部「添加记录」按钮（若开启）
-  if (params.showAdd) {
-    const header = container.createDiv();
-    header.addClass('workout-log-header');
-    const addBtn = header.createEl('button', { text: t('codeblock.addRecord', { exercise: params.exercise }) });
-    addBtn.addClass('mod-cta');
-    addBtn.addEventListener('click', () => onAddRecord(params.exercise, plan));
-  }
-
-  // 创建表格元素
-  const table = container.createEl('table');
-  table.addClass('workout-log-table');
-
   // 取首条记录所属训练类型的字段定义（决定表头画哪些列）
   const category = filteredLogs[0].category;
   const fields = await getTrainingTypeFields(category);
@@ -262,60 +249,68 @@ export async function renderWorkoutLog(
     (s) => s.enabled && s.associatedTypes.includes(category)
   );
 
-  // 画表头 <thead>
-  const thead = table.createEl('thead');
-  const headerRow = thead.createEl('tr');
-
-  // 第一列固定为日期
-  headerRow.createEl('th', { text: t('codeblock.date') });
-  // 每个字段画一列，列标题 = 字段标签，若有单位在后面加 (单位)
-  for (const field of fields) {
-    const unitText = getFieldUnit(field, unit);
-    headerRow.createEl('th', { text: `${getFieldLabel(field)}${unitText ? `(${unitText})` : ''}` });
+  // 顶部标题区：训练项名 + 训练类型圆角标签（左），「添加记录」按钮（右）
+  const header = container.createDiv();
+  header.addClass('workout-log-header');
+  const titleWrap = header.createDiv();
+  titleWrap.addClass('workout-log-title-wrap');
+  titleWrap.createEl('h3', { text: params.exercise, cls: 'workout-log-title' });
+  const typeDef = config.trainingTypes.find((tt) => tt.id === category);
+  if (typeDef) {
+    titleWrap.createSpan({ text: getTrainingTypeName(typeDef), cls: 'workout-cat-label' });
   }
-  // 备注列、操作列（编辑/删除按钮所在）
-  headerRow.createEl('th', { text: t('codeblock.note') });
-  headerRow.createEl('th', { text: t('codeblock.actions') });
-
-  // 画表体 <tbody>
-  const tbody = table.createEl('tbody');
+  if (params.showAdd) {
+    const addBtn = header.createEl('button', { text: t('codeblock.addRecord', { exercise: params.exercise }) });
+    addBtn.addClass('mod-cta');
+    addBtn.addEventListener('click', () => onAddRecord(params.exercise, plan));
+  }
 
   // 按渲染分组（displayLogs 已裁剪）的「分组名」排序
   const groupKeys = Array.from(groups.keys()).sort((a, b) => (params.sort === 'desc' ? b.localeCompare(a) : a.localeCompare(b)));
 
-  // 遍历每个分组，每个分组内逐条记录画一行
+  // 遍历每个分组：每个分组渲染为「日期 + 统计芯片」头 + 该组记录子表（卡片化，对应原型分组结构）
   for (const key of groupKeys) {
     const groupLogsList = groups.get(key)!;
     // 统计基于「完整数据」分组（fullGroups），不受 number/limit 裁剪影响，保证次数/总量等准确
     const statSourceLogs = fullGroups.get(key) ?? groupLogsList;
 
-    // 分组上方：日期 / 统计行。
-    // 布局：[日期(分组key) | 统计值(合并字段列) | 备注(空) | 操作(空)]
-    // 无统计时仅显示日期行作为分组分隔标识。
-    const groupHeaderRow = tbody.createEl('tr');
-    groupHeaderRow.addClass(matchedStats.length > 0 ? 'workout-log-stat' : 'workout-log-group-header');
+    const groupEl = container.createDiv();
+    groupEl.addClass('workout-log-group');
 
-    // 第一格固定为日期（分组 key），不随统计 colspan 吞掉
-    groupHeaderRow.createEl('td', { text: key });
-
+    // 分组头：日期（左） + 统计芯片（右，带单位）
+    const groupHead = groupEl.createDiv();
+    groupHead.addClass('workout-log-group-head');
+    groupHead.createEl('span', { text: key, cls: 'workout-log-date' });
     if (matchedStats.length > 0) {
-      // 有统计时：统计值合并所有字段列，纯数字、不附加单位。
-      // 多条统计用换行排列（\n），同一单元格内每条一行，CSS 用 white-space: pre-line 还原换行。
-      const statCells = matchedStats
-        .map((s) => `${s.name}: ${formatStatValue(computeStat(s, statSourceLogs))}`)
-        .join('\n');
-      const statCell = groupHeaderRow.createEl('td', { text: statCells });
-      statCell.colSpan = fields.length; // 显式设置，确保跨列合并所有配置字段
-      statCell.addClass('workout-log-stat-cell');
-    } else {
-      // 无统计时：字段列区域空白（合并占位）
-      const emptyCell = groupHeaderRow.createEl('td');
-      emptyCell.colSpan = fields.length;
+      const chips = groupHead.createDiv();
+      chips.addClass('workout-log-chips');
+      for (const s of matchedStats) {
+        const chip = chips.createSpan({ cls: 'workout-log-chip' });
+        chip.createSpan({ text: s.name, cls: 'workout-log-chip-label' });
+        chip.createSpan({ text: formatStatValue(computeStat(s, statSourceLogs), s.unit), cls: 'workout-log-chip-value' });
+      }
     }
-    // 备注列与操作列始终为空
-    groupHeaderRow.createEl('td', { text: '' });
-    groupHeaderRow.createEl('td', { text: '' });
 
+    // 该组记录表格（动态列：日期/时间 + 训练类型字段 + 备注 + 操作）
+    const table = groupEl.createEl('table');
+    table.addClass('workout-log-table');
+
+    // 画表头 <thead>
+    const thead = table.createEl('thead');
+    const headerRow = thead.createEl('tr');
+    // 第一列固定为时间（日期已在上方分组头显示）
+    headerRow.createEl('th', { text: t('codeblock.date') });
+    // 每个字段画一列，列标题 = 字段标签，若有单位在后面加 (单位)
+    for (const field of fields) {
+      const unitText = getFieldUnit(field, unit);
+      headerRow.createEl('th', { text: `${getFieldLabel(field)}${unitText ? `(${unitText})` : ''}` });
+    }
+    // 备注列、操作列（编辑/删除图标按钮所在）
+    headerRow.createEl('th', { text: t('codeblock.note') });
+    headerRow.createEl('th', { text: t('codeblock.actions') });
+
+    // 画表体 <tbody>
+    const tbody = table.createEl('tbody');
     for (const log of groupLogsList) {
       const row = tbody.createEl('tr');
 
@@ -323,7 +318,7 @@ export async function renderWorkoutLog(
       // 防御：timestamp 缺失时整行不渲染（分组阶段已过滤，此处再兜底）。
       if (!log.timestamp) continue;
       const timePart = log.timestamp.split(' ')[1] ?? log.timestamp;
-      row.createEl('td', { text: timePart });
+      row.createEl('td', { text: timePart, cls: 'workout-log-time' });
 
       // 中间各字段列：取该记录的字段值，按字段类型渲染（含单位换算）。
       // 按需求：单元格只显示纯数字，单位仅在表头体现；时长字段仍由 renderFieldValue 保持可读文本。
@@ -333,17 +328,15 @@ export async function renderWorkoutLog(
       }
 
       // 备注列
-      row.createEl('td', { text: log.note || '' });
+      row.createEl('td', { text: log.note || '', cls: 'workout-log-note' });
 
-      // 操作列：编辑按钮 + 删除按钮，样式与训练项管理保持一致（workout-action-btn / workout-danger-btn）
-      const actionsCell = row.createEl('td');
-      const actionsWrap = actionsCell.createDiv();
-      actionsWrap.addClass('workout-card-actions');
-      const editBtn = actionsWrap.createEl('button', { text: t('codeblock.edit') });
-      editBtn.addClass('workout-action-btn');
+      // 操作列：图标化编辑/删除按钮（原型风格，替代旧文字按钮）
+      const actionsCell = row.createEl('td', { cls: 'workout-log-actions' });
+      const editBtn = actionsCell.createEl('button', { cls: 'workout-icon-btn', attr: { 'aria-label': t('codeblock.edit') } });
+      setIcon(editBtn, 'pencil');
       editBtn.addEventListener('click', () => onEditRecord(log));
-      const deleteBtn = actionsWrap.createEl('button', { text: t('codeblock.delete') });
-      deleteBtn.addClass('workout-danger-btn');
+      const deleteBtn = actionsCell.createEl('button', { cls: 'workout-icon-btn workout-icon-btn-danger', attr: { 'aria-label': t('codeblock.delete') } });
+      setIcon(deleteBtn, 'trash');
       deleteBtn.addEventListener('click', () => onDeleteRecord(log));
     }
   }

@@ -2,7 +2,7 @@ import { App, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, N
 import { LogRow, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
 import { computeStat, formatStatValue } from '../data/statExpr';
-import { getExerciseName, getMuscleName, resolveLogExerciseName } from '../data/display';
+import { getExerciseName, getMuscleName, resolveLogExerciseName, getTrainingTypeName } from '../data/display';
 import { registerRenderedBlock, unregisterRenderedBlock } from './registry';
 
 /*
@@ -191,47 +191,64 @@ export async function renderWorkoutDay(
   // 按当日首次训练时间排序（训练先后），更符合"今天练了啥"的阅读顺序。
   const sortedGroups = Array.from(groups.values()).sort((a, b) => a.firstTs.localeCompare(b.firstTs));
 
-  // 画表格
-  const table = container.createEl('table');
-  table.addClass('workout-day-table');
+  // 训练项卡片网格（对应原型 day-grid / ex-card，替代旧表格）
+  const grid = container.createDiv();
+  grid.addClass('workout-day-grid');
 
-  const thead = table.createEl('thead');
-  const headerRow = thead.createEl('tr');
-  headerRow.createEl('th', { text: t('codeblock.day.project') });
-  headerRow.createEl('th', { text: t('codeblock.day.statValue') });
-  headerRow.createEl('th', { text: t('codeblock.day.primaryMuscles') });
-  headerRow.createEl('th', { text: t('codeblock.day.secondaryMuscles') });
-  headerRow.createEl('th', { text: t('codeblock.day.plan') });
-
-  const tbody = table.createEl('tbody');
   for (const group of sortedGroups) {
-    const row = tbody.createEl('tr');
+    const card = grid.createDiv();
+    card.addClass('workout-day-card');
 
-    // 1) 项目名：优先用配置里的训练项对象拿显示名，否则回退到日志解析名
+    // 卡片头：训练项名 + 训练类型圆角标签（左），方案徽章（右）
+    const cardHead = card.createDiv();
+    cardHead.addClass('workout-day-card-head');
+    const nameWrap = cardHead.createDiv();
+    nameWrap.addClass('workout-day-name-wrap');
     const exercise = group.exerciseId ? config.exercises.find((e) => e.id === group.exerciseId) : undefined;
     const name = exercise
       ? getExerciseName(exercise)
       : (resolveLogExerciseName(config, group.logs[0]) || t('codeblock.day.unknown'));
-    row.createEl('td', { text: name });
-
-    // 2) 数据统计值：该训练项所属类型下、已启用的统计条目（多条合并一格）。
-    const matchedStats = (config.statistics ?? []).filter(
-      (s) => s.enabled && s.associatedTypes.includes(group.category)
-    );
-    const statText = matchedStats.length
-      ? matchedStats.map((s) => `${s.name}: ${formatStatValue(computeStat(s, group.logs))}`).join('　|　')
-      : '—';
-    row.createEl('td', { text: statText });
-
-    // 3) 主肌群 / 4) 辅助肌群：取自训练项配置的 muscles（primary / secondary）
-    row.createEl('td', { text: muscleNames(config, exercise, 'primary') });
-    row.createEl('td', { text: muscleNames(config, exercise, 'secondary') });
-
-    // 5) 训练方案：该训练项当日记录的 plan 字段（去重合并；无则显示占位）
+    nameWrap.createEl('h3', { text: name, cls: 'workout-day-name' });
+    const typeDef = config.trainingTypes.find((tt) => tt.id === group.category);
+    if (typeDef) {
+      nameWrap.createSpan({ text: getTrainingTypeName(typeDef), cls: 'workout-cat-label' });
+    }
+    // 方案徽章：取自该训练项当日记录的 plan 字段（去重合并；多方案时合并显示）
     const plans = Array.from(
       new Set(group.logs.map((l) => l.plan).filter((p): p is string => typeof p === 'string' && p.length > 0))
     );
-    row.createEl('td', { text: plans.length ? plans.join('、') : '—' });
+    if (plans.length) {
+      cardHead.createSpan({ text: plans.join('、'), cls: 'workout-day-plan-badge' });
+    }
+
+    // 统计值（带单位，逐条分行展示，对应原型「训练总量 3,600 kg / 1RM 估算 95 kg」）
+    const matchedStats = (config.statistics ?? []).filter(
+      (s) => s.enabled && s.associatedTypes.includes(group.category)
+    );
+    const statBlock = card.createDiv();
+    statBlock.addClass('workout-day-stat');
+    if (matchedStats.length) {
+      for (const s of matchedStats) {
+        const line = statBlock.createDiv();
+        line.addClass('workout-day-stat-line');
+        line.createSpan({ text: s.name, cls: 'workout-day-stat-label' });
+        line.createSpan({ text: formatStatValue(computeStat(s, group.logs), s.unit), cls: 'workout-day-stat-value' });
+      }
+    } else {
+      statBlock.createSpan({ text: '—' });
+    }
+
+    // 主肌群 / 辅助肌群：取自训练项配置的 muscles（primary / secondary），渲染为标签
+    const muscles = card.createDiv();
+    muscles.addClass('workout-day-muscles');
+    const primary = exercise ? muscleNames(config, exercise, 'primary') : '—';
+    const secondary = exercise ? muscleNames(config, exercise, 'secondary') : '—';
+    if (primary !== '—') {
+      for (const m of primary.split('、')) muscles.createSpan({ text: m, cls: 'workout-tag workout-tag-primary' });
+    }
+    if (secondary !== '—') {
+      for (const m of secondary.split('、')) muscles.createSpan({ text: m, cls: 'workout-tag workout-tag-secondary' });
+    }
   }
 }
 
