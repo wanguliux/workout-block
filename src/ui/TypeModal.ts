@@ -1,6 +1,6 @@
 import { Modal, Notice } from 'obsidian';
 import { DataManager } from '../data/DataManager';
-import { getTrainingTypeName } from '../data/display';
+import { getTrainingTypeName, getFieldLabel } from '../data/display';
 import { TrainingType, FieldDef } from '../data/types';
 import { t } from '../i18n';
 import { INVALID_ID_RE, isInvalidId } from './idValidation';
@@ -179,7 +179,7 @@ export class TypeModal extends Modal {
     col2.createEl('label', { text: t('modal.newType.fieldLabel') });
     const labelInput = col2.createEl('input', { type: 'text', placeholder: t('modal.newType.fieldLabel') });
     labelInput.addClass('workout-input');
-    labelInput.value = field.label || '';
+    labelInput.value = getFieldLabel(field);
     labelInput.addEventListener('change', () => {
       this.fields[index].label = labelInput.value;
     });
@@ -331,7 +331,7 @@ export class TypeModal extends Modal {
       return;
     }
 
-    const validFields = this.fields.filter((f) => f.key && (f.label || f.labelKey));
+    const validFields = this.fields.filter((f) => f.key);
     if (validFields.length === 0) {
       new Notice(t('settings.atLeastOneField'));
       return;
