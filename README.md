@@ -254,6 +254,61 @@ Both datasets live inside the vault (data directory changeable in settings), bot
 
 ---
 
+## 🖥️ CLI (workout-block-cli)
+
+Besides clicking through the Obsidian UI, a bundled CLI (in `workout-block-cli/`, compiled from `src/cli`) lets you **read and write plugin data safely outside Obsidian** — handy for scripted bulk imports, external-tool integration, or logging a quick set from the terminal.
+
+> Specify the vault root before running: `workout-cli <command> --vault <vault root>` (or set the `WORKOUT_VAULT` env var). The CLI **verifies the path is a real Obsidian vault** (it must contain a `.obsidian` directory); pointing it at the wrong place (e.g. the plugin source dir) **errors out instead of silently writing data**. Pass `--force` to skip the check when you really intend to write outside a vault (testing/advanced only).
+
+### Command overview
+
+| Command | Purpose |
+|---------|---------|
+| `locate` | Show data-file locations (settings / CSV / config paths, unit, language) |
+| `doctor` | Read-only data health check: header / dirty rows / duplicate ids / tombstones |
+| `resolve <name or id>` | Resolve an exercise (run before logging to confirm the name / id) |
+| `config ...` | Add / edit / delete exercises / types / muscles / stats (cascade rules match the plugin) |
+| `add --exercise <name or id>` | Log a set (supports `key=value` and `--field key=value`) |
+| `list` | Query logs by exercise / date range (newest first by default) |
+| `delete --id <log id>` | Soft-delete a log (appends a tombstone, same semantics as the plugin) |
+| `compact` | Compact the CSV (purge tombstones and deleted rows) |
+| `stats` | Aggregate by stat / exercise / date |
+| `plan ...` | View / complete / add / edit / delete training plans |
+| `block <type>` | Emit a code-block snippet (paste straight into a note) |
+
+### Asking for missing required fields while logging
+
+Sometimes you just want to say "climbed once today" without any numbers. In an **interactive terminal**, `add` automatically detects the training type's fields marked **required but not provided**, and prompts you for each one — optional fields are skipped to avoid noise:
+
+```bash
+workout-cli add --exercise 攀岩
+# outputs: 1 required parameter missing, will ask one by one:
+# 时长（示例：90m / 1分30秒 / 1h30m）：
+```
+
+- **select fields**: the options are listed and re-prompted until you pick a valid one or leave it blank (up to 3 tries).
+- **scripts / pipes**: non-interactive mode never blocks on prompts; a missing required field errors out instead (keeping scripts compatible). Pass `--no-ask` to explicitly disable prompting.
+
+### Examples
+
+```bash
+# Create a custom sport in two steps (type + exercise)
+workout-cli config add-type --name 攀岩 --id climbing \
+  --fields-json '[{"key":"duration_sec","inputType":"duration","required":true},{"key":"routes","inputType":"number","unitLabel":"条"},{"key":"style","inputType":"select","options":["顶绳","先锋","抱石"]}]'
+workout-cli config add-exercise --name 攀岩 --id rock_climbing --category climbing \
+  --muscle lats:primary --muscle biceps:secondary
+
+# Log a set (when params are missing, the terminal prompts for each required field)
+workout-cli add --exercise 攀岩 duration_sec=90m routes=8 style=抱石
+
+# Show the latest 10 logs
+workout-cli list --last 10
+```
+
+See `workout-block-cli/SKILL.md` for full detail.
+
+---
+
 ## 🔧 Development
 
 ```bash
