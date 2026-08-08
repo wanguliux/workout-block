@@ -224,10 +224,17 @@ export class ExerciseModal extends Modal {
     });
 
     try {
+      // 编辑种子训练项时若改了显示名，必须清掉 nameKey，否则 getExerciseName 仍优先取
+      // nameKey 的翻译值，改名不生效（与 CLI applyExerciseUpdate 置 nameKey=undefined 对齐）。
+      // 仅当名字相对原显示名发生变化才清，避免"未改名直接保存"误删种子 nameKey、破坏多语言。
+      const nameChanged = this.options.editExercise
+        ? name !== getExerciseName(this.options.editExercise)
+        : false;
       const updates: Partial<Exercise> = {
         name,
         category,
         muscles: muscles.length > 0 ? muscles : undefined,
+        ...(nameChanged ? { nameKey: undefined } : {}),
       };
       if (this.options.editExercise) {
         const oldId = this.options.editExercise.id;

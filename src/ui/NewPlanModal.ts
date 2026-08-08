@@ -474,6 +474,9 @@ export class NewPlanModal extends Modal {
       timeRule: { ...this.timeRule },
       sourceNote: this.sourceNote,
       createdAt: this.editPlan?.createdAt ?? this.todayStr(),
+      // 编辑时保留已完成组（completedSets），否则 upsertPlan 整条替换会丢掉全部完成态。
+      // 与 CLI applyPlanUpdate（{ ...target } 保留）语义一致。
+      completedSets: this.editPlan?.completedSets,
       items: enabledItems.map((i) => ({
         exerciseId: i.exerciseId,
         category: i.category,
