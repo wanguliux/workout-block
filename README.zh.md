@@ -258,6 +258,61 @@ plan: 推日 A
 
 ---
 
+## 🖥️ 命令行工具（workout-block-cli）
+
+除了在 Obsidian 里点界面，你还能用随附的 CLI（位于 `workout-block-cli/`，由 `src/cli` 编译）**在 Obsidian 之外安全读写插件数据**——适合脚本化批量导入、外部工具联动，或在终端里快速记一笔。
+
+> 运行前需指定 vault 根目录：`workout-cli <命令> --vault <仓库根目录>`（或设环境变量 `WORKOUT_VAULT`）。CLI **会校验该路径是真实 Obsidian 仓库**（含 `.obsidian` 目录），指向错误位置（如插件源码目录）会**直接报错而非静默写入**。确要写入非仓库目录时可加 `--force` 跳过校验（仅测试/高级场景）。
+
+### 命令一览
+
+| 命令 | 作用 |
+|------|------|
+| `locate` | 显示数据文件定位（设置 / CSV / 配置路径、单位、语言） |
+| `doctor` | 数据体检（只读）：表头 / 脏行 / 重复 id / 墓碑统计 |
+| `resolve <名称或id>` | 训练项反查（录入前建议先跑，确认名称 / id） |
+| `config ...` | 训练项 / 类型 / 肌肉 / 统计的增改删（级联规则与插件一致） |
+| `add --exercise <名称或id>` | 记一笔训练（支持 `key=value` 与 `--field key=value`） |
+| `list` | 按训练项 / 日期区间查询记录（默认最新在前） |
+| `delete --id <记录id>` | 软删除一条记录（追加墓碑，与插件删除语义一致） |
+| `compact` | 压缩清理 CSV（清除墓碑与已删行） |
+| `stats` | 按统计项 / 训练项 / 日期聚合计算 |
+| `plan ...` | 训练计划的查看 / 完成 / 增改删 |
+| `block <类型>` | 生成代码块文本（可直接粘进笔记） |
+
+### 录入时自动询问缺失的必填参数
+
+有时候你只想说「今天攀岩了一次」，却没带任何具体数值。在**交互式终端**下，`add` 会自动检测训练类型里**标记为必填（required）但未提供的字段**，并逐个询问你补全——选填字段不询问，避免啰嗦：
+
+```bash
+workout-cli add --exercise 攀岩
+# 输出：检测到 1 个必填参数未提供，将逐个询问：
+# 时长（示例：90m / 1分30秒 / 1h30m）：
+```
+
+- **下拉（select）字段**：会列出可选项并循环提示，直到你选对或留空（最多 3 次）。
+- **脚本 / 管道场景**：非交互模式不会挂起询问，缺失必填会直接报错（保持脚本兼容）。传 `--no-ask` 可显式关闭询问。
+
+### 示例
+
+```bash
+# 一键建一个自定义运动（训练类型 + 训练项，两步）
+workout-cli config add-type --name 攀岩 --id climbing \
+  --fields-json '[{"key":"duration_sec","inputType":"duration","required":true},{"key":"routes","inputType":"number","unitLabel":"条"},{"key":"style","inputType":"select","options":["顶绳","先锋","抱石"]}]'
+workout-cli config add-exercise --name 攀岩 --id rock_climbing --category climbing \
+  --muscle lats:primary --muscle biceps:secondary
+
+# 记一笔（参数不全时，终端会逐个询问缺失的必填字段）
+workout-cli add --exercise 攀岩 duration_sec=90m routes=8 style=抱石
+
+# 查最近 10 条
+workout-cli list --last 10
+```
+
+更多细节见 `workout-block-cli/SKILL.md`。
+
+---
+
 ## 🔧 开发
 
 ```bash
