@@ -1,6 +1,6 @@
 import { App, TAbstractFile, TFile } from 'obsidian';
 import { WorkoutConfig } from './types';
-import { resolveExerciseByName } from './display';
+import { countWorkoutLogBlocks, extractSchemeExercisesFromContent } from './schemeRules';
 
 /*
  * planScanner.ts —— 训练方案（笔记）扫描工具
@@ -28,13 +28,9 @@ const listeners = new Set<() => void>();
 // vault 事件钩子是否已注册（整会话只注册一次）。
 let vaultHooked = false;
 
-// 统计一段内容里 ```workout-log 代码块（起始围栏）的数量。
-function countWorkoutLogBlocks(content: string): number {
-  const re = /```\s*workout-log\b/g;
-  let count = 0;
-  while (re.exec(content) !== null) count++;
-  return count;
-}
+// 判定与提取的纯规则已下沉到 schemeRules.ts（零 Obsidian 依赖，与 CLI 共用），
+// 此处再导出保持既有 API 不变。
+export { countWorkoutLogBlocks, extractSchemeExercisesFromContent } from './schemeRules';
 
 // 广播索引变化（单个订阅者异常不影响其他订阅者）。
 function emitChanged(): void {
@@ -142,7 +138,7 @@ export function invalidateSchemeCache(): void {
   schemeIndex = null;
 }
 
-// 从方案笔记提取训练项：遍历所有 ```workout-log 代码块，解析 exercise 参数 → 训练项 id。
+// 从方案笔记【文件】提取训练项（读盘后委托 schemeRules 的纯文本版）。
 export async function extractSchemeExercises(
   app: App,
   notePath: string,
@@ -152,20 +148,5 @@ export async function extractSchemeExercises(
   const file = app.vault.getAbstractFileByPath(notePath);
   if (!(file instanceof TFile)) return [];
   const content = await app.vault.cachedRead(file);
-
-  const result: { exerciseId: string; category: string }[] = [];
-  const seen = new Set<string>();
-  const re = /```\s*workout-log[\s\S]*?```/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content))) {
-    const block = m[0];
-    const exLine = block.match(/^\s*exercise:\s*(.+)$/m);
-    if (!exLine) continue;
-    const ex = resolveExerciseByName(config, exLine[1].trim());
-    if (ex && !seen.has(ex.id)) {
-      seen.add(ex.id);
-      result.push({ exerciseId: ex.id, category: ex.category });
-    }
-  }
-  return result;
+  return extractSchemeExercisesFromContent(content, config);
 }

@@ -1,8 +1,15 @@
-import Papa from 'papaparse';
 import { App, TFile } from 'obsidian';
 import { LogRow, CSV_FILENAME } from './types';
 import { DataManager } from './DataManager';
-import { generateId } from '../util/id';
+import {
+  CSV_HEADER,
+  parseCsvContent,
+  logRowToCsvLine,
+  tombstoneLine,
+  tombstoneLines,
+  logsToCsv,
+  isStaleHeader,
+} from './csvFormat';
 
 /*
  * CSVStore.ts —— 训练记录的数据层（vault 内 workout_logs.csv）。
@@ -17,9 +24,9 @@ import { generateId } from '../util/id';
  *    「整文件压缩清理」（真正移除被删行）由设置页按钮在用户主动触发时执行。
  *  - 编辑因需改中间行，仍整体重写（writeAll，使用 vault.modify），但属低频操作，
  *    且记录少时极快；外部手动改文件也不会丢数据。
+ *  - CSV 的序列化/解析硬约定（表头列序、转义、墓碑、容错）全部收敛在纯模块
+ *    `csvFormat.ts`，与 workout-block CLI 共用，保证两侧写盘逐字节同构。
  */
-// 第 8 列 deleted：空 = 正常行；'true' = 软删除墓碑行（仅标记 id 被删除，不作为记录）。
-const CSV_HEADER = 'id,timestamp,exerciseId,category,fields,note,plan,deleted';
 
 export class CSVStore {
   private dm: DataManager;   // 数据中枢，用于取设置（CSV 所在目录）与 App 实例
@@ -36,68 +43,10 @@ export class CSVStore {
     return dir ? `${dir}/${CSV_FILENAME}` : CSV_FILENAME;
   }
 
-  // 解析 CSV 文本为 LogRow[]，失败返回空结果（不抛异常，避免影响启动）。
-  // 返回值带 dropped：本被丢弃的脏行计数（如超长 fields 的幽灵行），供 init 判断是否需要落盘自愈。
-  // 返回值带 deletedIds：被软删除（墓碑行）标记过的 id 集合，供缓存过滤与 id 分配去重。
+  // 解析 CSV 文本为 LogRow[]（含脏行计数与墓碑 id 集合）。实现收敛在纯模块 csvFormat，
+  // 与 workout-block CLI 共用同一套容错规则（逐行降级、超长 fields 丢弃、墓碑过滤）。
   parseContent(content: string): { rows: LogRow[]; dropped: number; deletedIds: string[] } {
-    try {
-    const result = Papa.parse<Record<string, string>>(content, {
-      header: true,
-      skipEmptyLines: true,
-    });
-    // 收集软删除墓碑标记过的 id（deleted 列 === 'true' 的行）。
-    const deletedIds = new Set<string>();
-    let dropped = 0;
-    const rows = result.data
-      .map((row): LogRow | null => {
-        // 软删除墓碑行：deleted 列为 true，仅记录「该 id 已被删除」，
-        // 不计入脏行（dropped），也不作为正常记录返回（避免与同名数据行重复）。
-        if (row.deleted === 'true') {
-          if (row.id) deletedIds.add(row.id);
-          return null;
-        }
-        // 关键兜底：timestamp / category 是后续过滤/分组必须的字段；缺失则无法渲染，
-        // 且往往是脏 CSV（如未闭合引号把整行吞乱）产生的幽灵行，直接丢弃。
-        if (!row.timestamp || !row.category) {
-          dropped++;
-          return null;
-        }
-        let fields: Record<string, unknown> = {};
-        const raw = row.fields;
-        if (raw) {
-          // 单条记录的 fields 异常大（脏 CSV 未闭合引号把多行吞进一个单元格），
-          // 整行直接丢弃——而非置空后保留成幽灵行。否则会：① 与正常行形成重复 id；
-          // ② 被 writeAll 再次写回、撑大文件。丢弃才能从根上消除脏数据。
-          if (raw.length > 10000) {
-            console.warn('[workout] 跳过超长 fields（疑似脏数据）:', raw.slice(0, 80));
-            dropped++;
-            return null;
-          }
-          // 逐行兜底：某行 fields 解析失败只影响该行，绝不让整文件解析失败导致全部记录丢失。
-          try {
-            fields = JSON.parse(raw) as Record<string, unknown>;
-          } catch {
-            fields = {};
-          }
-        }
-        return {
-          id: row.id || generateId(),
-          timestamp: row.timestamp,
-          exerciseId: row.exerciseId || undefined,
-          category: row.category,
-          fields,
-          note: row.note || undefined,
-          plan: row.plan || undefined,
-        };
-      })
-      .filter((r): r is LogRow => r !== null)
-      // 过滤掉「数据行 id 已被墓碑标记删除」的残留行（软删除前的旧数据行），
-      // 保证内存缓存与渲染看到的都是存活记录。
-      .filter((r) => !deletedIds.has(r.id));
-    return { rows, dropped, deletedIds: Array.from(deletedIds) };
-    } catch {
-      return { rows: [], dropped: 0, deletedIds: [] };
-    }
+    return parseCsvContent(content);
   }
 
   // 读取 CSV 文本：优先走 vault 缓存层（getAbstractFileByPath + vault.read，写盘安全）；
@@ -163,32 +112,16 @@ export class CSVStore {
     }
   }
 
-  // 把一行记录转成 CSV 文本。使用 Papa.unparse({ header: false }) 确保转义与 writeAll 完全一致。
-  // deleted 列为空（正常行）；墓碑行由 appendTombstone 单独构造。
+  // 把一行记录转成 CSV 文本。实现收敛在纯模块 csvFormat（Papa.unparse + 规范列序），
+  // 确保嵌套 JSON 引号转义正确、与 writeAll/CLI 完全一致。
   private toCsvLine(row: LogRow): string {
-    const columns = CSV_HEADER.split(',');
-    return Papa.unparse(
-      [{
-        id: row.id,
-        timestamp: row.timestamp,
-        exerciseId: row.exerciseId || '',
-        category: row.category,
-        fields: JSON.stringify(normalizeFields(row.fields)),
-        note: row.note || '',
-        plan: row.plan || '',
-        deleted: '',
-      }],
-      { columns, header: false }
-    );
+    return logRowToCsvLine(row);
   }
 
   // 追加一行「软删除墓碑」：仅标记 id 为已删除（deleted 列 = true），O(1) 追加，不重写整文件。
   // 读取时 parseContent 据此过滤掉该 id 的残留数据行。用于 deleteLog，根治删除卡顿。
   async appendTombstone(id: string): Promise<void> {
-    const line = Papa.unparse(
-      [{ id, timestamp: '', exerciseId: '', category: '', fields: '', note: '', plan: '', deleted: 'true' }],
-      { columns: CSV_HEADER.split(','), header: false }
-    );
+    const line = tombstoneLine(id);
     const file = this.app.vault.getAbstractFileByPath(this.path);
     if (file instanceof TFile) {
       if (typeof this.app.vault.append === 'function') {
@@ -207,15 +140,7 @@ export class CSVStore {
   // 训练记录」场景，保证与大 CSV 同样无卡顿。文件不存在时静默忽略（删除已反映到内存缓存）。
   async appendTombstones(ids: string[]): Promise<void> {
     if (ids.length === 0) return;
-    const columns = CSV_HEADER.split(',');
-    const content = ids
-      .map((id) =>
-        Papa.unparse(
-          [{ id, timestamp: '', exerciseId: '', category: '', fields: '', note: '', plan: '', deleted: 'true' }],
-          { columns, header: false }
-        )
-      )
-      .join('\n');
+    const content = tombstoneLines(ids);
     const file = this.app.vault.getAbstractFileByPath(this.path);
     if (file instanceof TFile) {
       if (typeof this.app.vault.append === 'function') {
@@ -228,34 +153,10 @@ export class CSVStore {
   }
 
   // 整体写入（编辑/删除/批量导入）。存在则改、否则建。
-  // 强制使用规范列序（CSV_HEADER），避免「内存对象键序」泄漏到磁盘导致列顺序漂移：
-  // 例如 addLog 用 {...row, id, timestamp} 构造，会把 id/timestamp 排到末尾，若直接按首行键序
-  // 序列化，磁盘列序会变成 exerciseId,category,...,timestamp,id —— 数据不丢但顺序混乱。
+  // 序列化规则（强制规范列序、过滤无效行、空数据只写表头）收敛在纯模块 csvFormat.logsToCsv，
+  // 避免「内存对象键序」泄漏到磁盘导致列顺序漂移，并与 CLI 的整文件写保持同构。
   async writeAll(rows: LogRow[]): Promise<void> {
-    const columns = CSV_HEADER.split(',');
-    // 关键：持久化前过滤掉无效行。旧版 bug 可能让 logsCache 中混入 timestamp/category 为空的行；
-    // 若直接写回磁盘，下次读取会再次产生幽灵行并触发 split(undefined) 报错。只保留有效行。
-    const validRows = rows.filter((row) => !!row.timestamp && !!row.category);
-    let csv: string;
-    if (validRows.length === 0) {
-      // 空数据时只写表头，避免 Papa.unparse([]) 返回空字符串导致表头丢失。
-      // 删除最后一条记录后文件至少保留表头，下次 appendRow 可正确追加。
-      csv = CSV_HEADER;
-    } else {
-      csv = Papa.unparse(
-        validRows.map((row) => ({
-          id: row.id,
-          timestamp: row.timestamp,
-          exerciseId: row.exerciseId || '',       // 缺失则填空，保证 CSV 列对齐
-          category: row.category,
-          fields: JSON.stringify(normalizeFields(row.fields)), // 规范化为干净对象再序列化，避免脏字段被放大
-          note: row.note || '',
-          plan: row.plan || '',
-          deleted: '',                            // 正常行：空（writeAll 用于压缩/编辑，不含墓碑）
-        })),
-        { columns }
-      );
-    }
+    const csv = logsToCsv(rows);
     await this.createOrModify(csv + '\n');
   }
 
@@ -283,23 +184,6 @@ export class CSVStore {
   // 仅用于迁移自愈：旧文件是 9 列、无 id 列，直接追加新行会导致列错位、数据损坏。
   async isHeaderStale(): Promise<boolean> {
     const content = await this.readFileContent();
-    if (!content) return false;
-    const firstLine = content.split('\n', 1)[0];
-    return firstLine !== CSV_HEADER;
+    return isStaleHeader(content ?? '');
   }
-}
-
-// 把 fields 规范化为干净的普通对象：已是对象直接返回；是 JSON 字符串则尝试解析；
-// 其它情况（undefined / 脏字符串 / 非对象）一律回退为 {}，避免序列化出巨型或非法单元格。
-function normalizeFields(f: unknown): Record<string, unknown> {
-  if (f && typeof f === 'object') return f as Record<string, unknown>;
-  if (typeof f === 'string') {
-    try {
-      const parsed: unknown = JSON.parse(f);
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      return {};
-    }
-  }
-  return {};
 }
