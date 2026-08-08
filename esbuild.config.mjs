@@ -49,14 +49,42 @@ function copyAssets() {
   }
 }
 
+/*
+ * 第二构建入口：workout-block CLI（配套技能 workout-block-cli 的随附脚本）。
+ * 与插件共享 src/data 的纯模块（csvFormat/configMigrate/statExpr/display/codeBlockDefs），
+ * 保证两侧对 CSV/配置的理解逐字节一致。platform=node 让 node 内置模块自动 external。
+ */
+const CLI_SKILL_DIR = path.join('workout-block-cli', 'scripts');
+const cliContext = await esbuild.context({
+  banner: { js: banner },
+  entryPoints: ['src/cli/main.ts'],
+  bundle: true,
+  platform: 'node',
+  target: 'node18',
+  format: 'cjs',
+  logLevel: 'info',
+  sourcemap: prod ? false : 'inline',
+  treeShaking: true,
+  outfile: path.join(CLI_SKILL_DIR, 'workout-cli.js'),
+});
+
+// --cli：只构建 CLI（技能脚本更新时用）
+if (process.argv.includes('--cli')) {
+  await cliContext.rebuild();
+  process.exit(0);
+}
+
 if (prod) {
-  // 生产模式：一次性重新构建后退出
+  // 生产模式：一次性重新构建后退出（插件 + CLI 两个产物）
   await context.rebuild();
+  await cliContext.rebuild();
   copyAssets();
   process.exit(0);
 } else {
   // 开发模式：确保目录存在并复制资源，然后持续监听文件改动并自动重新打包（热重载）
   if (!fs.existsSync(DIST_DIR)) fs.mkdirSync(DIST_DIR, { recursive: true });
   copyAssets();
+  // 顺手构建一次 CLI（不监听；改 CLI 源码后用 npm run build:cli 重建）
+  await cliContext.rebuild();
   await context.watch();
 }
