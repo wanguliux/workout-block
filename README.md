@@ -194,7 +194,7 @@ Summarizes "what was trained" by day; columns: exercise / stat value / primary m
 day: 2026-07-12
 ```
 ````
-<img width="1075" height="161" alt="image" src="https://github.com/user-attachments/assets/40ba7a4c-097e-44e9-ac89-c61e5e07bf39" />
+<img width="1086" height="414" alt="image" src="https://github.com/user-attachments/assets/f957f19d-a862-4918-9c11-a0ec3f381715" />
 ### `workout-heatmap` — Muscle Heatmap
 
 Renders the full-body muscle figure, colored by training volume. Above the code block is a **front / back** switch; the color tiers (default 4: blue / green / orange / red) — tier count, each tier's color and threshold — are all customizable per muscle in "Muscle management."
@@ -228,7 +228,7 @@ plan: Push Day A
 ```
 ````
 
-<img width="1060" height="674" alt="image" src="https://github.com/user-attachments/assets/56d35395-d952-4f11-bf62-dfb4def6fe3f" />
+<img width="1064" height="987" alt="image" src="https://github.com/user-attachments/assets/0ed0414e-8a39-4a92-9d5d-5e823fa42cb7" />
 
 ---
 
