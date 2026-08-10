@@ -177,7 +177,7 @@ exercise: Squat
 limit: 20
 ```
 ````
-<img width="40%" height="833" alt="image" src="https://github.com/user-attachments/assets/24f51cbe-f731-42e5-8e74-71eab135e39a" />
+<img width="1067" height="605" alt="image" src="https://github.com/user-attachments/assets/5d5335dc-6c27-47ff-8c1e-1f917db8102c" />
 
 ### `workout-day` — That Day's Training Overview
 
