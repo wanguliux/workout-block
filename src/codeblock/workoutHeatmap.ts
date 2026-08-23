@@ -1,6 +1,6 @@
 import { MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian';
 import { HeatmapLevel, LogRow, Muscle, StatDef, WorkoutConfig } from '../data/types';
-import { computeStat } from '../data/statExpr';
+import { buildExerciseMuscleMap, computeMuscleValue } from '../data/muscleStats';
 import {
   formatSvgMuscleLabel,
   HIDDEN_SVG_GROUP_IDS,
@@ -134,33 +134,6 @@ function resolveMetricId(config: WorkoutConfig, muscle: Muscle, codeMetric?: str
   return resolveDefaultMetric(config);
 }
 
-function roleWeight(role: 'primary' | 'secondary'): number {
-  return role === 'primary' ? 1.0 : 0.5;
-}
-
-function computeMuscleValue(
-  muscle: Muscle,
-  stat: StatDef,
-  range: string,
-  logs: LogRow[],
-  exerciseMuscleMap: Map<string, { muscleId: string; role: 'primary' | 'secondary' }[]>
-): number {
-  let total = 0;
-  for (const log of logs) {
-    if (!log.timestamp || !log.exerciseId || !dateWithinRange(log.timestamp.split(' ')[0], range)) continue;
-    // 用预构建的 map 做 O(1) 查找，代替原先 config.exercises.find（每次 O(exercises)），
-    // 把整体复杂度从 O(muscles × logs × exercises) 降到 O(muscles × logs)。
-    const em = exerciseMuscleMap.get(log.exerciseId);
-    if (!em) continue;
-    const hit = em.find((m) => m.muscleId === muscle.id);
-    if (!hit) continue;
-    const instanceValue = computeStat(stat, [log]);
-    if (!Number.isFinite(instanceValue)) continue;
-    total += instanceValue * roleWeight(hit.role);
-  }
-  return Math.round(total * 100) / 100;
-}
-
 function colorForValue(value: number, scale?: HeatmapLevel[]): string {
   const levels = scale && scale.length > 0 ? scale : DEFAULT_HEATMAP_SCALE;
   // 按阈值升序：值 ≤ 某档阈值即取该色；超过所有阈值则取最高档（最重）。
@@ -284,13 +257,8 @@ export async function renderWorkoutHeatmap(
   function applyHeatmap(): void {
     if (lazyTip.isConnected) lazyTip.remove();
 
-    // 预构建 exerciseId → 训练项肌肉映射，供 computeMuscleValue 做 O(1) 查找（避免逐日志 O(exercises) 线性扫描）。
-    const exerciseMuscleMap = new Map<string, { muscleId: string; role: 'primary' | 'secondary' }[]>();
-    for (const ex of config.exercises) {
-      if (ex.muscles && ex.muscles.length) {
-        exerciseMuscleMap.set(ex.id, ex.muscles.map((m) => ({ muscleId: m.muscleId, role: m.role })));
-      }
-    }
+    // 预构建 exerciseId → 训练项肌肉映射（data/muscleStats.ts，O(1) 查找）
+    const exerciseMuscleMap = buildExerciseMuscleMap(config);
 
     // 计算每块肌肉的标量值
     const muscleEntries: { muscle: Muscle; stat: StatDef; range: string; value: number; scale: HeatmapLevel[] }[] = [];

@@ -50,11 +50,11 @@ function copyAssets() {
 }
 
 /*
- * 第二构建入口：workout-block CLI（配套技能 workout-block-cli 的随附脚本）。
+ * 第二构建入口：workout-block CLI（配套技能 workout-block-record 的随附脚本）。
  * 与插件共享 src/data 的纯模块（csvFormat/configMigrate/statExpr/display/codeBlockDefs），
  * 保证两侧对 CSV/配置的理解逐字节一致。platform=node 让 node 内置模块自动 external。
  */
-const CLI_SKILL_DIR = path.join('workout-block-cli', 'scripts');
+const CLI_SKILL_DIR = path.join('workout-block-record', 'scripts');
 const cliContext = await esbuild.context({
   banner: { js: banner },
   entryPoints: ['src/cli/main.ts'],

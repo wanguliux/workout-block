@@ -8,6 +8,7 @@ import { cmdStats } from './commands/statsCmd';
 import { cmdPlan } from './commands/planCmd';
 import { cmdBlock } from './commands/blockCmd';
 import { cmdDoctor } from './commands/doctorCmd';
+import { cmdCapabilities, cmdQuery } from './commands/decisionCmd';
 
 /*
  * main.ts —— workout-block CLI 入口。
@@ -59,6 +60,12 @@ const HELP = `workout-block CLI —— 在 Obsidian 之外安全读写 workout-b
   stats [--stat <名称或id>] [--exercise <名>] [--from ...] [--to ...]
         [--group date|week|none]
 
+决策中心协议（P0 查询合约）：
+  capabilities                    能力清单（静态，免 --vault）
+  query --dimension <id> [--mode summary|records]
+        [--filters '<json>'] [--page N] [--pageSize N]
+                                  执行查询（--vault 直读数据；--json 输出机器可读 JSON）
+
 训练计划：
   plan list
   plan show --plan <名称或id>      查看每组 set id 与完成状态
@@ -100,6 +107,12 @@ async function main(): Promise<void> {
     repeated: ['field', 'param', 'muscle'],
   });
 
+  // capabilities 是静态能力声明，无需读取 vault，提前处理（AI 免 --vault 也能发现能力）。
+  if (command === 'capabilities') {
+    cmdCapabilities();
+    return;
+  }
+
   const vaultPath = args.options['vault'] || process.env['WORKOUT_VAULT'] || '';
   if (!vaultPath) {
     throw new UsageError('缺少 vault 定位：请加 --vault <仓库根目录> 或设置环境变量 WORKOUT_VAULT');
@@ -121,6 +134,7 @@ async function main(): Promise<void> {
     case 'plan': return cmdPlan(env, args);
     case 'block': return cmdBlock(env, args);
     case 'doctor': return cmdDoctor(env, args);
+    case 'query': return cmdQuery(env, args);
     default:
       throw new UsageError(`未知命令 "${command}"。运行 workout-cli help 查看全部命令。`);
   }

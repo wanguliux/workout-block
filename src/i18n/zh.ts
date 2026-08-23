@@ -473,6 +473,10 @@ export const zh = {
     delete: '删除',
   },
 
+  decision: {
+    domainLabel: '运动',
+  },
+
   common: {
     cancel: '取消',
     close: '关闭',

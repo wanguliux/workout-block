@@ -472,6 +472,10 @@ export const en = {
     delete: 'Delete',
   },
 
+  decision: {
+    domainLabel: 'Exercise',
+  },
+
   common: {
     cancel: 'Cancel',
     close: 'Close',

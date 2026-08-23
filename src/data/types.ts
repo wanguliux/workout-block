@@ -167,6 +167,8 @@ export interface PluginSettings {
   muscleMappingInitialized: boolean;
   // 设置页「训练设置」区块下五个管理条目的显示顺序（仅影响设置页排序，不影响功能逻辑）
   managerOrder: string[];            // 管理入口显示顺序：['types','exercises','muscles','statistics','plans']
+  // 决策中心 contributor 的「忽略本期/跳过今天」状态：key = 决策项标识（如 muscle:chest / plan-today:<planId>:<date>），value = 忽略日期 YYYY-MM-DD
+  decisionDismissals?: Record<string, string>;
 }
 
 // 默认设置：首次安装时使用。之后用户改过的设置会覆盖其中对应项。
@@ -181,6 +183,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
   lastValueMemory: true,
   muscleMappingInitialized: false,
   managerOrder: ['types', 'exercises', 'muscles', 'statistics', 'plans'],
+  decisionDismissals: {},
 };
 
 // 训练记录 CSV 的文件名（存于 vault 中）

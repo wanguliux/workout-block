@@ -1,4 +1,4 @@
-import { Plugin, Notice, MarkdownPostProcessorContext } from 'obsidian';
+import { Plugin, Notice, MarkdownPostProcessorContext, TFile } from 'obsidian';
 import { DataManager } from './data/DataManager';
 import { getExerciseNameById } from './data/display';
 import { setLocale, t } from './i18n';
@@ -18,6 +18,11 @@ import { SettingsTab } from './ui/SettingsTab';
 import { InsertCodeBlockModal } from './ui/InsertCodeBlockModal';
 import { tryRegisterInsertCommand, type BlockDefinitionWithParams } from './blockProvider';
 import { CODE_BLOCK_DEFS } from './codeBlockDefs';
+import { getToolCapability as getToolCapabilityDef } from './decision/capability';
+import { executeQuery, type WorkoutQueryData } from './decision/queryHandler';
+import { createWorkoutContributor } from './decision/contributor';
+import { initDecisionCenter } from './decision/decisionHost';
+import { FILE_BUS_QUERIES_DIR, type DecisionHostApi, type QueryBusFile, type ToolCapability } from './decision/types';
 
 /*
  * main.ts —— 插件入口文件（核心枢纽）
@@ -34,6 +39,8 @@ export default class WorkoutPlugin extends Plugin {
   private settingsTab: SettingsTab | null = null;
   // 是否为通用插入命令的宿主（first-claim wins）
   private ownsUniversalInsert = false;
+  // 决策中心宿主 API（initDecisionCenter 检测到 KOS-block 时持有；无宿主时为 null）
+  private decisionHostApi: DecisionHostApi | null = null;
 
   // 插件加载时由 Obsidian 自动调用。这是初始化所有功能的入口。
   async onload(): Promise<void> {
@@ -58,6 +65,11 @@ export default class WorkoutPlugin extends Plugin {
     this.registerCodeBlocks();     // ```workout-log 代码块的接管渲染
     this.registerSettingsTab();    // 设置页
     this.registerEventListeners(); // 数据变化 / 文件修改时的自动刷新
+
+    // 决策中心接入：注册 contributor + queries/ 文件总线 + 过期文件清理
+    this.initDecisionCenterIntegration();
+    this.registerQueryBus();
+    void this.cleanupQueryBus();
 
     // 移动端适配：在 body 注入 .is-mobile 根类，供 styles.css 中所有 `.is-mobile` 作用域规则生效。
     // 弹窗 / 代码块 / 设置页 DOM 均在 body 之下，一处注入即可全局覆盖；桌面端不注入，零回归。
@@ -237,6 +249,7 @@ export default class WorkoutPlugin extends Plugin {
         }
         rerenderBlocksByType('workout-day');
         rerenderBlocksByType('workout-heatmap');
+        this.notifyDecisionChanged();
       })().catch(() => {});
     });
 
@@ -244,6 +257,7 @@ export default class WorkoutPlugin extends Plugin {
       rerenderAllBlocks();
       rerenderBlocksByType('workout-day');
       rerenderBlocksByType('workout-heatmap');
+      this.notifyDecisionChanged();
     });
 
     this.dataManager.on('settings-changed', () => {
@@ -272,6 +286,99 @@ export default class WorkoutPlugin extends Plugin {
         }
       })
     );
+  }
+
+  /**
+   * P0 工具合约：暴露本插件的能力清单（与 CLI capabilities 命令共用 capability.ts）。
+   * 宿主插件 / AI 可经插件实例动态发现。
+   */
+  getToolCapability(): ToolCapability {
+    return getToolCapabilityDef();
+  }
+
+  // —— 决策中心接入（P3 contributor + P0 文件总线）——
+
+  /** 注册 DecisionContributor 并检测宿主（KOS-block）。数据变化后通过 notifyDecisionChanged 通知宿主刷新。 */
+  private initDecisionCenterIntegration(): void {
+    const contributor = createWorkoutContributor(this, this.dataManager);
+    const result = initDecisionCenter(this, contributor);
+    this.decisionHostApi = result.hostApi;
+  }
+
+  /** 数据/配置变更后请求宿主刷新决策面板（无宿主时静默）。 */
+  private notifyDecisionChanged(): void {
+    try {
+      this.decisionHostApi?.requestRefresh('workout-block');
+    } catch {
+      /* 宿主刷新异常不影响本插件 */
+    }
+  }
+
+  /** 监听 `.block/inbox/queries/` 目录，处理 AI 写入的 pending 查询文件（异步文件总线，P0 5B）。 */
+  private registerQueryBus(): void {
+    this.registerEvent(
+      this.app.vault.on('create', (file) => {
+        if (!(file instanceof TFile)) return;
+        if (!file.path.startsWith(`${FILE_BUS_QUERIES_DIR}/`) || file.extension !== 'json') return;
+        void this.handleQueryBusFile(file);
+      })
+    );
+  }
+
+  /** 执行文件总线查询：读取 QueryBusFile → executeQuery → 覆写同文件为 fulfilled/error。 */
+  private async handleQueryBusFile(file: TFile): Promise<void> {
+    let qf: QueryBusFile | null = null;
+    try {
+      const text = await this.app.vault.cachedRead(file);
+      const parsed = JSON.parse(text) as QueryBusFile;
+      if (parsed.pluginId !== 'workout-block') return;
+      if (parsed.status !== 'pending') return;
+      qf = parsed;
+    } catch {
+      return; // 非本插件 / 非 pending / 解析失败：忽略
+    }
+
+    try {
+      const data: WorkoutQueryData = {
+        records: this.dataManager.getLogs(),
+        config: await this.dataManager.getConfig(),
+      };
+      const response = executeQuery(qf, data);
+      const updated: QueryBusFile = {
+        ...qf,
+        status: 'fulfilled',
+        response,
+        completedAt: new Date().toISOString(),
+      };
+      await this.app.vault.process(file, () => JSON.stringify(updated, null, 2));
+    } catch (e) {
+      const updated: QueryBusFile = {
+        ...qf,
+        status: 'error',
+        error: e instanceof Error ? e.message : String(e),
+        completedAt: new Date().toISOString(),
+      };
+      try {
+        await this.app.vault.process(file, () => JSON.stringify(updated, null, 2));
+      } catch {
+        /* 写回失败时放弃（AI 端超时会自行判定失败） */
+      }
+    }
+  }
+
+  /** 启动时清理超过 1 小时的过期查询文件（P0 约定：AI 读后删除，此处兜底）。 */
+  private async cleanupQueryBus(): Promise<void> {
+    try {
+      const now = Date.now();
+      const stale = this.app.vault
+        .getFiles()
+        .filter((f) => f.path.startsWith(`${FILE_BUS_QUERIES_DIR}/`) && f.extension === 'json' && f.stat?.mtime && now - f.stat.mtime > 3600e3);
+      for (const f of stale) {
+        await this.app.vault.delete(f, true);
+      }
+    } catch {
+      /* 清理失败不影响插件启动 */
+    }
   }
 
   /**

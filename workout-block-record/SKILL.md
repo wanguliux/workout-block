@@ -1,5 +1,5 @@
 ---
-name: workout-block-cli
+name: workout-block-record
 description: 通过随附 workout-cli 脚本在 Obsidian 之外安全读写 workout-block 训练插件的数据：一句话记录训练、查询历史、跑统计、训练计划打卡、修改配置（训练项/训练类型/肌肉/统计/计划的增删改）、生成 workout 代码块、数据体检。当用户说「记一笔训练」「我今天练了…」「帮我记录深蹲/卧推/跑步…」「查我最近的训练」「这周训练量多少」「完成训练计划某组」「加一个新训练项/训练类型」「生成 workout-log 代码块」，或需要批量/定时操作训练数据时使用。
 ---
 

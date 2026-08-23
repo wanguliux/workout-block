@@ -25,7 +25,11 @@ export const CSV_COLUMNS: string[] = CSV_HEADER.split(',');
 // 返回值带 deletedIds：被软删除（墓碑行）标记过的 id 集合，供缓存过滤与 id 分配去重。
 export function parseCsvContent(content: string): { rows: LogRow[]; dropped: number; deletedIds: string[] } {
   try {
-    const result = Papa.parse<Record<string, string>>(content, {
+    // 行尾归一化：历史文件可能以 CRLF 写出（旧版 Papa 默认 \r\n），而本模块统一写 LF。
+    // Papa 的 newline 自动探测以文件开头为准：CRLF 开头的文件里混入 LF 追加行会被吞进
+    // 上一行——静默丢行、不计入 dropped、doctor 自愈不触发（最隐蔽的损坏）。解析前统一为 \n。
+    const normalized = content.replace(/\r\n/g, '\n');
+    const result = Papa.parse<Record<string, string>>(normalized, {
       header: true,
       skipEmptyLines: true,
     });

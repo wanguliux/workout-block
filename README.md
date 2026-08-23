@@ -254,9 +254,9 @@ Both datasets live inside the vault (data directory changeable in settings), bot
 
 ---
 
-## 🖥️ CLI (workout-block-cli)
+## 🖥️ CLI (workout-block-record)
 
-Besides clicking through the Obsidian UI, a bundled CLI (in `workout-block-cli/`, compiled from `src/cli`) lets you **read and write plugin data safely outside Obsidian** — handy for scripted bulk imports, external-tool integration, or logging a quick set from the terminal.
+Besides clicking through the Obsidian UI, a bundled CLI (in `workout-block-record/`, compiled from `src/cli`) lets you **read and write plugin data safely outside Obsidian** — handy for scripted bulk imports, external-tool integration, or logging a quick set from the terminal.
 
 > Specify the vault root before running: `workout-cli <command> --vault <vault root>` (or set the `WORKOUT_VAULT` env var). The CLI **verifies the path is a real Obsidian vault** (it must contain a `.obsidian` directory); pointing it at the wrong place (e.g. the plugin source dir) **errors out instead of silently writing data**. Pass `--force` to skip the check when you really intend to write outside a vault (testing/advanced only).
 
@@ -305,7 +305,7 @@ workout-cli add --exercise 攀岩 duration_sec=90m routes=8 style=抱石
 workout-cli list --last 10
 ```
 
-See `workout-block-cli/SKILL.md` for full detail.
+See `workout-block-record/SKILL.md` for full detail.
 
 ---
 

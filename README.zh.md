@@ -261,9 +261,9 @@ plan: 推日 A
 
 ---
 
-## 🖥️ 命令行工具（workout-block-cli）
+## 🖥️ 命令行工具（workout-block-record）
 
-除了在 Obsidian 里点界面，你还能用随附的 CLI（位于 `workout-block-cli/`，由 `src/cli` 编译）**在 Obsidian 之外安全读写插件数据**——适合脚本化批量导入、外部工具联动，或在终端里快速记一笔。
+除了在 Obsidian 里点界面，你还能用随附的 CLI（位于 `workout-block-record/`，由 `src/cli` 编译）**在 Obsidian 之外安全读写插件数据**——适合脚本化批量导入、外部工具联动，或在终端里快速记一笔。
 
 > 运行前需指定 vault 根目录：`workout-cli <命令> --vault <仓库根目录>`（或设环境变量 `WORKOUT_VAULT`）。CLI **会校验该路径是真实 Obsidian 仓库**（含 `.obsidian` 目录），指向错误位置（如插件源码目录）会**直接报错而非静默写入**。确要写入非仓库目录时可加 `--force` 跳过校验（仅测试/高级场景）。
 
@@ -312,7 +312,7 @@ workout-cli add --exercise 攀岩 duration_sec=90m routes=8 style=抱石
 workout-cli list --last 10
 ```
 
-更多细节见 `workout-block-cli/SKILL.md`。
+更多细节见 `workout-block-record/SKILL.md`。
 
 ---
 
