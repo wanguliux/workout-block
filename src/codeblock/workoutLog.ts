@@ -3,6 +3,7 @@ import { LogRow, FieldDef, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
 import { getFieldLabel, getFieldUnit, renderFieldValue, resolveLogExerciseName, resolveExerciseIdByName, getTrainingTypeName } from '../data/display';
 import { computeStat, formatStatValue } from '../data/statExpr';
+import { materializeLogs } from '../data/computedField';
 import { registerRenderedBlock, unregisterRenderedBlock } from './registry';
 
 /*
@@ -244,6 +245,10 @@ export async function renderWorkoutLog(
   const category = filteredLogs[0].category;
   const fields = await getTrainingTypeFields(category);
 
+  // 计算（派生）字段：不落库，统计与单元格渲染前统一把公式求出的值注入记录，
+  // 保证派生字段（如配速 avg_pace）与源码字段一致、可被统计公式引用。
+  const materialize = (logs: LogRow[]): LogRow[] => materializeLogs(logs, fields);
+
   // 本代码块训练项所属训练类型下、已启用且关联该类型的数据统计条目。
   const matchedStats = (config.statistics ?? []).filter(
     (s) => s.enabled && s.associatedTypes.includes(category)
@@ -287,7 +292,8 @@ export async function renderWorkoutLog(
       for (const s of matchedStats) {
         const chip = chips.createSpan({ cls: 'workout-log-chip' });
         chip.createSpan({ text: s.name, cls: 'workout-log-chip-label' });
-        chip.createSpan({ text: formatStatValue(computeStat(s, statSourceLogs), s.unit), cls: 'workout-log-chip-value' });
+        // 统计前注入派生字段值，使统计公式可直接引用计算字段（如 avg_pace）
+        chip.createSpan({ text: formatStatValue(computeStat(s, materialize(statSourceLogs)), s.unit), cls: 'workout-log-chip-value' });
       }
     }
 
@@ -299,7 +305,7 @@ export async function renderWorkoutLog(
     const thead = table.createEl('thead');
     const headerRow = thead.createEl('tr');
     // 第一列固定为时间（日期已在上方分组头显示）
-    headerRow.createEl('th', { text: t('codeblock.date') });
+    headerRow.createEl('th', { text: t('codeblock.time') });
     // 每个字段画一列，列标题 = 字段标签，若有单位在后面加 (单位)
     for (const field of fields) {
       const unitText = getFieldUnit(field, unit);
@@ -322,8 +328,10 @@ export async function renderWorkoutLog(
 
       // 中间各字段列：取该记录的字段值，按字段类型渲染（含单位换算）。
       // 按需求：单元格只显示纯数字，单位仅在表头体现；时长字段仍由 renderFieldValue 保持可读文本。
+      // 计算字段：值在渲染前由 formula 注入（materialized），单元格展示派生结果（如配速"5分46秒/公里"）。
+      const materialized = materializeLogs([log], fields)[0];
       for (const field of fields) {
-        const value = log.fields[field.key];
+        const value = materialized.fields[field.key];
         row.createEl('td', { text: renderFieldValue(value, field, unit) });
       }
 

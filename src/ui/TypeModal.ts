@@ -2,6 +2,7 @@ import { Modal, Notice } from 'obsidian';
 import { DataManager } from '../data/DataManager';
 import { getTrainingTypeName, getFieldLabel } from '../data/display';
 import { TrainingType, FieldDef } from '../data/types';
+import { validateFieldExpr } from '../data/statExpr';
 import { t } from '../i18n';
 import { INVALID_ID_RE, isInvalidId } from './idValidation';
 
@@ -26,6 +27,9 @@ export class TypeModal extends Modal {
   private idHintTimer: number | null = null; // 提示自动隐藏的计时器
   private fieldsContainer!: HTMLDivElement;
   private fields: FieldDef[] = []; // 当前正在编辑的字段数组
+  // 计算字段在导航式构造器里的临时编辑状态（按字段下标），不写入配置：
+  // 引导式模式下用「左字段 运算符 右字段」拼出公式，表达式模式则直接手写。
+  private formulaBuilders = new Map<number, { mode: 'builder' | 'expression'; a: string; op: string; b: string }>();
 
   constructor(dataManager: DataManager, options: TypeModalOptions = {}) {
     super(dataManager.app);
@@ -190,7 +194,7 @@ export class TypeModal extends Modal {
     col3.createEl('label', { text: t('modal.newType.inputType') });
     const inputTypeSelect = col3.createEl('select');
     inputTypeSelect.addClass('workout-select');
-    const inputTypes: FieldDef['inputType'][] = ['number', 'duration', 'text', 'select'];
+    const inputTypes: FieldDef['inputType'][] = ['number', 'duration', 'text', 'select', 'computed'];
     for (const type of inputTypes) {
       const option = inputTypeSelect.createEl('option', {
         value: type,
@@ -289,6 +293,151 @@ export class TypeModal extends Modal {
       });
     }
 
+    // 计算字段（computed）特有：公式（引导式/表达式，引用同类型其他字段 key）+ 显示方式 + 单位。
+    if (field.inputType === 'computed') {
+      const cond = card.createDiv();
+      cond.addClass('workout-field-card-cond');
+
+      // 本字段可用作公式操作数的字段 = 同类型内其余已填 key 的字段（可含其他计算字段，按定义顺序求值）
+      const available = () => this.fields
+        .map((f) => f.key.trim())
+        .filter((k) => k && k !== this.fields[index].key.trim());
+
+      // 引导式构造器的临时状态（懒初始化）
+      const builderState = () => {
+        let st = this.formulaBuilders.get(index);
+        if (!st) {
+          const keys = this.fields.map((f) => f.key.trim()).filter(Boolean).filter((k) => k !== this.fields[index].key.trim());
+          const m = /^([a-zA-Z_][a-zA-Z0-9_]*)\s*([+\-*/])\s*([a-zA-Z_][a-zA-Z0-9_]*)$/.exec(this.fields[index].formula || '');
+          st = m
+            ? { mode: 'builder', a: m[1], op: m[2], b: m[3] }
+            : { mode: this.fields[index].formula ? 'expression' : 'builder', a: keys[0] ?? '', op: '/', b: keys[1] ?? keys[0] ?? '' };
+          this.formulaBuilders.set(index, st);
+        }
+        return st;
+      };
+
+      // 公式模式：引导式 / 表达式
+      const modeRow = cond.createDiv();
+      modeRow.addClass('workout-field');
+      modeRow.createEl('label', { text: t('modal.newType.formulaMode') });
+      const modeSelect = modeRow.createEl('select');
+      modeSelect.addClass('workout-select');
+      for (const m of ['builder', 'expression'] as const) {
+        const opt = modeSelect.createEl('option', { value: m, text: m === 'builder' ? t('modal.newType.builderMode') : t('modal.newType.expressionMode') });
+        if (m === builderState().mode) opt.selected = true;
+      }
+
+      const modeArea = cond.createDiv();
+
+      // 预览 + 实时校验挂载点
+      const preview = cond.createEl('p', { cls: 'workout-manager-detail' });
+      const errEl = cond.createEl('p', { cls: 'workout-manager-detail' });
+      errEl.setCssStyles({ color: 'var(--text-error)' });
+      const refresh = (): void => {
+        const st = builderState();
+        const formula = st.mode === 'builder'
+          ? (st.a && st.b ? `${st.a} ${st.op} ${st.b}` : '')
+          : (this.fields[index].formula ?? '');
+        this.fields[index].formula = formula.trim() ? formula : undefined;
+        preview.textContent = `${t('modal.newType.formulaPreview')}: ${formula || '-'}`;
+        errEl.textContent = '';
+        if (formula.trim()) {
+          try { validateFieldExpr(formula, available()); } catch (e) { errEl.textContent = (e as Error).message; }
+        }
+      };
+
+      const renderModeArea = (): void => {
+        modeArea.empty();
+        const st = builderState();
+        if (st.mode === 'builder') {
+          // 引导式：左字段 运算符 右字段 三个下拉（选字段即拼出公式）
+          const builderRow = modeArea.createDiv();
+          builderRow.addClass('workout-two-col');
+          const mkSelect = (labelKey: string, pick: string): HTMLSelectElement => {
+            const wrap = builderRow.createDiv();
+            wrap.addClass('workout-field');
+            wrap.createEl('label', { text: t(labelKey) });
+            const sel = wrap.createEl('select');
+            sel.addClass('workout-select');
+            const keys = available();
+            if (keys.length === 0) {
+              sel.createEl('option', { value: '', text: '-' });
+            } else {
+              for (const k of keys) {
+                const opt = sel.createEl('option', { value: k, text: k });
+                if (k === pick) opt.selected = true;
+              }
+            }
+            return sel;
+          };
+          const aSel = mkSelect('modal.newType.formulaLeft', st.a);
+          aSel.addEventListener('change', () => { builderState().a = aSel.value; refresh(); });
+          // 运算符
+          const opWrap = builderRow.createDiv();
+          opWrap.addClass('workout-field');
+          opWrap.createEl('label', { text: t('modal.newType.formulaOp') });
+          const opSelect = opWrap.createEl('select');
+          opSelect.addClass('workout-select');
+          for (const op of ['+', '-', '*', '/']) {
+            const opt = opSelect.createEl('option', { value: op, text: op });
+            if (op === st.op) opt.selected = true;
+          }
+          opSelect.addEventListener('change', () => { builderState().op = opSelect.value; refresh(); });
+          const bSel = mkSelect('modal.newType.formulaRight', st.b);
+          bSel.addEventListener('change', () => { builderState().b = bSel.value; refresh(); });
+        } else {
+          // 表达式：直接手写公式
+          const exprRow = modeArea.createDiv();
+          exprRow.addClass('workout-field');
+          exprRow.createEl('label', { text: t('modal.newType.formula') });
+          const exprInput = exprRow.createEl('input', { type: 'text', placeholder: t('modal.newType.formulaPlaceholder') });
+          exprInput.addClass('workout-input');
+          exprInput.value = this.fields[index].formula || '';
+          exprInput.addEventListener('input', () => {
+            const v = exprInput.value.trim();
+            this.fields[index].formula = v || undefined;
+            refresh();
+          });
+        }
+        refresh();
+      };
+
+      modeSelect.addEventListener('change', () => { builderState().mode = modeSelect.value as 'builder' | 'expression'; renderModeArea(); });
+      renderModeArea();
+
+      // 一行：显示方式（renderAs）+ 单位（自由文字）
+      const inlineRow = cond.createDiv();
+      inlineRow.addClass('workout-two-col');
+      const renderWrap = inlineRow.createDiv();
+      renderWrap.addClass('workout-field');
+      renderWrap.createEl('label', { text: t('modal.newType.renderAs') });
+      const renderAsSelect = renderWrap.createEl('select');
+      renderAsSelect.addClass('workout-select');
+      const renderOptions: { value: FieldDef['renderAs']; key: string }[] = [
+        { value: 'number', key: 'fieldRender.number' },
+        { value: 'duration', key: 'fieldRender.duration' },
+      ];
+      const currentRender = field.renderAs === 'duration' ? 'duration' : 'number';
+      for (const opt of renderOptions) {
+        const option = renderAsSelect.createEl('option', { value: opt.value, text: t(opt.key) });
+        if (currentRender === opt.value) option.selected = true;
+      }
+      renderAsSelect.addEventListener('change', () => {
+        this.fields[index].renderAs = renderAsSelect.value === 'duration' ? 'duration' : 'number';
+      });
+
+      const unitWrap = inlineRow.createDiv();
+      unitWrap.addClass('workout-field');
+      unitWrap.createEl('label', { text: t('modal.newType.customUnit') });
+      const unitInput = unitWrap.createEl('input', { type: 'text', placeholder: t('modal.newType.customUnit') });
+      unitInput.addClass('workout-input');
+      unitInput.value = field.unitLabel || '';
+      unitInput.addEventListener('change', () => {
+        this.fields[index].unitLabel = unitInput.value.trim() || undefined;
+      });
+    }
+
     // 输入类型切换：先写回，再整卡重渲染，让单位/选项区按新类型正确显隐
     inputTypeSelect.addEventListener('change', () => {
       this.fields[index].inputType = inputTypeSelect.value as FieldDef['inputType'];
@@ -335,6 +484,26 @@ export class TypeModal extends Modal {
     if (validFields.length === 0) {
       new Notice(t('settings.atLeastOneField'));
       return;
+    }
+
+    // 计算字段必须有公式；有 key 但缺 formula 的 computed 字段视为无效，直接拦截保存。
+    const computedNoFormula = validFields.find((f) => f.inputType === 'computed' && !f.formula);
+    if (computedNoFormula) {
+      new Notice(t('modal.newType.formulaRequired', { field: getFieldLabel(computedNoFormula) || computedNoFormula.key }));
+      return;
+    }
+
+    // 计算字段公式必须语法合法、无聚合函数、只引用同类型内其他字段（静态校验，防静默失效）。
+    const allKeys = validFields.map((f) => f.key).filter((k) => k);
+    for (const f of validFields) {
+      if (f.inputType !== 'computed' || !f.formula) continue;
+      const otherKeys = allKeys.filter((k) => k !== f.key);
+      try {
+        validateFieldExpr(f.formula, otherKeys);
+      } catch (e) {
+        new Notice(t('modal.newType.formulaInvalid', { field: getFieldLabel(f) || f.key, msg: (e as Error).message }));
+        return;
+      }
     }
 
     try {

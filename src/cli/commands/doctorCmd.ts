@@ -2,6 +2,8 @@ import { isStaleHeader, parseCsvContent, CSV_HEADER } from '../../data/csvFormat
 import { ParsedArgs } from '../args';
 import { CliEnv } from '../context';
 import { printJson } from '../output';
+import { WorkoutConfig } from '../../data/types';
+import { allowedStatFields, builderToExpr, validateExpression } from '../../data/statExpr';
 
 /*
  * doctorCmd.ts —— 数据体检（只读，不改任何文件）：
@@ -12,6 +14,10 @@ import { printJson } from '../output';
 export async function cmdDoctor(env: CliEnv, args: ParsedArgs): Promise<void> {
   const csvPath = env.vault.csvPath(env.settings);
   const configPath = env.vault.configPath(env.settings);
+
+  // 统计公式引用失效检测：字段 key 改名/删除后公式静默失效（sum 空值）。
+  // 逐个启用统计，用其「关联类型的字段交集」静态校验公式，列出引用非法字段的统计项。
+  const statisticsBroken = findBrokenStatistics(env.config);
 
   // 重复 id 检测：基于原始解析结果里「解析出的存活行」做统计（墓碑过滤后的重复才是真重复）
   const idCount = new Map<string, number>();
@@ -43,6 +49,7 @@ export async function cmdDoctor(env: CliEnv, args: ParsedArgs): Promise<void> {
       exercises: env.config.exercises.length,
       trainingTypes: env.config.trainingTypes.length,
       statistics: env.config.statistics.length,
+      brokenStatistics: statisticsBroken,
       plans: env.config.plans?.length ?? 0,
     },
     csv: {
@@ -68,6 +75,13 @@ export async function cmdDoctor(env: CliEnv, args: ParsedArgs): Promise<void> {
   console.log('配置');
   console.log(`  ${ok(env.configFound)} ${configPath}${env.configFound ? '' : '（不存在，按默认配置处理）'}`);
   console.log(`  训练项 ${report.config.exercises} / 训练类型 ${report.config.trainingTypes} / 统计 ${report.config.statistics} / 计划 ${report.config.plans}`);
+  if (statisticsBroken.length > 0) {
+    for (const s of statisticsBroken) {
+      console.log(`  ✗ 统计「${s.name}」公式引用失效：${s.errors.join('；')}（请用 stats 编辑该统计修正公式）`);
+    }
+  } else {
+    console.log('  ✓ 统计公式字段引用均有效');
+  }
   console.log('训练记录 CSV');
   console.log(`  ${ok(env.csvFound)} ${csvPath}${env.csvFound ? '' : '（不存在，视为空库）'}`);
   if (env.csvFound) {
@@ -88,4 +102,24 @@ export async function cmdDoctor(env: CliEnv, args: ParsedArgs): Promise<void> {
       console.log(`  ⚠ 有 ${reparsed.dropped} 行因缺少关键字段/超长 fields 被丢弃（历史脏数据，属预期容错行为）`);
     }
   }
+}
+
+// 逐个启用统计做公式字段引用静态校验。
+// 用「关联类型的字段交集」作为合法字段集（allowedStatFields），
+// 公式引用到不在交集内的字段即判定失效（字段 key 改名/删除会触发）。
+function findBrokenStatistics(config: WorkoutConfig): Array<{ id: string; name: string; errors: string[] }> {
+  const broken: Array<{ id: string; name: string; errors: string[] }> = [];
+  for (const stat of config.statistics) {
+    if (!stat.enabled) continue;
+    const expr = stat.formula.mode === 'builder'
+      ? builderToExpr(stat.formula.builder)
+      : (stat.formula.expression ?? '');
+    if (!expr.trim()) continue;
+    try {
+      validateExpression(expr, allowedStatFields(stat, config));
+    } catch (e) {
+      broken.push({ id: stat.id, name: stat.name, errors: [(e as Error).message] });
+    }
+  }
+  return broken;
 }

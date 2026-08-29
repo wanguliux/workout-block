@@ -1,18 +1,22 @@
 import { LogRow, TrainingType, WorkoutConfig } from '../data/types';
 import { getExerciseNameById, renderFieldValue } from '../data/display';
+import { materializeLog } from '../data/computedField';
 
 /*
  * output.ts —— CLI 的输出层：人读表格对齐 / JSON 机器输出，
  * 以及记录字段值的显示格式化（复用插件 display.ts，保证与界面一致）。
  */
 
-/** 把一条记录的 fields 渲染成 "标签: 值" 串联的文字（按类型字段定义顺序）。 */
+/** 把一条记录的 fields 渲染成 "标签: 值" 串联的文字（按类型字段定义顺序）。
+ *  计算字段不落库，先 materializeLog 注入派生值，使配速/速度等在 list 里也能显示。 */
 export function formatRecordFields(log: LogRow, config: WorkoutConfig, unit: 'kg' | 'lb'): string {
   const type: TrainingType | undefined = config.trainingTypes.find((t) => t.id === log.category);
   const fields = type?.fields ?? [];
+  // 注入计算字段值（派生字段随源字段动态求值，仅显示不落库）
+  const values = materializeLog(log, fields).fields;
   const parts: string[] = [];
   for (const f of fields) {
-    const v = log.fields[f.key];
+    const v = values[f.key];
     if (v === undefined || v === null || v === '') continue;
     parts.push(`${f.key}=${renderFieldValue(v, f, unit)}`);
   }

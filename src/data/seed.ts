@@ -30,6 +30,9 @@ export const DEFAULT_TRAINING_TYPES: TrainingType[] = [
     fields: [
       { key: 'duration_sec', labelKey: 'field.duration_sec', inputType: 'duration', required: true }, // 时长（秒）——跑步/骑行/跳绳等都先记时长
       { key: 'distance_km', labelKey: 'field.distance', inputType: 'number', unitLabel: '公里', required: false }, // 距离（跑步/骑行等，跳绳可留空）
+      // —— 派生字段（inputType='computed'）：不落库，渲染/统计时按公式动态求值，杜绝手填不一致 ——
+      { key: 'avg_pace', labelKey: 'field.avg_pace', inputType: 'computed', formula: 'duration_sec / distance_km', renderAs: 'duration', unitLabel: '/公里' }, // 配速 = 时长秒 ÷ 距离公里，显示如"5分46秒/公里"
+      { key: 'avg_speed', labelKey: 'field.avg_speed', inputType: 'computed', formula: 'distance_km / (duration_sec / 3600)', unitLabel: '公里/时' }, // 速度 = 距离 ÷ 小时数，显示如"10.4 公里/时"
     ],
     contributesToCoverage: false,
   },

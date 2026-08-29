@@ -1,5 +1,6 @@
 import { ExerciseMuscle, LogRow, Muscle, StatDef, WorkoutConfig } from './types';
 import { computeStat } from './statExpr';
+import { materializeLogs, fieldsOfCategory } from './computedField';
 import { dateWithinRange } from './heatmapDefaults';
 
 /*
@@ -34,13 +35,15 @@ export function buildExerciseMuscleMap(config: WorkoutConfig): Map<string, Exerc
 /**
  * 计算某块肌肉在 range 范围内的统计值（按该肌肉涉及的训练项记录累加，角色加权）。
  * range 支持 dateWithinRange 的全部写法：'7d'/'30d'/'all'/'YYYY-MM-DD..YYYY-MM-DD'/undefined。
+ * config 用于按每条记录的训练类型取字段定义，注入计算字段（派生）值后再统计。
  */
 export function computeMuscleValue(
   muscle: Muscle,
   stat: StatDef,
   range: string | undefined,
   logs: LogRow[],
-  exerciseMuscleMap: Map<string, ExerciseMuscle[]>
+  exerciseMuscleMap: Map<string, ExerciseMuscle[]>,
+  config: WorkoutConfig
 ): number {
   let total = 0;
   for (const log of logs) {
@@ -49,7 +52,9 @@ export function computeMuscleValue(
     if (!em) continue;
     const hit = em.find((m) => m.muscleId === muscle.id);
     if (!hit) continue;
-    const instanceValue = computeStat(stat, [log]);
+    // 计算字段：统计引用配置文件里的 stat，字段值由公式注入（如按 avg_pace 统计）
+    const injected = materializeLogs([log], fieldsOfCategory(config, log.category))[0];
+    const instanceValue = computeStat(stat, [injected]);
     if (!Number.isFinite(instanceValue)) continue;
     total += instanceValue * roleWeight(hit.role);
   }
@@ -66,7 +71,7 @@ export function computeAllMuscleValues(
   const map = new Map<string, number>();
   const em = buildExerciseMuscleMap(config);
   for (const muscle of config.muscles) {
-    map.set(muscle.id, computeMuscleValue(muscle, stat, range, logs, em));
+    map.set(muscle.id, computeMuscleValue(muscle, stat, range, logs, em, config));
   }
   return map;
 }

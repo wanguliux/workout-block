@@ -12,12 +12,24 @@ export interface FieldDef {
   key: string;                 // 字段的唯一内部标识（如 "weight"）。切勿随意改名，否则旧数据就无法对应
   labelKey?: string;           // 国际化 key（多语言用），如 "field.weight"，由 i18n 翻译成"重量"
   label?: string;              // 没有 labelKey 时的兜底显示名
-  inputType: 'number' | 'duration' | 'text' | 'select';  // 输入控件类型：数字 / 时长 / 文本 / 下拉选择
+  // 输入控件类型：数字 / 时长 / 文本 / 下拉选择 / 计算（派生）
+  inputType: FieldInputType;
   mass?: boolean;             // 是否参与 kg/lb 换算（仅数字字段有意义；选中"质量"即自动 true）
   unitLabel?: string;         // 单位显示文字（自由文本，如"次""层""圈""公里"），留空表示无单位
   required?: boolean;          // 是否为必填项
   options?: string[];          // 当 inputType 为 'select'（下拉）时的可选项列表
+  legacyKeys?: string[];       // 历史字段 key 别名：字段 key 若有改动，此处记下旧 key；
+                               // 读取记录时若新 key 无值，按 legacyKeys 顺序取旧 key 的值映射到新 key，
+                               // 实现「零数据迁移」的向后兼容（见 materializeLog）。
+  // —— 计算（派生）字段专用 ——
+  formula?: string;            // 派生公式（仅 inputType='computed'）：引用同类型其他字段 key 的四则表达式，
+                               // 如 "duration_sec / distance_km"（配速 = 时长秒 ÷ 距离公里）。不落库，渲染/统计时动态求值。
+  renderAs?: 'number' | 'duration'; // 计算结果如何显示（仅 inputType='computed'）：数字（配合 unitLabel）
+                               // 或时长（如配速按 formatDuration 显示成"5分46秒"，再拼 unitLabel）。缺省 'number'。
 }
+
+// 字段输入类型：number/duration/text/select 为用户录入型；computed 为派生型（由 formula 计算，不录入）。
+export type FieldInputType = 'number' | 'duration' | 'text' | 'select' | 'computed';
 
 // 训练类型：如"力量训练""有氧训练"。每个类型定义一组要记录的字段(fields)。
 export interface TrainingType {

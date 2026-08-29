@@ -10,6 +10,11 @@ import { formatMass } from '../util/units';
  * 负责把"程序存起来的数据"变成"用户看得懂的文字"。
  */
 
+// 是否计算（派生）字段：计算字段不落库，渲染前由调用方 materializeLog 注入值后调用本模块格式化。
+function isComputedField(field: FieldDef): boolean {
+  return field.inputType === 'computed';
+}
+
 // 默认肌肉 -> 国际化 key 的映射表（当配置里没写 nameKey 时作为兜底）
 export const DEFAULT_MUSCLE_NAME_KEYS: Record<string, string> = {
   chest: 'muscle.chest',
@@ -82,13 +87,25 @@ export function renderFieldValue(value: unknown, field: FieldDef, unit: 'kg' | '
   if (value === undefined || value === null) return '';
 
   switch (field.inputType) {
-    case 'duration':
-      return formatDuration(Number(value));  // 秒数 -> "1分30秒"这类可读文本
+    case 'duration': {
+      const s = formatDuration(Number(value));  // 秒数 -> "1分30秒"这类可读文本
+      // 带单位标签的时长（如配速 runAs=duration + unitLabel="/公里"）追加单位后缀，
+      // 避免"5分46秒"与训练时长混淆。
+      return field.unitLabel ? `${s}${field.unitLabel}` : s;
+    }
     case 'number':
       if (field.mass) {
         return formatMass(Number(value), unit);  // 质量按 kg/lb 换算并显示单位
       }
       return String(value);
+    case 'computed':
+      // 计算字段：value 已由调用方按 formula 注入。renderAs='duration' 按时长格式化
+      // 并追加单位标签（如"5分46秒/公里"）；否则按纯数字 + 单位文字。
+      if (field.renderAs === 'duration') {
+        const s = formatDuration(Number(value));
+        return field.unitLabel ? `${s}${field.unitLabel}` : s;
+      }
+      return field.unitLabel ? `${value} ${field.unitLabel}` : String(value);
     case 'text':
       return String(value);
     default:

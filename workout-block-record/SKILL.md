@@ -37,7 +37,7 @@ node <本技能目录>/scripts/workout-cli.js <命令> --vault <Obsidian仓库�
 
 ```bash
 workout-cli locate --vault <V>                     # 数据文件定位（首次必跑）
-workout-cli doctor --vault <V>                     # 数据体检（只读）：表头/脏行/墓碑/重复 id
+workout-cli doctor --vault <V>                     # 数据体检（只读）：表头/脏行/墓碑/重复 id/统计公式引用
 ```
 
 查询配置（录入前建议先 resolve）：
@@ -57,6 +57,11 @@ workout-cli config delete-exercise --exercise dumbbell_fly --yes --vault <V>
 #   级联软删除该训练项的全部记录
 workout-cli config add-type --name 柔韧 --fields-json '[{"key":"duration_sec","inputType":"duration","required":true}]' --vault <V>
 workout-cli config update-type --type 柔韧 --new-id flexibility --vault <V>   # 级联记录/训练项/统计
+#   ⚠ 字段 key 改名务必走 update-type --fields-json，且遵循铁律：
+#   * update-type 整体替换字段数组；若「恰好移除一个 key + 新增一个 key」会被判定为字段改名，
+#     自动把旧 key 记到新字段的 legacyKeys 上——读取时旧值零迁移映射到新 key，不丢数据。
+#   * 一次性改多个字段 key 无法自动对应，必须在 fields-json 里给新字段显式写 "legacyKeys":["旧key"]。
+#   * 改完字段后跑 `doctor` 做「统计公式引用失效检测」，确认没有统计项引用了失效字段。
 workout-cli config add-muscle --name 前锯肌 --rest-days 5 --vault <V>
 workout-cli config add-stat --name 总时长 --types aerobic --builder sum:duration_sec --vault <V>
 #   --builder：count / sum:<字段> / avg|max|min:<字段> / productSum:<a>,<b> / oneRepMax:<重量>,<次数>；也可 --expr "sum(reps*weight)"

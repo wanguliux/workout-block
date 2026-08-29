@@ -3,6 +3,7 @@ import { LogRow, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
 import { computeStat, formatStatValue } from '../data/statExpr';
 import { getExerciseName, getMuscleName, resolveLogExerciseName, getTrainingTypeName } from '../data/display';
+import { materializeLogs, fieldsOfCategory } from '../data/computedField';
 import { registerRenderedBlock, unregisterRenderedBlock } from './registry';
 
 /*
@@ -225,6 +226,8 @@ export async function renderWorkoutDay(
     const matchedStats = (config.statistics ?? []).filter(
       (s) => s.enabled && s.associatedTypes.includes(group.category)
     );
+    // 计算字段：统计前注入派生值，使公式可直接引用（如配速 avg_pace）
+    const materializedLogs = materializeLogs(group.logs, fieldsOfCategory(config, group.category));
     const statBlock = card.createDiv();
     statBlock.addClass('workout-day-stat');
     if (matchedStats.length) {
@@ -232,7 +235,7 @@ export async function renderWorkoutDay(
         const line = statBlock.createDiv();
         line.addClass('workout-day-stat-line');
         line.createSpan({ text: s.name, cls: 'workout-day-stat-label' });
-        line.createSpan({ text: formatStatValue(computeStat(s, group.logs), s.unit), cls: 'workout-day-stat-value' });
+        line.createSpan({ text: formatStatValue(computeStat(s, materializedLogs), s.unit), cls: 'workout-day-stat-value' });
       }
     } else {
       statBlock.createSpan({ text: '—' });

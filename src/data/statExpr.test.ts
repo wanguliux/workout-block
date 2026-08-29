@@ -6,6 +6,8 @@ import {
   builderToExpr,
   exprToBuilder,
   allowedStatFields,
+  validateFieldExpr,
+  evalFieldExpr,
 } from './statExpr';
 import { StatDef, WorkoutConfig, LogRow } from './types';
 
@@ -179,5 +181,51 @@ describe('allowedStatFields 字段交集', () => {
   it('无交集类型返回空', () => {
     const s = stat({ associatedTypes: [] });
     expect(allowedStatFields(s, config)).toEqual([]);
+  });
+});
+
+describe('validateFieldExpr 派生字段公式校验', () => {
+  it('纯四则合法通过', () => {
+    expect(() => validateFieldExpr('duration_sec / distance_km', ['duration_sec', 'distance_km'])).not.toThrow();
+    expect(() => validateFieldExpr('duration_sec', ['duration_sec'])).not.toThrow();
+    expect(() => validateFieldExpr('3600', [])).not.toThrow();
+  });
+
+  it('聚合函数被拒绝', () => {
+    expect(() => validateFieldExpr('sum(duration_sec)', ['duration_sec'])).toThrow(/聚合函数/);
+    expect(() => validateFieldExpr('duration_sec * avg(reps)', ['duration_sec', 'reps'])).toThrow(/聚合函数/);
+  });
+
+  it('引用未定义字段被拒绝', () => {
+    expect(() => validateFieldExpr('duration_sec / distance_km', ['duration_sec'])).toThrow(/distance_km/);
+    expect(() => validateFieldExpr('typo_field', ['duration_sec'])).toThrow(/typo_field/);
+  });
+
+  it('非法语法被拒绝', () => {
+    expect(() => validateFieldExpr('duration_sec /', ['duration_sec'])).toThrow();
+  });
+});
+
+describe('evalFieldExpr 派生字段求值', () => {
+  const fields = { duration_sec: 346, distance_km: 1.2 };
+
+  it('配速 = duration_sec / distance_km', () => {
+    expect(evalFieldExpr('duration_sec / distance_km', fields)).toBeCloseTo(346 / 1.2, 2);
+  });
+
+  it('速度 = distance_km / (duration_sec/3600) → km/h', () => {
+    expect(evalFieldExpr('distance_km / (duration_sec / 3600)', fields)).toBeCloseTo(1.2 / (346 / 3600), 2);
+  });
+
+  it('缺字段按 0 处理（不崩）', () => {
+    expect(evalFieldExpr('duration_sec / distance_km', { duration_sec: 300 })).toBe(0);
+  });
+
+  it('含聚合函数直接报错', () => {
+    expect(() => evalFieldExpr('sum(duration_sec)', fields)).toThrow(/聚合函数/);
+  });
+
+  it('纯数字常量可求值', () => {
+    expect(evalFieldExpr('2 * 3 + 4', fields)).toBe(10);
   });
 });

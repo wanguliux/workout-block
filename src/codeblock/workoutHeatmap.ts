@@ -266,7 +266,7 @@ export async function renderWorkoutHeatmap(
       const stat = resolveMetricId(config, muscle, params.metric);
       if (!stat) continue;
       const range = resolveRange(muscle, codeRange);
-      const value = computeMuscleValue(muscle, stat, range, logs, exerciseMuscleMap);
+      const value = computeMuscleValue(muscle, stat, range, logs, exerciseMuscleMap, config);
       // 逐肌分档：优先用该肌自己的 heatmapLevels，否则用所选 StatDef 的默认分档
       const scale = muscle.heatmapLevels ?? stat.heatmapScale ?? DEFAULT_HEATMAP_SCALE;
       muscleEntries.push({ muscle, stat, range, value, scale });

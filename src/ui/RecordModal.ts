@@ -1,7 +1,8 @@
 import { Modal, Notice } from 'obsidian';
 import { DataManager } from '../data/DataManager';
-import { getExerciseName, getFieldLabel, getTrainingTypeName, resolveExerciseByName } from '../data/display';
+import { getExerciseName, getFieldLabel, getTrainingTypeName, resolveExerciseByName, renderFieldValue } from '../data/display';
 import { Exercise, FieldDef, LogRow, TrainingType } from '../data/types';
+import { evalFieldExpr } from '../data/statExpr';
 import { t } from '../i18n';
 import { secondsToParts, parseDuration } from '../util/duration';
 import { formatMass, parseMass } from '../util/units';
@@ -49,6 +50,8 @@ export class RecordModal extends Modal {
   private planInput!: HTMLSelectElement;       // 训练方案下拉框；创建默认空、编辑可改
   private category = '';         // 当前训练项的类型 id（决定显示哪些字段）
   private fieldValues: Record<string, unknown> = {}; // 各字段当前值，key 为字段 key
+  // 计算字段的实时预览刷新器列表：源字段值变化时逐个 recompute，实现"随输入即时更新派生值"
+  private computedRefreshers: (() => void)[] = [];
   private exercises: Exercise[] = [];
   private trainingTypes: TrainingType[] = [];
   private filteredExercises: Exercise[] = []; // 搜索过滤后的训练项列表
@@ -387,6 +390,7 @@ export class RecordModal extends Modal {
   // 支持 4 种 inputType：number(数字)、duration(时长)、text(文本)、select(下拉)。
   private renderFields(): void {
     this.fieldsContainer.empty(); // 先清空，避免重复渲染时控件叠加
+    this.computedRefreshers = []; // 重置计算字段刷新器，避免切换类型后累积旧 DOM 的闭包
     const type = this.trainingTypes.find((item) => item.id === this.category);
     if (!type) return;
 
@@ -416,12 +420,14 @@ export class RecordModal extends Modal {
             numInput.value = fieldValue != null ? formatMass(Number(fieldValue), unit) : '';
             numInput.addEventListener('change', () => {
               this.fieldValues[field.key] = parseMass(numInput.value, unit);
+              this.refreshComputedPreviews();
             });
           } else {
             // 普通数字：直接存 parseFloat
             numInput.value = fieldValue != null ? String(fieldValue) : '';
             numInput.addEventListener('change', () => {
               this.fieldValues[field.key] = parseFloat(numInput.value);
+              this.refreshComputedPreviews();
             });
           }
           // 必填字段：标记 required，提交时会被校验
@@ -466,6 +472,7 @@ export class RecordModal extends Modal {
               parseInt(minInput.value, 10) || 0,
               parseInt(secInput.value, 10) || 0
             );
+            this.refreshComputedPreviews();
           };
           hourInput.addEventListener('change', updateDuration);
           minInput.addEventListener('change', updateDuration);
@@ -479,6 +486,7 @@ export class RecordModal extends Modal {
           textInput.value = fieldValue != null ? String(fieldValue) : '';
           textInput.addEventListener('change', () => {
             this.fieldValues[field.key] = textInput.value;
+            this.refreshComputedPreviews();
           });
           break;
         }
@@ -506,7 +514,28 @@ export class RecordModal extends Modal {
           }
           selectInput.addEventListener('change', () => {
             this.fieldValues[field.key] = selectInput.value;
+            this.refreshComputedPreviews();
           });
+          break;
+        }
+        case 'computed': {
+          // 计算（派生）字段：不提供输入控件，显示一个随源字段实时更新的只读预览。
+          // 公式求值失败/缺字段时留空，不打断录入。保存时不会落库（见 save）。
+          const preview = fieldRow.createDiv();
+          preview.addClass('workout-computed-preview');
+
+          // 复用 renderFieldValue 格式化；值是按公式对当前 fieldValues 求出的原始数值
+          const compute = (): void => {
+            let raw: unknown;
+            try {
+              raw = field.formula ? evalFieldExpr(field.formula, this.fieldValues) : undefined;
+            } catch {
+              raw = undefined;
+            }
+            preview.setText(raw === undefined || raw === null ? '—' : renderFieldValue(raw, field, unit));
+          };
+          compute();
+          this.computedRefreshers.push(compute);
           break;
         }
       }
@@ -585,6 +614,11 @@ export class RecordModal extends Modal {
       // 写入失败（如 CSV 异常）时给出错误提示，但不关闭弹窗，方便用户重试
       new Notice(t('modal.recordSet.saveFailed'));
     }
+  }
+
+  // 计算字段实时预览刷新：所有源字段值变化后逐个 recompute，派生值（如配速）随输入即时更新。
+  private refreshComputedPreviews(): void {
+    for (const recompute of this.computedRefreshers) recompute();
   }
 
   // onClose：弹窗关闭时移除 document 级监听器并清空内容容器，释放 DOM。

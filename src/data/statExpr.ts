@@ -163,7 +163,59 @@ function validateStructure(ast: Node): void {
   }
 }
 
-// 收集表达式中引用的字段名（递归遍历，顺带拒绝嵌套函数）
+// 把 `record.fields` 封装为 computeStat / 单记录求值都能读取的 LogRow（不关心其他列）。
+function recordFromFields(fields: Record<string, unknown>): LogRow {
+  return { id: '', timestamp: '', category: '', fields };
+}
+
+// ===== 计算（派生）字段：单记录纯算术表达式求值 =====
+// 与统计表达式不同：派生字段的公式是「针对单条记录」的纯四则表达式（无聚合函数），
+// 例如配速 `duration_sec / distance_km`、速度 `distance_km / (duration_sec / 3600)`。
+// 复用了本文件的词法/语法分析器与 evalNode，字段引用直接取 record.fields 里的原始数值
+// （duration 底层就是秒数，可直接参与算术）。
+
+/** 校验一条派生字段公式：语法合法、无聚合函数、只引用允许字段。 */
+export function validateFieldExpr(expr: string, allowedFields: string[]): void {
+  const ast = new Parser(tokenize(expr)).parse();
+  // 派生公式禁止任何聚合函数：顶层 `avg(reps)` 或嵌套 `x * sum(...)` 都要拒绝。
+  const fields = new Set<string>();
+  walkDerived(ast, fields);
+  const allowed = new Set(allowedFields);
+  for (const f of fields) {
+    if (!allowed.has(f)) {
+      throw new Error(`字段 "${f}" 不在可用字段范围（请先定义它，或检查引用拼写）`);
+    }
+  }
+}
+
+/** 收集派生字段公式引用的字段；遇到聚合函数节点直接抛错。 */
+function walkDerived(node: Node, out: Set<string>): void {
+  switch (node.type) {
+    case 'field':
+      out.add(node.name);
+      break;
+    case 'num':
+      break;
+    case 'binop':
+      walkDerived(node.left, out);
+      walkDerived(node.right, out);
+      break;
+    case 'func':
+      throw new Error('计算字段的公式不能使用聚合函数（sum/avg/max/min/count），请只写字段与四则运算');
+  }
+}
+
+/** 对单条记录的字段值求派生公式，返回计算结果（缺字段/非法时返回 0，与统计一致）。 */
+export function evalFieldExpr(expr: string, fields: Record<string, unknown>): number {
+  const ast = new Parser(tokenize(expr)).parse();
+  // 顶层与子表达式都不能是聚合函数（evalNode 遇 func 抛错，这里提前拦截给出明确提示）
+  if (ast.type === 'func') {
+    throw new Error('计算字段的公式不能使用聚合函数');
+  }
+  return evalNode(ast, recordFromFields(fields));
+}
+
+// ===== 收集表达式中引用的字段名（递归遍历，顺带拒绝嵌套函数）=====
 function collectFields(node: Node, out: Set<string>): void {
   switch (node.type) {
     case 'field':

@@ -238,7 +238,7 @@ function handleMuscleVolume(data: WorkoutQueryData, request: QueryRequest, range
     ? data.config.muscles.filter((m) => m.id === muscleId)
     : data.config.muscles;
   const entries = muscles
-    .map((m) => ({ key: m.id, value: computeMuscleValue(m, stat, rangeStr, scoped, em), unit: 'kg' }))
+    .map((m) => ({ key: m.id, value: computeMuscleValue(m, stat, rangeStr, scoped, em, data.config), unit: 'kg' }))
     .sort((a, b) => b.value - a.value);
   return { dimension: request.dimension, mode: 'summary', data: { entries }, shapeHint: 'kv-pairs' };
 }

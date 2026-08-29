@@ -82,6 +82,8 @@ export const en = {
     bodyweight: 'Body Weight',
     duration_sec: 'Duration',
     distance: 'Distance',
+    avg_pace: 'Pace',
+    avg_speed: 'Speed',
   },
 
   unit: {
@@ -100,6 +102,12 @@ export const en = {
     duration: 'Duration',
     text: 'Text',
     select: 'Select',
+    computed: 'Computed',
+  },
+
+  fieldRender: {
+    number: 'Number',
+    duration: 'As duration',
   },
 
   fieldUnit: {
@@ -114,6 +122,7 @@ export const en = {
     delete: 'Delete',
     confirmDelete: 'Are you sure you want to delete this record?',
     date: 'Date',
+    time: 'Time',
     note: 'Note',
     actions: 'Actions',
     totalSets: 'Total Sets',
@@ -255,6 +264,18 @@ export const en = {
       customUnit: 'Unit text',
       options: 'Options (dropdown)',
       optionsPlaceholder: 'Comma-separated, e.g. Light, Medium, Heavy',
+      formula: 'Formula',
+      formulaPlaceholder: 'e.g. duration_sec / distance_km',
+      formulaMode: 'Formula mode',
+      builderMode: 'Guided',
+      expressionMode: 'Expression',
+      formulaLeft: 'Left field',
+      formulaOp: 'Operator',
+      formulaRight: 'Right field',
+      formulaPreview: 'Preview',
+      formulaInvalid: 'Computed field "{field}" has an invalid formula: {msg}',
+      renderAs: 'Display as',
+      formulaRequired: 'Computed field "{field}" is missing a formula',
       save: 'Save',
       nameRequired: 'Please enter type name',
       saved: 'Training type saved',

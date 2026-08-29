@@ -10,7 +10,7 @@ import {
   TrainingType,
   WorkoutConfig,
 } from '../data/types';
-import { allowedStatFields, builderToExpr, validateExpression } from '../data/statExpr';
+import { allowedStatFields, builderToExpr, validateExpression, validateFieldExpr } from '../data/statExpr';
 import { getMuscleName } from '../data/display';
 import { INVALID_ID_RE, isInvalidId } from '../ui/idValidation';
 import { CliError } from './errors';
@@ -168,11 +168,12 @@ export function applyExerciseDelete(
 
 // ===== 训练类型（TrainingType） =====
 
-const INPUT_TYPES = ['number', 'duration', 'text', 'select'] as const;
+const INPUT_TYPES = ['number', 'duration', 'text', 'select', 'computed'] as const;
 
-// 常见字段 key → 中文标签。CLI 添加训练类型时，若字段未显式给 label / labelKey，
-// 先用本表补一个可读标签（未知 key 回退用 key 本身），避免插件 UI（TypeModal）
-// 把"无标签字段"判为无效、显示空白。
+/** 常见字段 key → 中文标签。CLI 添加训练类型时，若字段未显式给 label / labelKey，
+ * 先用本表补一个可读标签（未知 key 回退用 key 本身），避免插件 UI（TypeModal）
+ * 把"无标签字段"判为无效、显示空白。配速/速度等计算字段也纳入，减少手填标签。
+ */
 const BUILTIN_FIELD_LABELS: Record<string, string> = {
   weight: '重量',
   reps: '次数',
@@ -189,13 +190,16 @@ const BUILTIN_FIELD_LABELS: Record<string, string> = {
   calories: '卡路里',
   count: '个数',
   notes: '备注',
+  avg_pace: '配速',
+  avg_speed: '速度',
 };
 
 /** FieldDef[] 结构校验（JSON 输入的唯一入口）。 */
 export function validateFieldDefs(fields: unknown): FieldDef[] {
   if (!Array.isArray(fields)) throw new CliError('fields 必须是 FieldDef 数组');
+  const defs: FieldDef[] = [];
   const seen = new Set<string>();
-  return fields.map((raw, i): FieldDef => {
+  fields.forEach((raw, i) => {
     if (!raw || typeof raw !== 'object') throw new CliError(`fields[${i}] 不是对象`);
     const f = raw as Record<string, unknown>;
     const key = typeof f.key === 'string' ? f.key.trim() : '';
@@ -220,15 +224,41 @@ export function validateFieldDefs(fields: unknown): FieldDef[] {
       def.mass = true;
     }
     if (typeof f.unitLabel === 'string') def.unitLabel = f.unitLabel;
-    if (f.required === true) def.required = true;
+    // 历史 key 别名：字段 key 改名时记录旧 key，读取时按 legacyKeys 把旧值映射到新 key（零迁移向后兼容）。
+    if (Array.isArray(f.legacyKeys)) {
+      def.legacyKeys = f.legacyKeys.filter((x) => typeof x === 'string' && x.trim());
+      if (def.legacyKeys.length === 0) delete def.legacyKeys;
+    }
+    // computed 是派生字段，不落库、不能是必填（必填语义毫无意义，直接忽略）
+    if (f.required === true && inputType !== 'computed') def.required = true;
     if (inputType === 'select') {
       if (!Array.isArray(f.options) || f.options.length === 0 || f.options.some((o) => typeof o !== 'string')) {
         throw new CliError(`字段 "${key}"：select 类型需要非空的 options 字符串数组`);
       }
       def.options = f.options as string[];
     }
-    return def;
+    if (inputType === 'computed') {
+      if (typeof f.formula !== 'string' || !f.formula.trim()) {
+        throw new CliError(`字段 "${key}"：computed 计算字段必须提供 formula（如 "duration_sec / distance_km"）`);
+      }
+      def.formula = f.formula.trim();
+      if (f.renderAs === 'duration') def.renderAs = 'duration';
+    }
+    defs.push(def);
   });
+
+  // computed 公式白名单校验：必须引用同类型内「已定义的」其他字段，且不能用聚合函数。
+  // 整体遍历收集全部 key 后再校验，保证可引用任意顺序定义的字段。
+  const keys = defs.map((d) => d.key);
+  for (const d of defs) {
+    if (d.inputType !== 'computed') continue;
+    try {
+      validateFieldExpr(d.formula!, keys);
+    } catch (e) {
+      throw new CliError(`字段 "${d.key}" 的公式无效：${(e as Error).message}`);
+    }
+  }
+  return defs;
 }
 
 export function parseFieldDefsJson(json: string): FieldDef[] {
@@ -271,6 +301,21 @@ export interface TypePatch {
   fields?: FieldDef[];
 }
 
+// 字段替换时自动继承「历史 key」：当旧字段集里恰好移除一个 key、新字段集里恰好新增一个 key，
+// 判定为单字段改名，把移除的旧 key 记到新增字段的 legacyKeys 上，使历史记录旧值能映射到新 key。
+// 多字段同时增减无法确定一一映射，保守跳过（不猜测、不丢数据，留待显式指定 legacyKeys）。
+function inheritLegacyKeys(oldFields: FieldDef[], newFields: FieldDef[]): FieldDef[] {
+  const oldKeys = new Set(oldFields.map((f) => f.key));
+  const added = newFields.map((f) => f.key).filter((k) => !oldKeys.has(k));
+  const removed = oldFields.map((f) => f.key).filter((k) => !newFields.some((f) => f.key === k));
+  if (added.length !== 1 || removed.length !== 1) return newFields;
+  return newFields.map((f) => {
+    if (f.key !== added[0]) return f;
+    const legacy = Array.from(new Set([...(f.legacyKeys ?? []), removed[0]]));
+    return { ...f, legacyKeys: legacy };
+  });
+}
+
 /** 更新训练类型；改 id 时级联改写记录 category、训练项 category、统计 associatedTypes。 */
 export function applyTypeUpdate(
   config: WorkoutConfig,
@@ -287,7 +332,7 @@ export function applyTypeUpdate(
   }
   if (patch.fields !== undefined) {
     if (patch.fields.length === 0) throw new CliError('训练类型至少需要一个字段');
-    updates.fields = patch.fields;
+    updates.fields = inheritLegacyKeys(config.trainingTypes[index].fields, patch.fields);
   }
 
   const finalId = patch.newId ? normalizeEntityId(patch.newId, updates.name ?? config.trainingTypes[index].name ?? patch.id) : patch.id;

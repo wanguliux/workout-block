@@ -83,6 +83,8 @@ export const zh = {
     bodyweight: '体重',
     duration_sec: '时长',
     distance: '距离',
+    avg_pace: '配速',
+    avg_speed: '速度',
   },
 
   unit: {
@@ -101,6 +103,12 @@ export const zh = {
     duration: '时长',
     text: '文本',
     select: '下拉选择',
+    computed: '计算(派生)',
+  },
+
+  fieldRender: {
+    number: '数字',
+    duration: '按时长',
   },
 
   fieldUnit: {
@@ -115,6 +123,7 @@ export const zh = {
     delete: '删除',
     confirmDelete: '确定删除这条记录吗？',
     date: '日期',
+    time: '时间',
     note: '备注',
     actions: '操作',
     totalSets: '总组数',
@@ -256,6 +265,18 @@ export const zh = {
       customUnit: '单位文字',
       options: '选项(下拉)',
       optionsPlaceholder: '用英文逗号分隔,如:轻,中,重',
+      formula: '公式',
+      formulaPlaceholder: '如 duration_sec / distance_km',
+      formulaMode: '公式模式',
+      builderMode: '引导式',
+      expressionMode: '表达式',
+      formulaLeft: '左字段',
+      formulaOp: '运算符',
+      formulaRight: '右字段',
+      formulaPreview: '预览',
+      formulaInvalid: '计算字段「{field}」公式无效：{msg}',
+      renderAs: '显示方式',
+      formulaRequired: '计算字段「{field}」缺少公式',
       save: '保存',
       nameRequired: '请输入类型名称',
       saved: '训练类型已保存',

@@ -81,6 +81,9 @@ export function parseFieldValue(field: FieldDef, raw: string, unit: 'kg' | 'lb')
     }
     case 'text':
       return value;
+    case 'computed':
+      // 计算字段不落库、由公式算出，CLI 不接受手动输入
+      throw new CliError(`字段 ${field.key} 是计算字段，由公式自动算出，不能手动输入`);
   }
 }
 
