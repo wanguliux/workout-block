@@ -16,7 +16,13 @@ import { ExerciseModal } from './ui/ExerciseModal';
 import { TypeModal } from './ui/TypeModal';
 import { SettingsTab } from './ui/SettingsTab';
 import { InsertCodeBlockModal } from './ui/InsertCodeBlockModal';
-import { tryRegisterInsertCommand, type BlockDefinitionWithParams } from './blockProvider';
+import {
+  tryRegisterInsertCommand,
+  type BlockDefinitionWithParams,
+  type BlockParamDef,
+  type ParamRenderContext,
+} from './blockProvider';
+import { renderParamControl } from './ui/paramRenderers';
 import { CODE_BLOCK_DEFS } from './codeBlockDefs';
 import { getToolCapability as getToolCapabilityDef } from './decision/capability';
 import { executeQuery, type WorkoutQueryData } from './decision/queryHandler';
@@ -393,6 +399,9 @@ export default class WorkoutPlugin extends Plugin {
       name: def.title,
       description: def.desc,
       icon: def.icon,
+      // 契约 v2：pluginId 供宿主定向找本插件的参数渲染器；title 是 name 的契约别名
+      pluginId: this.manifest.id,
+      title: def.title,
       params: def.params.map((p) => {
         // 跨插件联动关键：把 dynamic 数据源「物化」成静态 options/optionLabels。
         // 任何宿主插件（含 finance-block 等其它 block 插件）拿到后都能直接渲染下拉，
@@ -412,6 +421,16 @@ export default class WorkoutPlugin extends Plugin {
         };
       }),
     }));
+  }
+
+  /**
+   * 契约 v2（参数渲染委托）：渲染本插件声明的「自定义 type」参数控件。
+   * 供跨插件宿主对不认识的 type 定向调用（block.pluginId → 本方法）；宿主见
+   * blockProvider.getPluginParamRenderer。实现委托给 paramRenderers（纯渲染，无状态）。
+   * workout 自定义类型：exercise（训练项搜索 combobox）。
+   */
+  renderParamField(container: HTMLElement, param: BlockParamDef, ctx: ParamRenderContext): void {
+    renderParamControl(container, param, ctx, this.dataManager.getConfigSync());
   }
 
   /** 把 dynamic 数据源解析为具体 options（供 getBlockRegistry 跨插件暴露时物化）。 */

@@ -117,13 +117,15 @@ export class InsertCodeBlockModal extends Modal {
     const group = this.groups[this.activeTab];
     const q = this.searchInput.value.trim().toLowerCase();
 
+    // hidden=true 的块仅存量笔记渲染，不进入「插入代码块」弹窗（跨插件契约字段）
+    const visible = group.blocks.filter((b) => !b.hidden);
     const matched = q
-      ? group.blocks.filter(
+      ? visible.filter(
           (b) =>
             b.name.toLowerCase().includes(q) ||
             (b.description ?? '').toLowerCase().includes(q),
         )
-      : group.blocks;
+      : visible;
 
     if (matched.length === 0) {
       this.listEl.createDiv({ text: t('modal.insertCodeblock.noMatch'), cls: 'workout-insert-empty' });

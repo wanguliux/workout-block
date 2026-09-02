@@ -5,7 +5,12 @@ import { WorkoutConfig, Exercise, TrainingType } from '../data/types';
 import { getExerciseName, getTrainingTypeName } from '../data/display';
 import { t } from '../i18n';
 import { buildCodeBlock } from '../codeBlockDefs';
-import type { BlockDefinitionWithParams, BlockParamDef } from '../blockProvider';
+import {
+  getPluginParamRenderer,
+  type BlockDefinitionWithParams,
+  type BlockParamDef,
+  type BlockProviderPlugin,
+} from '../blockProvider';
 
 /*
  * InsertCodeBlockParamModal —— 参数弹窗（跨插件通用）
@@ -27,6 +32,12 @@ interface ExerciseComboState {
   highlighted: number;
 }
 
+/**
+ * 宿主认识的 type（其余一律按契约 v2 委托定义方插件渲染）。
+ * 新增宿主本地控件时同步此处——未登记的类型不会被误吞，只会走委托/文本回落。
+ */
+const KNOWN_PARAM_TYPES = new Set(['text', 'number', 'select', 'date', 'exercise']);
+
 export class InsertCodeBlockParamModal extends Modal {
   private dataManager: DataManager;
   private block: BlockDefinitionWithParams;
@@ -35,11 +46,15 @@ export class InsertCodeBlockParamModal extends Modal {
   private inputs: Record<string, HTMLInputElement | HTMLSelectElement> = {};
   private exerciseCombos: Record<string, ExerciseComboState> = {};
   private docMousedownHandlers: Array<(e: MouseEvent) => void> = []; // document 级监听器（onClose 移除）
+  /** 契约 v2：本 block 定义方插件的参数渲染器（无 → 未知类型回落文本） */
+  private paramRenderer: BlockProviderPlugin['renderParamField'] | undefined;
 
   constructor(app: App, dataManager: DataManager, block: BlockDefinitionWithParams) {
     super(app);
     this.dataManager = dataManager;
     this.block = block;
+    // 契约 v2：解析定义方插件的参数渲染器（构造时解析一次；无渲染器则未知类型回落文本）
+    this.paramRenderer = getPluginParamRenderer(app, block.pluginId);
   }
 
   async onOpen(): Promise<void> {
@@ -98,6 +113,12 @@ export class InsertCodeBlockParamModal extends Modal {
   private renderParams(config: WorkoutConfig): void {
     this.paramContainer.empty();
     for (const p of this.block.params) {
+      // 契约 v2：宿主不认识的类型 → 委托定义方插件渲染（渲染器自含字段结构，整块 append）
+      if (!KNOWN_PARAM_TYPES.has(p.type)) {
+        this.renderDelegatedParam(p);
+        continue;
+      }
+
       const row = this.paramContainer.createDiv();
       row.addClass('workout-field');
 
@@ -204,7 +225,7 @@ export class InsertCodeBlockParamModal extends Modal {
         input.value = `${y}-${m}-${d}`;
         this.inputs[p.key] = input;
       } else {
-        // text / number / 以及未知类型（如跨插件的 'account' 等）均 fallback 为文本输入
+        // text / number（宿主本地已知类型；未知类型已在循环开头委托给定义方插件）
         const isNumber = p.type === 'number';
         const input = row.createEl('input', { type: isNumber ? 'number' : 'text' });
         input.addClass('workout-input');
@@ -220,6 +241,44 @@ export class InsertCodeBlockParamModal extends Modal {
         this.inputs[p.key] = input;
       }
     }
+  }
+
+  /**
+   * 契约 v2 委托分支：宿主不认识 type（如 health 的 metric 等）时，
+   * 定向交给定义方插件的 renderParamField（渲染器自含字段名/描述结构，直接整块 append）；
+   * 定义方未实现渲染器时回落为文本输入。
+   */
+  private renderDelegatedParam(p: BlockParamDef): void {
+    if (this.paramRenderer) {
+      // 预写初始值：委托控件不交互直接点「插入」也能带上默认值（渲染器 onChange 后覆盖）
+      const initial = this.values[p.key] ?? p.defaultValue;
+      if (initial !== undefined) this.values[p.key] = initial;
+      this.paramRenderer(this.paramContainer, p, {
+        initial,
+        onChange: (v) => {
+          this.values[p.key] = v;
+        },
+      });
+      return;
+    }
+    // 回落：无定义方渲染器 → 文本输入
+    const row = this.paramContainer.createDiv();
+    row.addClass('workout-field');
+    const labelRow = row.createDiv();
+    labelRow.addClass('workout-insert-param-label');
+    labelRow.createSpan({ text: p.label });
+    if (p.optional !== false) {
+      const optTag = labelRow.createSpan({ text: t('modal.insertCodeblock.optional') });
+      optTag.addClass('workout-insert-param-optional');
+    }
+    if (p.description) {
+      row.createDiv({ text: p.description, cls: 'workout-insert-param-hint' });
+    }
+    const input = row.createEl('input', { type: 'text' });
+    input.addClass('workout-input');
+    if (p.placeholder) input.placeholder = p.placeholder;
+    if (p.defaultValue) input.value = p.defaultValue;
+    this.inputs[p.key] = input;
   }
 
   // 通用可编辑下拉框（combobox）：input + 过滤下拉。

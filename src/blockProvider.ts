@@ -12,6 +12,9 @@
  *    - 装 N 个 → 字母序首个当宿主，合并视图按插件分组 + 搜索
  * 4. 统一插入格式：所有插件共用 ```类型名 ... ``` fence 语法
  * 5. 可扩展：第 N 个 block 插件只需实现 getBlockRegistry() + 自带宿主声明逻辑
+ * 6. 契约 v2（参数渲染委托）：宿主对「不认识的 type」不再一律降级文本，而是定向委托给
+ *    定义方插件（block.pluginId → app.plugins.plugins[id].renderParamField，见
+ *    getPluginParamRenderer）。谁定义参数，谁渲染参数——提供方对未来控件负责，宿主零跟进。
  */
 
 import type { App, Plugin } from 'obsidian';
@@ -24,13 +27,38 @@ export interface BlockParamDef {
   key: string;
   label: string;
   description?: string;
-  type: string; // 参数类型（各插件可扩展；通用 Modal 对未知类型 fallback 为 text）
+  type: string; // 参数类型（各插件可扩展；未知类型宿主按契约 v2 委托定义方渲染，无渲染器才 fallback 为 text）
   optional?: boolean;
   placeholder?: string;
   options?: string[];
   optionLabels?: Record<string, string>;
+  /** 多选分组元数据（定义方自定义 type 的物化产物）：label=组名，options=组内 value */
+  optionGroups?: Array<{ label: string; options: string[] }>;
   defaultValue?: string;
   dynamic?: 'exercise' | 'plan' | 'metric'; // workout 专有：运行时从 config 填充选项
+}
+
+/**
+ * 参数渲染委托上下文（契约 v2）：
+ * 宿主把「不认识的 type」控件渲染委托给定义方插件时传入。
+ * 渲染器只负责控件（含自身需要的字段名/描述排版），值变更经 onChange 回写宿主表单。
+ */
+export interface ParamRenderContext {
+  /** 初始值（宿主的 defaultValue / 已填值） */
+  initial?: string;
+  /** 值变更回调：渲染器把当前值写回宿主表单 */
+  onChange: (value: string) => void;
+}
+
+/** BlockProvider 插件实例（宿主按 pluginId 定向取定义方渲染器时探测的类型） */
+export interface BlockProviderPlugin {
+  getBlockRegistry?: () => BlockDefinitionWithParams[];
+  /**
+   * 契约 v2：渲染本插件定义的「自定义 type」参数控件到 container。
+   * 宿主只在自身不认识的 type 时调用；未实现该方法的插件仍是合法 Provider（宿主降级文本）。
+   */
+  renderParamField?: (container: HTMLElement, param: BlockParamDef, ctx: ParamRenderContext) => void;
+  manifest?: { id?: string; name?: string };
 }
 
 /** 单个可插入的 block 定义（对外暴露给通用 Modal 的格式） */
@@ -41,11 +69,18 @@ export interface BlockDefinitionWithParams {
   icon?: string; // Obsidian 图标名
   template?: string; // 原始模板（含 {{key}} 占位）
   params: BlockParamDef[]; // 参数定义
+  /** 所属插件 ID：宿主定向查找定义方参数渲染器的依据（契约 v2 要求） */
+  pluginId?: string;
+  /** 契约别名：与 name 同义，供只认 title 的宿主 Modal 读取 */
+  title?: string;
+  /** 是否从「插入代码块」弹窗隐藏（true=仅存量笔记渲染，新用户不可插入） */
+  hidden?: boolean;
 }
 
 /** 按插件分组的视图数据（供 Modal 展示） */
 export interface ProviderGroup {
   pluginId: string;
+  pluginName: string;
   blocks: BlockDefinitionWithParams[];
 }
 
@@ -69,16 +104,35 @@ export function getBlockProviders(app: App): ProviderGroup[] {
   for (const pluginId of Object.keys(plugins)) {
     const plugin = plugins[pluginId] as Plugin & {
       getBlockRegistry?: () => BlockDefinitionWithParams[];
+      manifest?: { name?: string };
     };
     if (typeof plugin?.getBlockRegistry === 'function') {
       const blocks = plugin.getBlockRegistry();
       if (blocks.length > 0) {
-        groups.push({ pluginId, blocks });
+        groups.push({ pluginId, pluginName: plugin.manifest?.name ?? pluginId, blocks });
       }
     }
   }
 
   return groups.sort((a, b) => a.pluginId.localeCompare(b.pluginId));
+}
+
+/**
+ * 契约 v2：宿主按 block.pluginId 定向取「定义方插件」的参数渲染器。
+ * 沿 app.plugins.plugins 探测（与 getBlockRegistry 同一运行时发现机制，无模块级注册表）；
+ * 定义方未实现 / 未启用时返回 undefined → 宿主回落到文本输入。
+ */
+export function getPluginParamRenderer(
+  app: App,
+  pluginId?: string,
+): BlockProviderPlugin['renderParamField'] {
+  if (!pluginId) return undefined;
+  const plugins = (app as unknown as { plugins: { plugins: Record<string, unknown> } }).plugins
+    .plugins;
+  const plugin = plugins[pluginId] as BlockProviderPlugin | undefined;
+  return typeof plugin?.renderParamField === 'function'
+    ? plugin.renderParamField.bind(plugin)
+    : undefined;
 }
 
 /** 合并所有 provider 的 block 定义（扁平列表） */

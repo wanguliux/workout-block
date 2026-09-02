@@ -1639,3 +1639,63 @@ input[type="checkbox"].workout-switch:checked::after {
   margin-left: auto;
 }
 .workout-plan-done svg { width: 15px; height: 15px; }
+
+/* ─── 契约通用：参数控件（block-param-*，供参数渲染委托的渲染器使用） ───
+ * 本段是 block 系列「参数渲染委托（契约 v2）」的公共 CSS 片段：
+ * 渲染器（paramRenderers.ts）可能被任意宿主弹窗调用，故类名用契约前缀 block-param-*，
+ * 各 block 插件宿主应在自己的 styles.css 复制同一份（见升级方案文档）。 */
+.block-param-ms {
+  margin: 2px 0 10px;
+  max-width: 100%;
+}
+.block-param-field-name {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.block-param-field-desc {
+  color: var(--text-muted);
+  font-size: var(--font-smaller);
+  margin-bottom: 4px;
+}
+.block-param-ms-empty {
+  color: var(--text-muted);
+  font-size: var(--font-smaller);
+  padding: 4px 0;
+}
+.block-param-ms-group {
+  margin: 4px 0;
+  padding: 6px 10px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+}
+.block-param-ms-group-title {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin-bottom: 4px;
+}
+.block-param-ms-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
+}
+.block-param-ms-opt {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--text-normal);
+  padding: 2px 0;
+  border-radius: 4px;
+}
+.block-param-ms-opt:hover {
+  background: var(--background-modifier-hover);
+}
+.block-param-ms-opt input[type='checkbox'] {
+  margin: 0;
+}
+.block-param-text {
+  width: 100%;
+  box-sizing: border-box;
+}
