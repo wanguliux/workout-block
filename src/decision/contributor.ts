@@ -1,3 +1,4 @@
+import { Notice } from 'obsidian';
 import type { App } from 'obsidian';
 import type { DataManager } from '../data/DataManager';
 import type {
@@ -5,13 +6,16 @@ import type {
   DecisionAction,
   DecisionContributor,
   DecisionItem,
+  DomainWriteContract,
   ResolveResult,
+  WriteAction,
 } from './types';
 import { countPeriodPending, isPlanScheduledOn, todayStr, weekMonday } from './queryHandler';
 import { buildExerciseMuscleMap, computeMuscleRestDays, daysBetween } from '../data/muscleStats';
 import { getMuscleName } from '../data/display';
 import { RecordModal } from '../ui/RecordModal';
 import { t } from '../i18n';
+import { workoutLogContract, handleWorkoutActions, type WorkoutWriteApi } from './workoutLogWrite';
 
 /*
  * contributor.ts —— P3 DecisionContributor 实现。
@@ -36,9 +40,19 @@ export function createWorkoutContributor(
 ): DecisionContributor {
   const capabilities: ContributorCapabilities = {
     supportedTypes: ['simple-confirm'],
-    writableDomains: ['workout'],
+    writableDomains: ['workout-log'],
     domainLabel: t('decision.domainLabel'),
     consumableKinds: ['workout', 'exercise', 'rest'],
+  };
+
+  // workout-log 写域：由 dataManager 注入真实写能力（与录入弹窗/CLI 同一条写路径）
+  const writeApi: WorkoutWriteApi = {
+    getConfigSync: () => dataManager.getConfigSync(),
+    readLogs: () => dataManager.getLogs(),
+    addLog: (row) => dataManager.addLog(row),
+    updateLog: (id, updates) => dataManager.updateLog(id, updates),
+    deleteLog: (id) => dataManager.deleteLog(id),
+    notice: (msg) => new Notice(msg),
   };
 
   function dismissals(): Record<string, string> {
@@ -201,7 +215,18 @@ export function createWorkoutContributor(
   return {
     pluginId: 'workout-block',
     capabilities,
+    writableDomains: ['workout-log'],
     getDecisionItems,
     resolveItem,
+
+    // ── 跨插件写入（workout-log 域被写方）：executeActions 真实落写 + 写契约 ──
+    executeActions(_itemId: string, actions: WriteAction[]): ResolveResult {
+      // 宿主按域已把 workout-log 域动作分派到本模块；内部再做语义校验（真闸）
+      handleWorkoutActions(writeApi, actions);
+      return { success: true };
+    },
+    provideWriteContract(): DomainWriteContract {
+      return workoutLogContract(dataManager.getConfigSync());
+    },
   };
 }

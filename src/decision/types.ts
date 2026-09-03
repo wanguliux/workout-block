@@ -147,11 +147,50 @@ export interface DecisionOption {
   actions?: WriteAction[];
 }
 
-/** 跨域写入操作（P1 用；本插件暂不实现 P1，保留类型以便未来扩展）。 */
+// ── 域写契约（跨插件写入：KOS 宿主在路由前/写穿前校验，接口形态对齐 KOS-block / finance-block） ──
+
+/** 字段值的合法类型（FieldRule.type） */
+export type FieldRuleType = 'string' | 'number' | 'boolean' | 'date' | 'enum' | 'list';
+
+/** 字段规则：类型 / 必填 / 枚举词表 / 默认值 */
+export interface FieldRule {
+  type: FieldRuleType;
+  required?: boolean;
+  /** type='enum' 时的合法值词表 */
+  enum?: string[];
+  default?: unknown;
+}
+
+/** 一个写入操作（op id → 定义）的契约描述 */
+export interface WorkOp {
+  /** 目标文件：固定路径，或 'dynamic'（由 WriteAction.target 提供） */
+  target: string | 'dynamic';
+  /** 必填字段（缺失即拦截） */
+  requiredFields: string[];
+  /** 字段 schema：类型 / 必填 / 枚举 / 默认 */
+  fieldsSchema: Record<string, FieldRule>;
+  /** true = 只允许追加（写穿可自动放行的最低门槛，天然可逆） */
+  appendOnly?: boolean;
+  /** 可用执行轨道（跨插件写主路径用 local=本地执行） */
+  mode: 'local' | 'ai' | 'both';
+}
+
+/** 域写契约：本插件向外声明"能接受哪些跨域写入、字段长什么样" */
+export interface DomainWriteContract {
+  pluginId: string;
+  writableDomains: string[];
+  operations: Record<string, WorkOp>;
+}
+
+/** 写入动作（跨插件分派：宿主按 domain 路由到对应 contributor 的 executeActions） */
 export interface WriteAction {
+  /** 目标域（'workout-log' / 'schedule' / 'finance-ledger' / ...） */
   domain: string;
+  /** 域自定义操作（如 'log-workout' / 'update-log' / 'remove-log'） */
   operation: string;
+  /** 目标文件路径（如 CSV） */
   target: string;
+  /** 序列化后的写入数据 */
   data: unknown;
   executionMode?: 'local' | 'ai';
 }
@@ -195,9 +234,26 @@ export interface ContributorCapabilities {
 export interface DecisionContributor {
   pluginId: string;
   capabilities?: ContributorCapabilities;
+  /** 本 contributor 可写入的域列表（宿主据此做 domain → contributor 路由） */
+  writableDomains?: string[];
   getDecisionItems(): Promise<DecisionItem[]>;
   resolveItem(itemId: string, action: DecisionAction, modifiedData?: unknown): ResolveResult;
   openEditor?(itemId: string, payload: unknown): Promise<unknown | null>;
+  /**
+   * 可选：提取该决策项的完整 WriteAction 列表。宿主在 approve/modify 后调用，
+   * 获取所有需要执行的写入操作（含跨域分发）。未实现时宿主回退到 resolveItem。
+   */
+  prepareActions?(itemId: string, action: DecisionAction, modifiedData?: unknown): WriteAction[];
+  /**
+   * 执行分配给本 contributor 的 WriteAction 子集（跨插件写入）。宿主按 domain 分组后，
+   * 把属于本 contributor 域的 actions 传回执行。actions 中的 domain 一定匹配 writableDomains。
+   */
+  executeActions?(itemId: string, actions: WriteAction[]): ResolveResult;
+  /**
+   * 提供本 contributor 的域写契约（跨插件写入）。宿主在路由前/写穿前拉此契约做前置校验；
+   * 本插件在 executeActions 内还会做第二次语义校验（最终防线）。
+   */
+  provideWriteContract?(): DomainWriteContract;
 }
 
 /** 宿主暴露给贡献者的 API。 */
