@@ -91,25 +91,45 @@ export class CSVStore {
         const newContent = content.replace(/\s+$/, '') + '\n' + line + '\n';
         await this.app.vault.modify(file, newContent);
       }
-    } else {
-      try {
-        await this.app.vault.create(this.path, CSV_HEADER + '\n' + line + '\n');
-      } catch (e: unknown) {
-        if (String((e as Error)?.message ?? '').includes('File already exists')) {
-          const f = this.app.vault.getAbstractFileByPath(this.path);
-          if (f instanceof TFile) {
-            if (typeof this.app.vault.append === 'function') {
-              await this.app.vault.append(f, line + '\n');
-            } else {
-              const c = await this.app.vault.read(f);
-              await this.app.vault.modify(f, c.replace(/\s+$/, '') + '\n' + line + '\n');
-            }
-          }
-        } else {
-          throw e;
-        }
-      }
+      return;
     }
+    // 文件在 vault 缓存中解析不到（如目录含反斜杠、folder 未就绪、并发首建）：
+    // 先尝试创建；若「已存在」且缓存仍解析不到，绝不能静默丢写——必须兜底落到一个
+    // 与读取时能看到的那份文件一致的位置（adapter 直接读/写，Windows 对分隔符宽容）。
+    try {
+      await this.app.vault.create(this.path, CSV_HEADER + '\n' + line + '\n');
+    } catch (e: unknown) {
+      if (String((e as Error)?.message ?? '').includes('File already exists')) {
+        const existing = this.app.vault.getAbstractFileByPath(this.path);
+        if (existing instanceof TFile) {
+          if (typeof this.app.vault.append === 'function') {
+            await this.app.vault.append(existing, line + '\n');
+          } else {
+            const c = await this.app.vault.read(existing);
+            await this.app.vault.modify(existing, c.replace(/\s+$/, '') + '\n' + line + '\n');
+          }
+          return;
+        }
+      } else {
+        throw e;
+      }
+      // 文件确实存在但 vault 一直解析不到：用 adapter 兜底追加，保证本条记录真正落盘。
+      await this.appendViaAdapter(line);
+    }
+  }
+
+  // 绕过 vault 缓存、直接经 adapter 把数据行追加到 CSV（读侧已有 adapter.read 兜底，
+  // 这里是写侧的对称兜底）。优先 adapter.append（O(1)），否则读整文件再写回。
+  private async appendViaAdapter(line: string): Promise<void> {
+    if (typeof this.app.vault.adapter.append === 'function') {
+      await this.app.vault.adapter.append(this.path, line + '\n');
+      return;
+    }
+    const existing = await this.app.vault.adapter.read(this.path);
+    await this.app.vault.adapter.write(
+      this.path,
+      existing.replace(/\s+$/, '') + '\n' + line + '\n'
+    );
   }
 
   // 把一行记录转成 CSV 文本。实现收敛在纯模块 csvFormat（Papa.unparse + 规范列序），

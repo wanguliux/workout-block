@@ -191,14 +191,23 @@ export class DataManager {
     return this.selfWriting;
   }
 
+  // 统一目录分隔符：设置里可能以 Windows 反斜杠存入（如 ".block\workout"）。
+  // 若直接拼进路径会得到 ".block\workout/workout_logs.csv" 这种混用分隔符路径，
+  // 导致 vault 的 getAbstractFileByPath/vault.append 解析不到（返回 null），
+  // 写入静默失败——记录能显示（进了内存缓存）却落不进 CSV。这里归一到正斜杠，
+  // 保证读取与写入、监听匹配都指向同一个规范路径。空目录直接返回空串。
+  private static normalizeDir(dir: string): string {
+    return dir.replace(/\\/g, '/').replace(/\/+$/, '');
+  }
+
   // 记录 CSV 文件路径（供 main.ts 监听匹配）。
   getCsvPath(): string {
-    const dir = this.settings.csvDirectory || '';
+    const dir = DataManager.normalizeDir(this.settings.csvDirectory || '');
     return dir ? `${dir}/${CSV_FILENAME}` : CSV_FILENAME;
   }
   // 配置 JSON 文件路径（供 main.ts 监听匹配）。
   getConfigPath(): string {
-    const dir = this.settings.configDirectory || '';
+    const dir = DataManager.normalizeDir(this.settings.configDirectory || '');
     return dir ? `${dir}/${CONFIG_FILENAME}` : CONFIG_FILENAME;
   }
 
