@@ -12,6 +12,10 @@ import { t } from '../i18n';
 
 // 把秒数格式化成「时/分/秒」连写的文字，用于界面展示
 export function formatDuration(seconds: number): string {
+  // computed 派生值可能是小数秒（如配速 = 时长÷距离），统一四舍五入到整数秒再拆分；
+  // 录入型字段本来就是整数秒，取整对它们无影响
+  seconds = Math.round(seconds);
+
   // 非正数直接返回 "0秒"（或对应语言的秒）
   if (seconds <= 0) {
     return '0' + t('duration.second');
@@ -50,6 +54,8 @@ export function parseDuration(hours: number, minutes: number, seconds: number): 
 
 // 把秒数拆成 {hours, minutes, seconds} 对象，方便表单回填（例如编辑时把存储的秒拆开填进输入框）
 export function secondsToParts(seconds: number): { hours: number; minutes: number; seconds: number } {
+  // 与 formatDuration 同理：小数秒先取整，避免编辑弹窗回填出小数输入值
+  seconds = Math.round(seconds);
   return {
     hours: Math.floor(seconds / 3600),
     minutes: Math.floor((seconds % 3600) / 60),

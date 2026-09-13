@@ -2438,6 +2438,7 @@ function t(key, params) {
 
 // src/util/duration.ts
 function formatDuration(seconds) {
+  seconds = Math.round(seconds);
   if (seconds <= 0) {
     return "0" + t("duration.second");
   }
