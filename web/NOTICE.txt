@@ -1,0 +1,20 @@
+WORKOUT BLOCK · 网页版 — 第三方素材声明
+==========================================
+
+本网页内联了以下第三方素材，授权与署名要求如下；以本文件与仓库根
+THIRD-PARTY-NOTICES 内容一致为准。
+
+肌肉示意图
+----------
+原始作品 : Figma Muscle Atlas by Ryan Graves
+引用途径 : flutter-body-atlas (https://github.com/kit-g/flutter-body-atlas)
+授权协议 : Creative Commons Attribution 4.0 International (CC BY 4.0)
+           https://creativecommons.org/licenses/by/4.0/
+修改说明 : 通过 SVG 路径 id 过滤移除了头部区域。
+署名位置 : 应用内「肌肉热力图」页脚与「设置 → 关于」，以及本文件。
+声明     : 不暗示原作者对本作品存在背书。
+
+flutter-body-atlas 代码封装
+---------------------------
+BSD 3-Clause License, Copyright (c) 2026 Kit G.
+完整条款见仓库根 THIRD-PARTY-NOTICES。

@@ -82,6 +82,16 @@ export function getFieldUnit(field: FieldDef, unit: 'kg' | 'lb'): string {
   return '';
 }
 
+// 把数值规整成展示文字：四舍五入到最多 2 位小数并去掉尾零（19.3548… → "19.35"，
+// 60.50 → "60.5"，60.00 → "60"）；非有限值（NaN/Infinity）显示占位符。
+// 计算字段（如 距离/时长 得到的速度）与统计不同源：computeStat 出口已舍入，
+// 而计算字段由 materializeLog 直接注入原始浮点数，必须在本层收口，否则
+// 「19.354838709677419 公里/时」这类长小数会直达界面（插件端与网页端同源修复）。
+export function formatNumber(value: number): string {
+  if (!Number.isFinite(value)) return '—';
+  return String(Math.round(value * 100) / 100);
+}
+
 // 把字段值格式化成展示文字：时长用 formatDuration，质量用 formatMass（含单位换算），其余直接转字符串。
 export function renderFieldValue(value: unknown, field: FieldDef, unit: 'kg' | 'lb'): string {
   if (value === undefined || value === null) return '';
@@ -97,7 +107,7 @@ export function renderFieldValue(value: unknown, field: FieldDef, unit: 'kg' | '
       if (field.mass) {
         return formatMass(Number(value), unit);  // 质量按 kg/lb 换算并显示单位
       }
-      return String(value);
+      return formatNumber(Number(value));
     case 'computed':
       // 计算字段：value 已由调用方按 formula 注入。renderAs='duration' 按时长格式化
       // 并追加单位标签（如"5分46秒/公里"）；否则按纯数字 + 单位文字。
@@ -105,7 +115,7 @@ export function renderFieldValue(value: unknown, field: FieldDef, unit: 'kg' | '
         const s = formatDuration(Number(value));
         return field.unitLabel ? `${s}${field.unitLabel}` : s;
       }
-      return field.unitLabel ? `${value} ${field.unitLabel}` : String(value);
+      return field.unitLabel ? `${formatNumber(Number(value))} ${field.unitLabel}` : formatNumber(Number(value));
     case 'text':
       return String(value);
     default:
