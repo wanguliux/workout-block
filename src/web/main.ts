@@ -17,5 +17,11 @@ const store = new WebStore();
 const app = new WebApp(store);
 app.mount(root);
 
-// 冒烟测试 / 调试入口（见 scripts/web-smoke.mjs）
-(window as unknown as { __workoutWeb: unknown }).__workoutWeb = { app, store };
+// 调试 / 冒烟测试入口：只在本地或显式 ?debug=1 时暴露，别把 store 挂到每个访客页面上
+const isLocal =
+  typeof location !== 'undefined' &&
+  (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:');
+const debugRequested = typeof location !== 'undefined' && /(?:^|[?&])debug=1(?:&|$)/.test(location.search);
+if (isLocal || debugRequested) {
+  (window as unknown as { __workoutWeb: unknown }).__workoutWeb = { app, store };
+}

@@ -2922,8 +2922,14 @@ input[type='radio'] {
   transform: translate(-50%, 0);
 }
 
-/* ---------- 首次访问的演示数据引导条 ---------- */
-.demo-banner {
+/* 日志页「显示更多」 */
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+
+/* ---------- 首次访问的演示数据引导条 ---------- */.demo-banner {
   margin-top: 16px;
   display: flex;
   align-items: center;

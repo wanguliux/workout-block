@@ -14,6 +14,10 @@ let lang: 'zh' | 'en' = 'zh';
 
 export function setWebLang(next: 'zh' | 'en'): void {
   lang = next;
+  // 同步 <html lang>：屏幕阅读器与浏览器翻译功能都读它，切英文后不能仍是 zh-CN
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = next === 'en' ? 'en' : 'zh-CN';
+  }
 }
 
 export function getWebLang(): 'zh' | 'en' {

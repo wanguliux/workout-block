@@ -16,7 +16,7 @@ import {
   metricOfDay,
   planProgress,
   plansForDay,
-  setDoneDate,
+  isSetDone,
   todayPlan,
   volumeOfLogs,
 } from '../calc';
@@ -120,7 +120,7 @@ function todayPlanCard(ctx: UiContext, today: string): string {
     .map((item) => {
       const exercise = getExerciseNameById(config.exercises, item.exerciseId) || item.exerciseId;
       const done = item.sets.filter((set) =>
-        setDoneDate(plan, item.exerciseId, set.id)
+        isSetDone(plan, item.exerciseId, set.id)
       ).length;
       const pills = item.sets
         .map((set, index) =>
@@ -129,7 +129,7 @@ function todayPlanCard(ctx: UiContext, today: string): string {
             item.exerciseId,
             set.id,
             index,
-            !!setDoneDate(plan, item.exerciseId, set.id),
+            isSetDone(plan, item.exerciseId, set.id),
             `${exercise} · ${compactSetText(config, item.category, set.fields, unit)}`
           )
         )

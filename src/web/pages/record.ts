@@ -123,6 +123,18 @@ function durationTip(): string {
   );
 }
 
+/** 保证 state.record 的动作选择与当前训练类型一致。渲染前调用，不在渲染函数里改状态。 */
+export function ensureRecordSelection(ctx: UiContext): void {
+  const type = typeOf(ctx.store.config, state.record.typeId) ?? ctx.store.config.trainingTypes[0];
+  if (!type) return;
+  const exercises = exercisesOfType(ctx.store.config, type.id);
+  if (exercises.some((exercise) => exercise.id === state.record.exerciseId)) return;
+  state.record.exerciseId = exercises[0]?.id ?? '';
+  if (state.record.exerciseId && Object.keys(state.record.values).length === 0) {
+    state.record.values = initialValuesFor(ctx, state.record.exerciseId);
+  }
+}
+
 export function renderRecord(ctx: UiContext): string {
   const { config, settings } = ctx.store;
   const type = typeOf(config, state.record.typeId) ?? config.trainingTypes[0];
@@ -137,15 +149,8 @@ export function renderRecord(ctx: UiContext): string {
     );
   }
 
-  const exercises = exercisesOfType(config, type.id);
-  if (!exercises.some((exercise) => exercise.id === state.record.exerciseId)) {
-    state.record.exerciseId = exercises[0]?.id ?? '';
-    if (state.record.exerciseId && Object.keys(state.record.values).length === 0) {
-      state.record.values = initialValuesFor(ctx, state.record.exerciseId);
-    }
-  }
-
-  const recentExercises = sortLogsDesc(ctx.store.logs).slice(0, 30);  const suggestions: string[] = [];
+  const recentExercises = sortLogsDesc(ctx.store.logs).slice(0, 30);
+  const suggestions: string[] = [];
   for (const log of recentExercises) {
     if (!log.exerciseId || suggestions.includes(log.exerciseId)) continue;
     suggestions.push(log.exerciseId);

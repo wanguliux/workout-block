@@ -58,11 +58,13 @@ function lsGet(key: string): string | null {
     return null;
   }
 }
-function lsSet(key: string, value: string): void {
+function lsSet(key: string, value: string): boolean {
   try {
     window.localStorage.setItem(key, value);
+    return true;
   } catch {
-    /* 隐私模式/配额超限：降级为仅内存，不阻断当次使用 */
+    /* 隐私模式/配额超限：写入失败要能被上层看见，否则用户以为存下来了 */
+    return false;
   }
 }
 function lsRemove(key: string): void {
@@ -71,6 +73,11 @@ function lsRemove(key: string): void {
   } catch {
     /* 同上 */
   }
+}
+
+/** 判断 localStorage 变更事件是否属于本应用的键（多标签同步用）。 */
+export function isStoreKey(key: string | null): boolean {
+  return !!key && key.startsWith(LS_PREFIX);
 }
 
 function looksLikeConfig(value: unknown): value is WorkoutConfig {
@@ -99,6 +106,9 @@ export class WebStore {
   logs: LogRow[];
 
   private listeners = new Set<() => void>();
+  private persistErrorListeners = new Set<() => void>();
+  /** 是否处于「写盘失败」状态：只在失败首次出现时通知一次，避免每次输入都弹提示。 */
+  private persistFailed = false;
 
   constructor() {
     this.settings = this.loadSettings();
@@ -169,9 +179,34 @@ export class WebStore {
   }
 
   private persist(): void {
-    lsSet(KEY_CONFIG, JSON.stringify(this.config));
-    lsSet(KEY_SETTINGS, JSON.stringify(this.settings));
-    lsSet(KEY_LOGS, logsToCsv(this.logs));
+    // 三个键都尝试写（不要用 && 短路，否则前一个失败会让后面根本不写）
+    const okConfig = lsSet(KEY_CONFIG, JSON.stringify(this.config));
+    const okSettings = lsSet(KEY_SETTINGS, JSON.stringify(this.settings));
+    const okLogs = lsSet(KEY_LOGS, logsToCsv(this.logs));
+    const ok = okConfig && okSettings && okLogs;
+    if (!ok) {
+      if (!this.persistFailed) {
+        this.persistFailed = true;
+        for (const fn of this.persistErrorListeners) fn();
+      }
+      return;
+    }
+    this.persistFailed = false;
+  }
+
+  /** 写盘失败通知（配额满、隐私模式）：只在首次失败时触发一次，成功一次后重置。 */
+  onPersistError(fn: () => void): void {
+    this.persistErrorListeners.add(fn);
+  }
+
+  /** 从 localStorage 全量重载（多标签页同步用：别的标签改了数据，本标签跟上）。 */
+  reloadFromStorage(): void {
+    this.config = this.loadConfig();
+    this.settings = this.loadSettings();
+    this.logs = this.loadLogs();
+    setLocale(this.settings.language);
+    setWebLang(this.settings.language);
+    this.emit();
   }
 
   updateConfig(mutate: (config: WorkoutConfig) => void): void {

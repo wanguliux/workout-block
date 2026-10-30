@@ -81,7 +81,8 @@ export function confirmDialog(options: ConfirmOptions): void {
   showModal(
     modalFrame({
       title: options.title,
-      body: `<div class="muted" style="font-size:13px;line-height:1.7">${options.message}</div>`,
+      // message 里常带用户数据（计划名/统计名/字段 key），必须转义后再进 HTML。
+      body: `<div class="muted" style="font-size:13px;line-height:1.7">${esc(options.message)}</div>`,
       foot,
     })
   );

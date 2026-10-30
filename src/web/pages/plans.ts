@@ -13,7 +13,7 @@ import {
   planProgress,
   planRuleText,
   plansForDay,
-  setDoneDate,
+  isSetDone,
 } from '../calc';
 import { L, esc, todayStr } from '../format';
 
@@ -21,7 +21,7 @@ function setPills(ctx: UiContext, plan: TrainingPlanInstance, item: TrainingPlan
   const unit = ctx.store.settings.unit;
   return item.sets
     .map((set, index) => {
-      const done = !!setDoneDate(plan, item.exerciseId, set.id);
+      const done = isSetDone(plan, item.exerciseId, set.id);
       const tip = compactSetText(ctx.store.config, item.category, set.fields, unit);
       return (
         `<button class="set-pill${done ? ' done' : ''}" ` +

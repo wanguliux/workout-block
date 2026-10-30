@@ -104,7 +104,14 @@ export function openLogEditor(ctx: UiContext, logId: string): void {
       setError(parsed.error);
       return null;
     }
-    return { fields: parsed.fields };
+    // 字段从类型里被删掉后，历史记录里该字段的值仍要保留（与删除字段时的提示一致）：
+    // 表单覆盖「当前类型定义内的键」，其余孤儿键原样带回。
+    const known = new Set(type.fields.map((field) => field.key));
+    const orphans: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(log.fields ?? {})) {
+      if (!known.has(key)) orphans[key] = value;
+    }
+    return { fields: { ...orphans, ...parsed.fields } };
   };
 
   root.addEventListener(

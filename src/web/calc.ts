@@ -25,7 +25,7 @@ import {
   renderFieldValue,
 } from '../data/display';
 import { formatMass } from '../util/units';
-import { L, compactFields, dateOf, isoWeekday, spanSeconds, weekdayLabel } from './format';
+import { L, compactFields, dateOf, isoWeekday, spanSeconds, todayStr, weekdayLabel } from './format';
 import type { WebRange } from './store';
 
 export function sortLogsDesc(logs: LogRow[]): LogRow[] {
@@ -290,8 +290,33 @@ export function completionKey(exerciseId: string, setId: string): string {
   return `${exerciseId}#${setId}`;
 }
 
-export function isSetDone(plan: TrainingPlanInstance, exerciseId: string, setId: string): boolean {
-  return !!plan.completedSets?.[completionKey(exerciseId, setId)];
+/** 某天所在自然周的周一（ISO 周，周一为一周之始）。 */
+function weekStartOf(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const back = (dt.getDay() || 7) - 1;
+  dt.setDate(dt.getDate() - back);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 完成态是否算「在本周期内完成」。
+ * 周计划（timeRule=weekday）按自然周判定：上周勾掉的组，这周打开应重新变成未完成；
+ * 日期计划按当天判定。历史完成日期仍留在 completedSets 里，不做删除。
+ */
+function doneInPeriod(plan: TrainingPlanInstance, storedDate: string | undefined, day: string): boolean {
+  if (!storedDate) return false;
+  if (plan.timeRule?.type === 'date') return storedDate === day;
+  return weekStartOf(storedDate) === weekStartOf(day);
+}
+
+export function isSetDone(
+  plan: TrainingPlanInstance,
+  exerciseId: string,
+  setId: string,
+  day: string = todayStr()
+): boolean {
+  return doneInPeriod(plan, plan.completedSets?.[completionKey(exerciseId, setId)], day);
 }
 
 export function setDoneDate(plan: TrainingPlanInstance, exerciseId: string, setId: string): string | undefined {
@@ -302,7 +327,8 @@ export function setDoneDate(plan: TrainingPlanInstance, exerciseId: string, setI
 export function toggleSetDone(plan: TrainingPlanInstance, exerciseId: string, setId: string, day: string): boolean {
   const key = completionKey(exerciseId, setId);
   const map = { ...(plan.completedSets ?? {}) };
-  if (map[key]) {
+  // 只有「本周期内已完成」才取消；上个周期的旧记录视为未完成，直接覆盖成本次日期。
+  if (doneInPeriod(plan, map[key], day)) {
     delete map[key];
     plan.completedSets = map;
     return false;

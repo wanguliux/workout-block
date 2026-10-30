@@ -11,18 +11,18 @@
 import { LogRow } from '../data/types';
 import { applyMappingTier } from '../data/muscleMapping';
 import { getExerciseNameById } from '../data/display';
-import { WebStore } from './store';
+import { WebStore, isStoreKey } from './store';
 import { seedDemoLogs } from './demo';
 import { UiContext } from './context';
-import { PageId, state, initState, resetRecordState } from './state';
+import { PageId, state, initState, resetRecordState, HISTORY_PAGE } from './state';
 import type { AnalysisTab, CustomTab } from './state';
 import { icon } from './icons';
 import { L, esc, addDays, downloadText, nowLocalValue, readFileText, toStorageTime, todayStr } from './format';
 import { refreshComputedIn, parseDraft } from './fields';
-import { exercisesOfType, toggleSetDone, typeOf, logExerciseName } from './calc';
+import { exercisesOfType, toggleSetDone, typeOf, logExerciseName, sortLogsDesc } from './calc';
 import { toast, closeModal, acceptConfirm, confirmDialog } from './ui';
 import { renderDashboard } from './pages/dashboard';
-import { renderRecord, initialValuesFor, valuesFromLog } from './pages/record';
+import { renderRecord, ensureRecordSelection, initialValuesFor, valuesFromLog } from './pages/record';
 import { renderHistory, renderHistoryBody } from './pages/history';
 import { renderPlans } from './pages/plans';
 import { renderAnalysis } from './pages/analysis';
@@ -190,6 +190,19 @@ export class WebApp {
     document.addEventListener('change', (event) => this.onChange(event));
     document.addEventListener('keydown', (event) => this.onKeydown(event));
     window.addEventListener('hashchange', () => this.applyRoute());
+    // 写盘失败（配额满 / 隐私模式）：必须让用户知道这次改动没落盘
+    this.store.onPersistError(() => {
+      toast(
+        L(
+          '本地存储写入失败（可能已满或被禁用），本次改动只在内存里，刷新会丢失',
+          'Saving locally failed (storage full or blocked). This change is in memory only and will be lost on reload.'
+        )
+      );
+    });
+    // 多标签页同步：别的标签改了数据，本标签跟随重载
+    window.addEventListener('storage', (event) => {
+      if (isStoreKey(event.key)) this.store.reloadFromStorage();
+    });
     this.applyRoute();
   }
 
@@ -292,8 +305,9 @@ export class WebApp {
       '</div>' +
       `<nav class="mobile-nav">${navHTML(true)}</nav>` +
       '</div>' +
-      '<div id="modalRoot"></div>' +
-      '<div id="toast"></div>';
+      '<div id="modalRoot"></div>';
+    // 注意：#toast 不能放在外壳 HTML 里——外壳会被整段重渲染（改设置、存记录都会），
+    // 刚弹出的提示会被一起换掉。由 ui.toast() 自己在 <body> 上创建并复用。
 
     this.renderView();
   }
@@ -304,6 +318,7 @@ export class WebApp {
     const ctx = this.ctx;
     switch (state.page) {
       case 'record':
+        ensureRecordSelection(ctx);
         view.innerHTML = renderRecord(ctx);
         break;
       case 'history':
@@ -384,6 +399,9 @@ export class WebApp {
       el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       document.querySelectorAll('.settings-nav button').forEach((btn) => btn.classList.toggle('on', btn === scrollEl));
     }
+
+    // 兜底：点到搜索框以外的任何位置都收起建议面板
+    if (!target.closest('.topbar-search')) this.hideSearchPop();
   }
 
   private action(el: HTMLElement): void {
@@ -681,10 +699,15 @@ export class WebApp {
         });
         return;
       }
+      case 'history-more':
+        state.history.limit += HISTORY_PAGE;
+        this.renderView();
+        return;
       case 'search-jump': {
         state.history.search = el.dataset.q ?? '';
         state.history.range = 'all';
         state.history.typeId = '';
+        state.history.limit = HISTORY_PAGE;
         this.hideSearchPop();
         this.go('history');
         return;
@@ -745,6 +768,7 @@ export class WebApp {
     }
     if (target.matches('[data-history-search]')) {
       state.history.search = target.value;
+      state.history.limit = HISTORY_PAGE;
       this.refreshHistoryBody();
       return;
     }
@@ -762,10 +786,12 @@ export class WebApp {
     }
   }
 
-  /** 顶栏搜索的即时建议：动作与记录各取前几条，点选即跳日志页筛出结果。 */  private exerciseLabel(exerciseId: string | undefined): string {
+  /** 动作 id → 展示名（搜索建议用）。 */
+  private exerciseLabel(exerciseId: string | undefined): string {
     return getExerciseNameById(this.store.config.exercises, exerciseId) || '';
   }
 
+  /** 顶栏搜索的即时建议：动作与记录各取前几条，点选即跳日志页筛出结果。 */
   private refreshSearchPop(raw: string): void {
     const pop = document.getElementById('searchPop');
     if (!pop) return;
@@ -784,13 +810,13 @@ export class WebApp {
           `<button class="search-pop-item" data-action="search-jump" data-q="${esc(item.name)}">` +
           `${icon('dumbbell', 'ic-sm')}<b>${esc(item.name)}</b><span>${esc(L('动作', 'Exercise'))}</span></button>`
       );
-    const logs = this.store.logs
-      .filter((log) => {
+    const logs = sortLogsDesc(
+      this.store.logs.filter((log) => {
         const name = logExerciseName(this.store.config, log).toLowerCase();
         return name.includes(term) || (log.note ?? '').toLowerCase().includes(term) || (log.plan ?? '').toLowerCase().includes(term);
       })
-      .slice(-3)
-      .reverse()
+    )
+      .slice(0, 3)
       .map(
         (log) =>
           `<button class="search-pop-item" data-action="search-jump" data-q="${esc(
@@ -853,6 +879,7 @@ export class WebApp {
     }
     if (target.matches('[data-history-type]')) {
       state.history.typeId = target.value;
+      state.history.limit = HISTORY_PAGE;
       this.refreshHistoryBody();
       return;
     }
@@ -860,6 +887,7 @@ export class WebApp {
       const value = target.value;
       if (value === 'all' || value === '7d' || value === '30d' || value === '90d') {
         state.history.range = value;
+        state.history.limit = HISTORY_PAGE;
         this.refreshHistoryBody();
       }
       return;
@@ -894,6 +922,7 @@ export class WebApp {
       state.history.search = target.value.trim();
       state.history.range = 'all';
       state.history.typeId = '';
+      state.history.limit = HISTORY_PAGE;
       this.go('history');
     }
   }

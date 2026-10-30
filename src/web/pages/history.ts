@@ -42,8 +42,13 @@ export function historyResults(ctx: UiContext): HistoryResult {
   if (state.history.typeId) logs = logs.filter((log) => log.category === state.history.typeId);
   logs = logs.filter((log) => matchesSearch(ctx, log));
 
+  // count / days 报的是「筛选后全量」，rows 只渲染前 limit 条，避免几千行一次铺满 DOM
+  const total = logs.length;
+  const days = new Set(logs.map((log) => dateOf(log.timestamp))).size;
+  const visible = total > state.history.limit ? logs.slice(0, state.history.limit) : logs;
+
   const grouped = new Map<string, typeof logs>();
-  for (const log of logs) {
+  for (const log of visible) {
     const day = dateOf(log.timestamp);
     const list = grouped.get(day);
     if (list) list.push(log);
@@ -83,7 +88,7 @@ export function historyResults(ctx: UiContext): HistoryResult {
     })
     .join('');
 
-  return { rows, count: logs.length, days: grouped.size };
+  return { rows, count: total, days };
 }
 
 function filterOptions(ctx: UiContext): string {
@@ -138,6 +143,16 @@ export function renderHistory(ctx: UiContext): string {
     '<div class="table-wrap"><table class="data-table"><thead><tr>' +
     `<th>${esc(L('时间', 'Time'))}</th><th>${esc(L('类型', 'Type'))}</th><th>${esc(L('动作', 'Exercise'))}</th><th>${esc(L('数据', 'Values'))}</th><th>${esc(L('备注', 'Note'))}</th><th></th>` +
     `</tr></thead><tbody id="historyBody">${result.rows}</tbody></table></div>` +
+    (result.count > state.history.limit
+      ? '<div class="load-more">' +
+        `<button class="btn btn-outline" data-action="history-more">${icon('chevron')}${esc(
+          L(
+            `显示更多（还有 ${result.count - state.history.limit} 组）`,
+            `Show more (${result.count - state.history.limit} left)`
+          )
+        )}</button>` +
+        '</div>'
+      : '') +
     '</div>'
   );
 }

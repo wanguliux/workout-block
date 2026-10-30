@@ -20,9 +20,32 @@
   <meta name="twitter:description" content="训练类型、字段、衍生统计、肌肉热力图全部可自定义的训练记录工具。纯静态，数据只存本地浏览器。" />
   <meta name="twitter:image" content="og.png" />
   <link rel="stylesheet" href="bundle.css" />
+  <script>
+    // 首屏主题：在样式生效前先定好 data-theme，避免深色用户先闪一帧浅色。
+    (function () {
+      try {
+        var raw = localStorage.getItem('workout-block-web:v1:settings');
+        var theme = raw ? JSON.parse(raw).theme : null;
+        if (theme !== 'dark' && theme !== 'light') {
+          theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    })();
+  </script>
 </head>
 <body>
   <div id="app"></div>
+  <noscript>
+    <div style="max-width:520px;margin:80px auto;padding:24px;font:14px/1.8 -apple-system,'PingFang SC','Microsoft YaHei',sans-serif;color:#5f6069">
+      <h1 style="font-size:18px;color:#15161a">WorkOut Block 需要启用 JavaScript</h1>
+      <p>这是一个纯前端的训练记录工具，所有计算与数据存储都在你自己的浏览器里完成。
+         请在浏览器设置中允许本站运行 JavaScript，然后刷新页面。</p>
+      <p>WorkOut Block needs JavaScript. It runs entirely in your browser — no server, no account.</p>
+    </div>
+  </noscript>
   <script src="bundle.js"></script>
 </body>
 </html>

@@ -24,11 +24,21 @@ const NAMED_COLOR_MAP: Record<string, string> = {
   red: '#ef4444',
 };
 
+// 允许的两种颜色形态：严格十六进制，或纯字母的 CSS 命名色。
+// 两者都不含引号、分号、空格与括号，因此不可能闭合 style/fill 属性造成注入；
+// 其余任何字符串（含从第三方配置导入的脏值）一律回落到中性灰。
+const HEX_COLOR = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const NAMED_COLOR = /^[a-z]{3,20}$/i;
+const FALLBACK_COLOR = '#c9c7bf';
+
 // 把颜色规整为可写进 SVG fill / CSS background 的值：
-// 十六进制原样返回；命名色映射为对应 hex；未知值原样返回（由上层兜底）。
+// 十六进制原样返回；命名色映射为对应 hex；其余命名色原样放行；非法值回落中性灰。
 export function colorToCss(color: string): string {
-  if (color.startsWith('#')) return color;
-  return NAMED_COLOR_MAP[color] ?? color;
+  const raw = String(color ?? '').trim();
+  if (HEX_COLOR.test(raw)) return raw;
+  const key = raw.toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(NAMED_COLOR_MAP, key)) return NAMED_COLOR_MAP[key];
+  return NAMED_COLOR.test(raw) ? raw : FALLBACK_COLOR;
 }
 
 // 本地当天日期（YYYY-MM-DD），供「最近 N 天」范围计算使用。

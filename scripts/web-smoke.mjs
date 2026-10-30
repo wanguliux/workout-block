@@ -438,6 +438,55 @@ const finalRestore = store.importBackupJson(backup);
 goto('analysis', 'stats');
 check('最终恢复备份', finalRestore.ok === true && qsa('.stat-card').length === 3, `实际 ${qsa('.stat-card').length} 张`);
 
+// —— 13. 安全与周期口径回归 ——
+console.log('\n[13] 安全与周期口径');
+
+// 确认框里的用户数据必须转义（配置可从外部导入，不能当 HTML 执行）
+store.updateConfig((config) => {
+  config.plans = config.plans ?? [];
+  config.plans.push({
+    id: 'xss-plan',
+    name: '<img src=x onerror="window.__xss=1">',
+    timeRule: { type: 'weekday', weekdays: [1] },
+    createdAt: dateOffset(0),
+    items: [],
+  });
+});
+goto('plans');
+click('[data-action="delete-plan"][data-plan="xss-plan"]');
+const modalBody = qs('#modalRoot .modal-body');
+check('确认框不把计划名当 HTML 执行', !!modalBody && !modalBody.querySelector('img') && window.__xss !== 1);
+check('确认框按字面显示计划名', (modalBody?.textContent ?? '').includes('<img src=x'));
+click('[data-action="confirm-yes"]');
+
+// 配色脏值必须回落，不能闭合 style 属性注入事件处理器
+store.updateConfig((config) => {
+  config.statistics[0].heatmapScale = [{ max: 10, color: 'red" onmouseover="window.__xssColor=1' }];
+});
+goto('analysis', 'heatmap');
+const legendDot = qsa('.legend i')[0];
+check('非法配色回落到安全色', (legendDot?.getAttribute('style') ?? '') === 'background:#c9c7bf', legendDot?.getAttribute('style') ?? '');
+check('非法配色不产生事件属性', !legendDot?.hasAttribute('onmouseover'));
+
+// 周计划的完成态按自然周判定：上周勾的组，本周打开应重新是未完成
+const weekPlan = (store.config.plans ?? []).find((plan) => plan.items.some((item) => item.sets.length));
+const weekItem = weekPlan?.items.find((item) => item.sets.length);
+const weekSet = weekItem?.sets[0];
+if (weekPlan && weekItem && weekSet) {
+  const lastWeek = dateOffset(-8);
+  store.updateConfig((config) => {
+    const target = config.plans.find((plan) => plan.id === weekPlan.id);
+    target.completedSets = { [`${weekItem.exerciseId}#${weekSet.id}`]: lastWeek };
+  });
+  goto('plans');
+  const pill = qs(
+    `[data-action="toggle-plan-set"][data-plan="${weekPlan.id}"][data-exercise="${weekItem.exerciseId}"][data-set="${weekSet.id}"]`
+  );
+  check('上周完成的组本周显示为未完成', !!pill && !pill.classList.contains('done'));
+  const kept = store.config.plans.find((plan) => plan.id === weekPlan.id).completedSets;
+  check('历史完成日期仍保留', !!kept?.[`${weekItem.exerciseId}#${weekSet.id}`]);
+}
+
 // 汇总
 console.log(`\n${failures === 0 ? '✅ 全部通过' : `❌ ${failures} 项失败`}\n`);
 process.exit(failures === 0 ? 0 : 1);

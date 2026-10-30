@@ -28,7 +28,12 @@ export interface HistoryUiState {
   search: string;
   typeId: string;
   range: WebRange;
+  /** 当前已渲染的记录条数上限（「显示更多」每次 +HISTORY_PAGE，筛选条件变化时重置）。 */
+  limit: number;
 }
+
+/** 日志页每次加载的条数：记录多了也不至于一次渲染几千行卡住。 */
+export const HISTORY_PAGE = 100;
 
 export interface AnalysisUiState {
   tab: AnalysisTab;
@@ -83,6 +88,7 @@ export const state: AppState = {
     search: '',
     typeId: '',
     range: 'all',
+    limit: HISTORY_PAGE,
   },
 };
 
