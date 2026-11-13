@@ -2,6 +2,9 @@
  * main.ts —— 网页版入口。
  * 装配 Store（localStorage 数据层）→ App（外壳 + 五视图）→ 挂载到 #app。
  * 同时挂载 window.__workoutWeb 供冒烟测试与调试使用。
+ *
+ * ⚠️ 网页版已冻结（2026-11-13 起暂停维护，见 web/PAUSED.md）：插件侧新功能不再同步到 src/web。
+ * 允许的改动只有「修崩」与「共享模块签名变更带来的类型修补」，补功能前先问用户。
  */
 
 import './styles.css';

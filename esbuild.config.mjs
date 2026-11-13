@@ -99,8 +99,17 @@ const webContext = await esbuild.context({
   },
 });
 
+/*
+ * ⚠️ 网页版已冻结（2026-11-13 起暂停维护，见 web/PAUSED.md）。
+ * --web 仍可构建（产物留档 / 崩溃修复用），但不再接收功能改动，插件侧新功能无需同步过来。
+ * 这里只打印告警、不阻断构建：冻结不是禁用，遇到必要修复仍然要能出包。
+ */
+const WEB_FROZEN_NOTICE =
+  '[FROZEN] 网页版自 2026-11-13 起暂停维护（见 web/PAUSED.md）——插件新功能无需同步到网页版。';
+
 // --web：只构建网页版（投稿演示/静态托管用）
 if (process.argv.includes('--web')) {
+  console.warn(WEB_FROZEN_NOTICE);
   await webContext.rebuild();
   process.exit(0);
 }
