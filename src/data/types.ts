@@ -55,6 +55,17 @@ export interface Muscle {
   heatmapMetric?: string;        // 引用 StatDef.id；空=跟随默认
   heatmapRange?: string;         // 7d / 30d / 90d / all / 日期区间；空=跟随默认
   heatmapLevels?: HeatmapLevel[]; // 该肌 4 色分档（蓝/绿/橙/红）阈值；空=跟随所选指标的默认分档（逐肌可配）
+  recovery?: RecoveryTuning;     // 该肌的恢复曲线微调；空=跟随全局默认
+}
+
+// 恢复曲线的逐肌微调（与热力图设置并列，同在「编辑肌肉」弹窗里）。
+// 每个字段留空 = 跟随全局默认（三级回退：肌肉 → 全局 → 内置默认），与 heatmapMetric/heatmapLevels 同构。
+export interface RecoveryTuning {
+  fatiguePerSet?: number;   // 每组带来多少疲劳点（留空跟随默认）
+  fatigueTau?: number;      // 疲劳消退时间常数（天）
+  fitnessPerSet?: number;   // 每组留下多少适应点
+  fitnessTau?: number;      // 适应消退时间常数（天）
+  levels?: HeatmapLevel[];  // 恢复色标分档（仅当热力图指标选「恢复状态」时使用）
 }
 
 // 训练项与肌肉的关联：一个动作练到哪些肌肉，以及是主练还是辅练。

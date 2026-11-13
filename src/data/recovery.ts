@@ -1,4 +1,4 @@
-import { Exercise, LogRow, Muscle, WorkoutConfig } from './types';
+import { Exercise, LogRow, Muscle, RecoveryTuning, WorkoutConfig } from './types';
 import { DEFAULT_DOSE_WEIGHTS, DoseWeights, roleWeight } from './muscleStats';
 import { FITNESS_GROUPS, SVG_MUSCLE_CATALOG } from './svgMuscleCatalog';
 
@@ -201,6 +201,39 @@ export function recoverySummary(
   }
 
   return { state, etaDays, peak, hasData };
+}
+
+/**
+ * 逐肌微调合并：肌肉级字段优先，缺省项回落到全局默认。
+ * 形态与热力图的三级回退（肌肉 → 全局 → 内置）一致，只是这里没有代码块中间层。
+ */
+export function mergeRecoveryParams(base: RecoveryParams, tuning?: RecoveryTuning): RecoveryParams {
+  if (!tuning) return base;
+  const pick = (v: number | undefined, fallback: number): number =>
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : fallback;
+  return {
+    baseline: base.baseline,
+    fatiguePerSet: pick(tuning.fatiguePerSet, base.fatiguePerSet),
+    fatigueTau: pick(tuning.fatigueTau, base.fatigueTau),
+    fitnessPerSet: pick(tuning.fitnessPerSet, base.fitnessPerSet),
+    fitnessTau: pick(tuning.fitnessTau, base.fitnessTau),
+  };
+}
+
+/**
+ * 求某个曲线主体（一块肌肉 / 一个肌群）实际生效的参数。
+ * - 单块肌肉：用它自己 `recovery` 里的覆盖值，缺项回落全局；
+ * - 肌群（多块肌肉）：**一律用全局参数**——多块肌肉各有各的 tau 时，合并成一条曲线只能取其一，
+ *   取谁的都说不清，不如统一用全局，并在 UI 说明「肌群曲线不读逐肌微调」。
+ */
+export function paramsForSubject(
+  config: WorkoutConfig,
+  muscleIds: string[],
+  base: RecoveryParams = DEFAULT_RECOVERY_PARAMS
+): RecoveryParams {
+  if (muscleIds.length !== 1) return base;
+  const muscle = config.muscles.find((m) => m.id === muscleIds[0]);
+  return mergeRecoveryParams(base, muscle?.recovery);
 }
 
 /**
