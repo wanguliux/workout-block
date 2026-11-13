@@ -176,8 +176,12 @@ async function findSourceNoteFile(env: CliEnv, basename: string): Promise<string
 }
 
 async function planAdd(env: CliEnv, args: ParsedArgs): Promise<void> {
-  const name = requireOption(args, 'name', 'workout-cli plan add --name <计划名> [--date YYYY-MM-DD | --weekdays 1,3,5] [--source-note <笔记名> | --items-json JSON]');
-  const timeRule = buildTimeRule(args.options['date'], args.options['weekdays']);
+  const name = requireOption(
+    args,
+    'name',
+    'workout-cli plan add --name <计划名> [--date YYYY-MM-DD | --weekdays 1,3,5 | --cycle-days N [--date 起始日]] [--source-note <笔记名> | --items-json JSON]'
+  );
+  const timeRule = buildTimeRule(args.options['date'], args.options['weekdays'], args.options['cycle-days']);
 
   let items;
   let sourceNote: string | undefined;
@@ -208,11 +212,19 @@ async function planAdd(env: CliEnv, args: ParsedArgs): Promise<void> {
 }
 
 async function planUpdate(env: CliEnv, args: ParsedArgs): Promise<void> {
-  const planRef = requireOption(args, 'plan', 'workout-cli plan update --plan <名称或id> [--new-name ...] [--date ... | --weekdays ...] [--items-json ...]');
+  const planRef = requireOption(
+    args,
+    'plan',
+    'workout-cli plan update --plan <名称或id> [--new-name ...] [--date ... | --weekdays ... | --cycle-days N] [--items-json ...]'
+  );
   const patch: Parameters<typeof applyPlanUpdate>[1] = { plan: planRef };
   if (args.options['new-name']) patch.newName = args.options['new-name'];
-  if (args.options['date'] !== undefined || args.options['weekdays'] !== undefined) {
-    patch.timeRule = buildTimeRule(args.options['date'], args.options['weekdays']);
+  if (
+    args.options['date'] !== undefined ||
+    args.options['weekdays'] !== undefined ||
+    args.options['cycle-days'] !== undefined
+  ) {
+    patch.timeRule = buildTimeRule(args.options['date'], args.options['weekdays'], args.options['cycle-days']);
   }
   if (args.options['items-json']) {
     patch.items = buildPlanItems(env.config, parseItemsJson(args.options['items-json'], env.config));

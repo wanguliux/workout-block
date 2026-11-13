@@ -25,7 +25,8 @@ import {
   renderFieldValue,
 } from '../data/display';
 import { formatMass } from '../util/units';
-import { L, compactFields, dateOf, isoWeekday, spanSeconds, todayStr, weekdayLabel } from './format';
+import { cycleLength, planMatchesDay as ruleMatchesDay, planPeriodKey } from '../data/planSchedule';
+import { L, compactFields, dateOf, spanSeconds, todayStr, weekdayLabel } from './format';
 import type { WebRange } from './store';
 
 export function sortLogsDesc(logs: LogRow[]): LogRow[] {
@@ -268,8 +269,7 @@ export function bestStreak(logs: LogRow[]): number {
 
 // —— 训练计划 ——
 export function planMatchesDay(plan: TrainingPlanInstance, day: string): boolean {
-  if (plan.timeRule.type === 'date') return plan.timeRule.date === day;
-  return (plan.timeRule.weekdays ?? []).includes(isoWeekday(day));
+  return ruleMatchesDay(plan.timeRule, day);
 }
 
 export function plansForDay(config: WorkoutConfig, day: string): TrainingPlanInstance[] {
@@ -279,6 +279,14 @@ export function plansForDay(config: WorkoutConfig, day: string): TrainingPlanIns
 export function planRuleText(plan: TrainingPlanInstance): string {
   if (plan.timeRule.type === 'date') {
     return plan.timeRule.date || L('未设置时间', 'No schedule');
+  }
+  if (plan.timeRule.type === 'cycle') {
+    if (!plan.timeRule.cycleStart) return L('未设置时间', 'No schedule');
+    const n = cycleLength(plan.timeRule);
+    return L(
+      `每 ${n} 天 · 自 ${plan.timeRule.cycleStart} 起`,
+      `${n}-day cycle from ${plan.timeRule.cycleStart}`
+    );
   }
   const days = [...new Set(plan.timeRule.weekdays ?? [])].sort((a, b) => a - b);
   if (days.length === 0) return L('未设置时间', 'No schedule');
@@ -290,24 +298,14 @@ export function completionKey(exerciseId: string, setId: string): string {
   return `${exerciseId}#${setId}`;
 }
 
-/** 某天所在自然周的周一（ISO 周，周一为一周之始）。 */
-function weekStartOf(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  const back = (dt.getDay() || 7) - 1;
-  dt.setDate(dt.getDate() - back);
-  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-}
-
 /**
  * 完成态是否算「在本周期内完成」。
- * 周计划（timeRule=weekday）按自然周判定：上周勾掉的组，这周打开应重新变成未完成；
- * 日期计划按当天判定。历史完成日期仍留在 completedSets 里，不做删除。
+ * 周期口径统一由 planPeriodKey 给出：每周=自然周（上周勾掉的组这周应重新未完成）、
+ * 指定日期=当天、循环=所在循环区间。历史完成日期仍留在 completedSets 里，不做删除。
  */
 function doneInPeriod(plan: TrainingPlanInstance, storedDate: string | undefined, day: string): boolean {
-  if (!storedDate) return false;
-  if (plan.timeRule?.type === 'date') return storedDate === day;
-  return weekStartOf(storedDate) === weekStartOf(day);
+  if (!storedDate || !plan.timeRule) return false;
+  return planPeriodKey(plan.timeRule, storedDate) === planPeriodKey(plan.timeRule, day);
 }
 
 export function isSetDone(

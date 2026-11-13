@@ -1,5 +1,6 @@
 import { PlanItem, TimeRule, TrainingPlanInstance, WorkoutConfig } from '../data/types';
 import { generateId } from '../util/id';
+import { normalizeTimeRule } from '../data/planSchedule';
 import { assertDate, todayStr } from './core';
 import { CliError } from './errors';
 
@@ -59,9 +60,16 @@ export function buildPlanItems(config: WorkoutConfig, inputs: PlanItemInput[]): 
   });
 }
 
-/** 构造时间规则：--date 与 --weekdays 二选一。 */
-export function buildTimeRule(date?: string, weekdays?: string): TimeRule {
-  if (date && weekdays) throw new CliError('--date 与 --weekdays 只能二选一');
+/** 构造时间规则：--date / --weekdays / --cycle-days 三选一（--date 可与 --cycle-days 合用作循环起始日）。 */
+export function buildTimeRule(date?: string, weekdays?: string, cycleDays?: string): TimeRule {
+  if (weekdays && (date || cycleDays)) throw new CliError('--weekdays 与 --date / --cycle-days 只能二选一');
+  if (cycleDays) {
+    const n = parseInt(cycleDays.trim(), 10);
+    if (!Number.isInteger(n) || n < 1) {
+      throw new CliError(`--cycle-days 需要不小于 1 的整数（每几天练一次），收到 "${cycleDays}"`);
+    }
+    return { type: 'cycle', cycleDays: n, cycleStart: date ? assertDate(date) : todayStr() };
+  }
   if (weekdays) {
     const days = weekdays.split(',').map((x) => parseInt(x.trim(), 10));
     if (days.some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
@@ -91,10 +99,7 @@ export function buildPlan(config: WorkoutConfig, input: PlanBuildInput): Trainin
   assertPlanNameFree(config, name);
   const enabled = input.items.filter((i) => i.enabled);
   if (enabled.length === 0) throw new CliError('计划至少需要一个启用的训练项');
-  const timeRule: TimeRule = { ...input.timeRule };
-  if (timeRule.type === 'weekday' && (!timeRule.weekdays || timeRule.weekdays.length === 0)) {
-    timeRule.weekdays = [1]; // 与 NewPlanModal.save 一致的空选回退
-  }
+  const timeRule = normalizeTimeRule({ ...input.timeRule }, todayStr());
   return {
     id: generateId(),
     name,

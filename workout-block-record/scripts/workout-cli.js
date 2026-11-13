@@ -1603,9 +1603,14 @@ var zh = {
       time: "\u8BA1\u5212\u65F6\u95F4",
       timeDate: "\u6307\u5B9A\u65E5\u671F",
       timeWeek: "\u6BCF\u5468",
+      timeCycle: "\u5FAA\u73AF",
       date: "\u65E5\u671F",
       weekdayHint: "\u6BCF\u5468 {days}",
       weekdayNone: "\u672A\u9009\u62E9\u661F\u671F",
+      cycleDays: "\u5FAA\u73AF\u5468\u671F\uFF08\u5929\uFF09",
+      cycleStart: "\u5FAA\u73AF\u8D77\u59CB\u65E5\u671F",
+      cycleHint: "\u6BCF {n} \u5929 \xB7 \u81EA {date} \u8D77",
+      cycleInvalid: "\u5FAA\u73AF\u5468\u671F\u9700\u4E3A\u4E0D\u5C0F\u4E8E 1 \u7684\u6574\u6570",
       selectPlan: "\u9009\u62E9\u8BAD\u7EC3\u65B9\u6848",
       noScheme: "\uFF08\u624B\u52A8\u6DFB\u52A0 / \u4E0D\u5173\u8054\u65B9\u6848\uFF09",
       selected: "\u5DF2\u9009 {x} / \u5171 {y}",
@@ -2094,9 +2099,14 @@ var en = {
       time: "Plan schedule",
       timeDate: "On a date",
       timeWeek: "Weekly",
+      timeCycle: "Cycle",
       date: "Date",
       weekdayHint: "Weekly on {days}",
       weekdayNone: "No weekday selected",
+      cycleDays: "Cycle length (days)",
+      cycleStart: "Cycle start",
+      cycleHint: "{n}-day cycle from {date}",
+      cycleInvalid: "Cycle length must be an integer of at least 1",
       selectPlan: "Training scheme",
       noScheme: "(Add manually / no scheme)",
       selected: "Selected {x} / {y}",
@@ -2479,6 +2489,50 @@ function parseMass(value, unit) {
   return numValue;
 }
 
+// src/data/planSchedule.ts
+function isoWeekdayOf(day) {
+  const [y, m, d] = day.split("-").map(Number);
+  const dow = new Date(y, m - 1, d).getDay();
+  return dow === 0 ? 7 : dow;
+}
+function dayDiff(a, b) {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 864e5);
+}
+function cycleLength(rule) {
+  const n = Math.trunc(Number(rule.cycleDays));
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+function planMatchesDay(rule, day) {
+  switch (rule.type) {
+    case "date":
+      return (rule.date ?? "") === day;
+    case "weekday":
+      return (rule.weekdays ?? []).includes(isoWeekdayOf(day));
+    case "cycle": {
+      if (!rule.cycleStart)
+        return false;
+      const diff = dayDiff(rule.cycleStart, day);
+      return diff >= 0 && diff % cycleLength(rule) === 0;
+    }
+    default:
+      return false;
+  }
+}
+function normalizeTimeRule(rule, today) {
+  if (rule.type === "weekday") {
+    const days = Array.from(
+      new Set((rule.weekdays ?? []).filter((d) => Number.isInteger(d) && d >= 1 && d <= 7))
+    ).sort((a, b) => a - b);
+    return { type: "weekday", weekdays: days.length ? days : [1] };
+  }
+  if (rule.type === "cycle") {
+    return { type: "cycle", cycleDays: cycleLength(rule), cycleStart: rule.cycleStart || today };
+  }
+  return { type: "date", date: rule.date || today };
+}
+
 // src/data/display.ts
 var DEFAULT_MUSCLE_NAME_KEYS = {
   chest: "muscle.chest",
@@ -2529,6 +2583,11 @@ function getMuscleName(muscle) {
 function getFieldLabel(field) {
   return field.labelKey ? t(field.labelKey) : field.label || field.key;
 }
+function formatNumber(value) {
+  if (!Number.isFinite(value))
+    return "\u2014";
+  return String(Math.round(value * 100) / 100);
+}
 function renderFieldValue(value, field, unit) {
   if (value === void 0 || value === null)
     return "";
@@ -2541,13 +2600,13 @@ function renderFieldValue(value, field, unit) {
       if (field.mass) {
         return formatMass(Number(value), unit);
       }
-      return String(value);
+      return formatNumber(Number(value));
     case "computed":
       if (field.renderAs === "duration") {
         const s = formatDuration(Number(value));
         return field.unitLabel ? `${s}${field.unitLabel}` : s;
       }
-      return field.unitLabel ? `${value} ${field.unitLabel}` : String(value);
+      return field.unitLabel ? `${formatNumber(Number(value))} ${field.unitLabel}` : formatNumber(Number(value));
     case "text":
       return String(value);
     default:
@@ -2565,6 +2624,11 @@ function formatTimeRule(rule) {
     if (!rule.date)
       return "";
     return rule.date;
+  }
+  if (rule.type === "cycle") {
+    if (!rule.cycleStart)
+      return t("modal.newPlan.weekdayNone");
+    return t("modal.newPlan.cycleHint", { n: String(cycleLength(rule)), date: rule.cycleStart });
   }
   const labels = ["\u4E00", "\u4E8C", "\u4E09", "\u56DB", "\u4E94", "\u516D", "\u65E5"];
   const days = (rule.weekdays ?? []).slice().sort((a, b) => a - b).map((d) => d >= 1 && d <= 7 ? labels[d - 1] : String(d));
@@ -3364,7 +3428,7 @@ var CSV_HEADER = "id,timestamp,exerciseId,category,fields,note,plan,deleted";
 var CSV_COLUMNS = CSV_HEADER.split(",");
 function parseCsvContent(content) {
   try {
-    const normalized = content.replace(/\r\n/g, "\n");
+    const normalized = content.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
     const result = import_papaparse.default.parse(normalized, {
       header: true,
       skipEmptyLines: true
@@ -5357,9 +5421,16 @@ function buildPlanItems(config, inputs) {
     };
   });
 }
-function buildTimeRule(date, weekdays) {
-  if (date && weekdays)
-    throw new CliError("--date \u4E0E --weekdays \u53EA\u80FD\u4E8C\u9009\u4E00");
+function buildTimeRule(date, weekdays, cycleDays) {
+  if (weekdays && (date || cycleDays))
+    throw new CliError("--weekdays \u4E0E --date / --cycle-days \u53EA\u80FD\u4E8C\u9009\u4E00");
+  if (cycleDays) {
+    const n = parseInt(cycleDays.trim(), 10);
+    if (!Number.isInteger(n) || n < 1) {
+      throw new CliError(`--cycle-days \u9700\u8981\u4E0D\u5C0F\u4E8E 1 \u7684\u6574\u6570\uFF08\u6BCF\u51E0\u5929\u7EC3\u4E00\u6B21\uFF09\uFF0C\u6536\u5230 "${cycleDays}"`);
+    }
+    return { type: "cycle", cycleDays: n, cycleStart: date ? assertDate(date) : todayStr2() };
+  }
   if (weekdays) {
     const days = weekdays.split(",").map((x) => parseInt(x.trim(), 10));
     if (days.some((d) => !Number.isInteger(d) || d < 1 || d > 7)) {
@@ -5382,10 +5453,7 @@ function buildPlan(config, input) {
   const enabled = input.items.filter((i) => i.enabled);
   if (enabled.length === 0)
     throw new CliError("\u8BA1\u5212\u81F3\u5C11\u9700\u8981\u4E00\u4E2A\u542F\u7528\u7684\u8BAD\u7EC3\u9879");
-  const timeRule = { ...input.timeRule };
-  if (timeRule.type === "weekday" && (!timeRule.weekdays || timeRule.weekdays.length === 0)) {
-    timeRule.weekdays = [1];
-  }
+  const timeRule = normalizeTimeRule({ ...input.timeRule }, todayStr2());
   return {
     id: generateId(),
     name,
@@ -5609,8 +5677,12 @@ async function findSourceNoteFile(env, basename3) {
   return hits[0];
 }
 async function planAdd(env, args) {
-  const name = requireOption(args, "name", "workout-cli plan add --name <\u8BA1\u5212\u540D> [--date YYYY-MM-DD | --weekdays 1,3,5] [--source-note <\u7B14\u8BB0\u540D> | --items-json JSON]");
-  const timeRule = buildTimeRule(args.options["date"], args.options["weekdays"]);
+  const name = requireOption(
+    args,
+    "name",
+    "workout-cli plan add --name <\u8BA1\u5212\u540D> [--date YYYY-MM-DD | --weekdays 1,3,5 | --cycle-days N [--date \u8D77\u59CB\u65E5]] [--source-note <\u7B14\u8BB0\u540D> | --items-json JSON]"
+  );
+  const timeRule = buildTimeRule(args.options["date"], args.options["weekdays"], args.options["cycle-days"]);
   let items;
   let sourceNote;
   if (args.options["items-json"]) {
@@ -5639,12 +5711,16 @@ async function planAdd(env, args) {
   console.log(`\u5DF2\u521B\u5EFA\u8BA1\u5212\uFF1A${plan.name}\uFF08id=${plan.id}\uFF0C${plan.items.length} \u4E2A\u8BAD\u7EC3\u9879\uFF0C\u65F6\u95F4 ${formatTimeRule(plan.timeRule)}${sourceNote ? `\uFF0C\u6765\u6E90 ${sourceNote}` : ""}\uFF09`);
 }
 async function planUpdate(env, args) {
-  const planRef = requireOption(args, "plan", "workout-cli plan update --plan <\u540D\u79F0\u6216id> [--new-name ...] [--date ... | --weekdays ...] [--items-json ...]");
+  const planRef = requireOption(
+    args,
+    "plan",
+    "workout-cli plan update --plan <\u540D\u79F0\u6216id> [--new-name ...] [--date ... | --weekdays ... | --cycle-days N] [--items-json ...]"
+  );
   const patch = { plan: planRef };
   if (args.options["new-name"])
     patch.newName = args.options["new-name"];
-  if (args.options["date"] !== void 0 || args.options["weekdays"] !== void 0) {
-    patch.timeRule = buildTimeRule(args.options["date"], args.options["weekdays"]);
+  if (args.options["date"] !== void 0 || args.options["weekdays"] !== void 0 || args.options["cycle-days"] !== void 0) {
+    patch.timeRule = buildTimeRule(args.options["date"], args.options["weekdays"], args.options["cycle-days"]);
   }
   if (args.options["items-json"]) {
     patch.items = buildPlanItems(env.config, parseItemsJson(args.options["items-json"], env.config));
@@ -6145,9 +6221,7 @@ function getCountStat() {
   };
 }
 function isPlanScheduledOn(plan, dateStr) {
-  if (plan.timeRule.type === "date")
-    return (plan.timeRule.date ?? "") === dateStr;
-  return (plan.timeRule.weekdays ?? []).includes(isoWeekday(dateStr));
+  return planMatchesDay(plan.timeRule, dateStr);
 }
 function countPeriodPending(plan, from, to, completedSets) {
   const enabled = plan.items.filter((i) => i.enabled);

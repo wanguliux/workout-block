@@ -3,6 +3,7 @@ import type { LogRow, StatDef, TrainingPlanInstance, WorkoutConfig } from '../da
 import { computeStat } from '../data/statExpr';
 import { buildExerciseMuscleMap, computeMuscleValue, computeMuscleRestDays } from '../data/muscleStats';
 import { getExerciseNameById, getTrainingTypeName } from '../data/display';
+import { planMatchesDay } from '../data/planSchedule';
 
 /*
  * queryHandler.ts —— P0 查询执行的唯一真相源（纯函数，接收预加载数据）。
@@ -172,10 +173,9 @@ function getCountStat(): StatDef {
 
 // ===== 计划调度助手 =====
 
-/** 某计划在指定日期是否排期（timeRule：date=指定日期；weekday=周几包含）。 */
+/** 某计划在指定日期是否排期（规则判定统一走 planSchedule，三端口径一致）。 */
 export function isPlanScheduledOn(plan: TrainingPlanInstance, dateStr: string): boolean {
-  if (plan.timeRule.type === 'date') return (plan.timeRule.date ?? '') === dateStr;
-  return (plan.timeRule.weekdays ?? []).includes(isoWeekday(dateStr));
+  return planMatchesDay(plan.timeRule, dateStr);
 }
 
 /**

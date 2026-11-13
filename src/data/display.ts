@@ -2,6 +2,7 @@ import { t, getAllTranslations } from '../i18n';
 import { Exercise, FieldDef, LogRow, Muscle, TimeRule, TrainingType, WorkoutConfig } from './types';
 import { formatDuration } from '../util/duration';
 import { formatMass } from '../util/units';
+import { cycleLength } from './planSchedule';
 
 /*
  * display.ts —— "显示名解析"工具集。
@@ -131,12 +132,16 @@ export function getExerciseNameById(exercises: Exercise[], id?: string): string 
 }
 
 // 把计划时间规则渲染成可读文字：指定日期直接返回日期；每周模式按 ISO 周几
-// （周一=1 … 周日=7）拼成「每周 一、三、五」这样的提示。供「新增训练计划」弹窗
-// 与 workout-plan 完成面板复用，避免各模块各自拼装造成表述不一致。
+// （周一=1 … 周日=7）拼成「每周 一、三、五」；循环模式拼成「每 3 天 · 自 2026-11-13 起」。
+// 供「新增训练计划」弹窗、计划管理、workout-plan 完成面板复用，避免各模块各自拼装造成表述不一致。
 export function formatTimeRule(rule: TimeRule): string {
   if (rule.type === 'date') {
     if (!rule.date) return '';
     return rule.date;
+  }
+  if (rule.type === 'cycle') {
+    if (!rule.cycleStart) return t('modal.newPlan.weekdayNone');
+    return t('modal.newPlan.cycleHint', { n: String(cycleLength(rule)), date: rule.cycleStart });
   }
   const labels = ['一', '二', '三', '四', '五', '六', '日']; // ISO 周一=1 … 周日=7
   const days = (rule.weekdays ?? [])

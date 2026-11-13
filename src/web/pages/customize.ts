@@ -9,7 +9,7 @@ import { icon } from '../icons';
 import { UiContext } from '../context';
 import { state } from '../state';
 import type { CustomTab } from '../state';
-import { statAssocText, statFormulaText, typeName } from '../calc';
+import { planRuleText, statAssocText, statFormulaText, typeName } from '../calc';
 import { L, esc } from '../format';
 import { DEFAULT_HEATMAP_SCALE, colorToCss } from '../../data/heatmapDefaults';
 
@@ -283,11 +283,7 @@ function plansTab(ctx: UiContext): string {
               '<div class="mini-item">' +
               `<b>${esc(plan.name)}</b>` +
               `<span class="faint">${esc(plan.items.filter((item) => item.enabled).length)} ${esc(L('个动作', 'exercises'))}</span>` +
-              `<span class="val faint">${esc(
-                plan.timeRule.type === 'date'
-                  ? plan.timeRule.date ?? ''
-                  : L('每周', 'Weekly') + ' ' + (plan.timeRule.weekdays ?? []).join('/')
-              )}</span>` +
+              `<span class="val faint">${esc(planRuleText(plan))}</span>` +
               `<button class="mini-btn" data-action="edit-plan" data-plan="${esc(plan.id)}">${icon('edit', 'ic-sm')}</button>` +
               '</div>'
           )

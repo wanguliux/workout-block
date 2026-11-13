@@ -57,4 +57,18 @@ describe('display helpers', async () => {
     const config = getDefaultConfig();
     expect(resolveExerciseByName(config, 'deadlift')?.id).toBe('deadlift');
   });
+
+  // 用例 L6：计划时间的三种规则都渲染成可读文字（循环带周期与起始日）
+  it('L6: formats date / weekday / cycle time rules', async () => {
+    const { formatTimeRule } = await import('./display');
+    expect(formatTimeRule({ type: 'date', date: '2026-11-13' })).toBe('2026-11-13');
+    expect(formatTimeRule({ type: 'weekday', weekdays: [1, 3] })).toContain('一');
+    expect(formatTimeRule({ type: 'cycle', cycleDays: 3, cycleStart: '2026-11-13' })).toBe(
+      '每 3 天 · 自 2026-11-13 起'
+    );
+    setLocale('en');
+    expect(formatTimeRule({ type: 'cycle', cycleDays: 3, cycleStart: '2026-11-13' })).toBe(
+      '3-day cycle from 2026-11-13'
+    );
+  });
 });

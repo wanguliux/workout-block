@@ -22,7 +22,7 @@ Most training apps hard-code fields, exercises, and plans, forcing you to adapt 
 | What **fields** each type logs | Any number, any combination (number / duration / text / select) — no system constraints | Same |
 | Field **units** | Weight auto-converts kg/lb, or free-text units (reps / km / floors / laps…) | Same |
 | **Derived data** from log fields | Configure "data stats" just like workout types — guided builder or expression `sum(reps*weight)` | Stats design |
-| How **training plans** are laid out | Custom target volume per exercise and per set; run on specific dates or weekly weekdays | Plan design |
+| How **training plans** are laid out | Custom target volume per exercise and per set; run on specific dates, weekly weekdays, or a free N-day cycle from a start date | Plan design |
 | How **muscles** are managed | Any granularity: one muscle can map to 1 or N anatomy paths | Muscle design |
 | What the **heatmap** draws | Per-muscle metric / time window / color tiers on a medical-grade anatomy figure | Same |
 

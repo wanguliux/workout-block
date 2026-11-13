@@ -6,12 +6,13 @@ import { t } from '../i18n';
 import { parseDuration, secondsToParts } from '../util/duration';
 import { formatMass, parseMass } from '../util/units';
 import { generateId } from '../util/id';
+import { normalizeTimeRule } from '../data/planSchedule';
 import { ensureSchemeIndex, getSchemeNotes, extractSchemeExercises, invalidateSchemeCache, onSchemeIndexChanged } from '../data/planScanner';
 
 /*
  * NewPlanModal.ts —— 「新增训练计划」弹窗（配置形态）
  * 从已有训练方案（含 workout-plan 代码块的笔记）加载训练项，或手动添加，
- * 为每个训练项的每一组预设字段，配置计划时间（具体日期 / 每周 ISO 周几），
+ * 为每个训练项的每一组预设字段，配置计划时间（指定日期 / 每周 ISO 周几 / 循环每 N 天），
  * 保存为一条 TrainingPlanInstance 聚合进 workout-config.json 的 plans 字段。
  * 与「训练计划管理」是独立功能：本弹窗只负责「创建 / 编辑」单个计划。
  */
@@ -41,7 +42,9 @@ export class NewPlanModal extends Modal {
 
   private nameInput!: HTMLInputElement;
   private timeTypeSelect!: HTMLSelectElement;
+  private timeTwoColEl!: HTMLDivElement;
   private timeControlsEl!: HTMLDivElement;
+  private cycleControlsEl!: HTMLDivElement;
   private schemeSelect!: HTMLSelectElement;
   private unsubScheme?: () => void; // 方案索引变化订阅的退订函数
   private selectAllCheckbox!: HTMLInputElement;
@@ -98,22 +101,31 @@ export class NewPlanModal extends Modal {
     });
 
     // 计划时间类型 + 控件（两列网格：左类型下拉，右日期 / 周几）
-    const timeTwoCol = contentEl.createDiv();
-    timeTwoCol.addClass('workout-two-col');
-    const timeField = timeTwoCol.createDiv();
+    this.timeTwoColEl = contentEl.createDiv();
+    this.timeTwoColEl.addClass('workout-two-col');
+    const timeField = this.timeTwoColEl.createDiv();
     timeField.addClass('workout-field');
     timeField.createEl('label', { text: t('modal.newPlan.time') });
     this.timeTypeSelect = timeField.createEl('select');
     this.timeTypeSelect.addClass('workout-select');
     this.timeTypeSelect.createEl('option', { value: 'date', text: t('modal.newPlan.timeDate') });
     this.timeTypeSelect.createEl('option', { value: 'weekday', text: t('modal.newPlan.timeWeek') });
+    this.timeTypeSelect.createEl('option', { value: 'cycle', text: t('modal.newPlan.timeCycle') });
     this.timeTypeSelect.value = this.timeRule.type;
     this.timeTypeSelect.addEventListener('change', () => {
-      this.timeRule.type = this.timeTypeSelect.value as 'date' | 'weekday';
+      this.timeRule.type = this.timeTypeSelect.value as TimeRule['type'];
+      if (this.timeRule.type === 'cycle') {
+        // 切到循环时补齐默认值：周期 3 天、起始日沿用原指定日期（没有就用今天）
+        this.timeRule.cycleDays = this.timeRule.cycleDays ?? 3;
+        this.timeRule.cycleStart = this.timeRule.cycleStart ?? this.timeRule.date ?? this.todayStr();
+      }
       this.renderTimeControls();
     });
-    this.timeControlsEl = timeTwoCol.createDiv();
+    this.timeControlsEl = this.timeTwoColEl.createDiv();
     this.timeControlsEl.addClass('workout-plan-time-controls');
+    // 循环模式的两个输入（周期天数 / 起始日期）独占整行，放在两列网格之外
+    this.cycleControlsEl = contentEl.createDiv();
+    this.cycleControlsEl.addClass('workout-plan-cycle');
     this.renderTimeControls();
 
     // 选择训练方案（下拉，标签上方）
@@ -225,6 +237,15 @@ export class NewPlanModal extends Modal {
 
   private renderTimeControls(): void {
     this.timeControlsEl.empty();
+    this.cycleControlsEl.empty();
+    // 循环模式不要在左侧空出半格，让类型下拉独占整行、下方铺开循环参数
+    this.timeTwoColEl.toggleClass('is-single', this.timeRule.type === 'cycle');
+
+    if (this.timeRule.type === 'cycle') {
+      this.renderCycleControls();
+      return;
+    }
+
     if (this.timeRule.type === 'date') {
       const dateField = this.timeControlsEl.createDiv();
       dateField.addClass('workout-field');
@@ -256,6 +277,50 @@ export class NewPlanModal extends Modal {
       const hint = this.timeControlsEl.createDiv({ text: formatTimeRule(this.timeRule) });
       hint.addClass('workout-hint');
     }
+  }
+
+  // 循环模式：周期天数（自由填）+ 循环起始日期；下方实时回显「每 N 天 · 自 X 起」
+  private renderCycleControls(): void {
+    const grid = this.cycleControlsEl.createDiv();
+    grid.addClass('workout-two-col');
+
+    const daysField = grid.createDiv();
+    daysField.addClass('workout-field');
+    daysField.createEl('label', { text: t('modal.newPlan.cycleDays') });
+    const daysInput = daysField.createEl('input', { type: 'number' });
+    daysInput.addClass('workout-input');
+    daysInput.setAttribute('min', '1');
+    daysInput.setAttribute('step', '1');
+    daysInput.setAttribute('inputmode', 'numeric'); // 移动端弹数字键盘
+    daysInput.value = String(this.timeRule.cycleDays ?? 3);
+    daysInput.addEventListener('input', () => {
+      const n = parseInt(daysInput.value, 10);
+      this.timeRule.cycleDays = Number.isFinite(n) && n >= 1 ? n : undefined;
+      updateHint();
+    });
+
+    const startField = grid.createDiv();
+    startField.addClass('workout-field');
+    startField.createEl('label', { text: t('modal.newPlan.cycleStart') });
+    const startInput = startField.createEl('input', { type: 'date' });
+    startInput.addClass('workout-input');
+    startInput.value = this.timeRule.cycleStart || this.timeRule.date || this.todayStr();
+    this.timeRule.cycleStart = startInput.value;
+    startInput.addEventListener('change', () => {
+      this.timeRule.cycleStart = startInput.value;
+      updateHint();
+    });
+
+    const hint = this.cycleControlsEl.createDiv();
+    hint.addClass('workout-hint');
+    const updateHint = (): void => {
+      hint.setText(
+        this.timeRule.cycleDays && this.timeRule.cycleStart
+          ? formatTimeRule({ type: 'cycle', cycleDays: this.timeRule.cycleDays, cycleStart: this.timeRule.cycleStart })
+          : ''
+      );
+    };
+    updateHint();
   }
 
   private addItem(exerciseId?: string): void {
@@ -467,11 +532,20 @@ export class NewPlanModal extends Modal {
     if (this.timeRule.type === 'weekday' && (!this.timeRule.weekdays || this.timeRule.weekdays.length === 0)) {
       this.timeRule.weekdays = [1];
     }
+    if (this.timeRule.type === 'cycle') {
+      const n = Math.trunc(Number(this.timeRule.cycleDays));
+      if (!Number.isFinite(n) || n < 1) {
+        new Notice(t('modal.newPlan.cycleInvalid'));
+        return;
+      }
+      this.timeRule.cycleDays = n;
+    }
+    const timeRule = normalizeTimeRule(this.timeRule, this.todayStr());
 
     const plan: TrainingPlanInstance = {
       id: this.editPlan?.id ?? generateId(),
       name,
-      timeRule: { ...this.timeRule },
+      timeRule,
       sourceNote: this.sourceNote,
       createdAt: this.editPlan?.createdAt ?? this.todayStr(),
       // 编辑时保留已完成组（completedSets），否则 upsertPlan 整条替换会丢掉全部完成态。

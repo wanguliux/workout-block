@@ -1,10 +1,10 @@
 /*
  * planEditor.ts —— 训练计划编辑器。
- * 支持日期 / 每周两种时间规则，逐动作增删与逐组预设；编辑时保留组 id，
+ * 支持日期 / 每周 / 循环三种时间规则，逐动作增删与逐组预设；编辑时保留组 id，
  * 这样已完成状态（`exerciseId#setId`）不会因为改计划而丢失。
  */
 
-import { FieldDef, PlanSet, TrainingPlanInstance, TrainingType } from '../../data/types';
+import { FieldDef, PlanSet, TimeRule, TrainingPlanInstance, TrainingType } from '../../data/types';
 import { getExerciseName, getTrainingTypeName } from '../../data/display';
 import { generateId } from '../../util/id';
 import { icon } from '../icons';
@@ -30,9 +30,11 @@ interface PlanDraft {
   id: string;
   existing: boolean;
   name: string;
-  ruleType: 'weekday' | 'date';
+  ruleType: TimeRule['type'];
   weekdays: number[];
   date: string;
+  cycleDays: number;
+  cycleStart: string;
   sourceNote: string;
   items: ItemDraft[];
   completedSets: Record<string, string>;
@@ -57,6 +59,8 @@ function draftFrom(ctx: UiContext, plan?: TrainingPlanInstance): PlanDraft {
       ruleType: 'weekday',
       weekdays: [1, 3, 5],
       date: todayStr(),
+      cycleDays: 3,
+      cycleStart: todayStr(),
       sourceNote: '',
       items: [],
       completedSets: {},
@@ -70,6 +74,8 @@ function draftFrom(ctx: UiContext, plan?: TrainingPlanInstance): PlanDraft {
     ruleType: plan.timeRule.type,
     weekdays: [...(plan.timeRule.weekdays ?? [])],
     date: plan.timeRule.date ?? todayStr(),
+    cycleDays: plan.timeRule.cycleDays ?? 3,
+    cycleStart: plan.timeRule.cycleStart ?? plan.timeRule.date ?? todayStr(),
     sourceNote: plan.sourceNote ?? '',
     createdAt: plan.createdAt,
     completedSets: { ...(plan.completedSets ?? {}) },
@@ -99,6 +105,31 @@ function weekdayChips(draft: PlanDraft): string {
       .join('') +
     '</div>'
   );
+}
+
+function cycleFields(draft: PlanDraft): string {
+  return (
+    '<div class="editor-grid" style="margin-top:10px">' +
+    `<div class="field"><label>${esc(L('循环周期（天）', 'Cycle length (days)'))}</label>` +
+    `<input class="input" type="number" min="1" step="1" inputmode="numeric" data-editor-cycle-days value="${draft.cycleDays}" /></div>` +
+    `<div class="field"><label>${esc(L('循环起始日期', 'Cycle start'))}</label>` +
+    `<input class="input" type="date" data-editor-cycle-start value="${esc(draft.cycleStart)}" /></div>` +
+    '</div>' +
+    `<div class="faint" style="margin-top:6px" data-editor-cycle-hint>${esc(
+      L(`自 ${draft.cycleStart} 起，每 ${draft.cycleDays} 天练一次`, `${draft.cycleDays}-day cycle from ${draft.cycleStart}`)
+    )}</div>`
+  );
+}
+
+/** 循环参数改动后就地刷新提示文字（不整块重渲染，避免打断输入）。 */
+function refreshCycleHint(root: ParentNode, draft: PlanDraft): void {
+  const el = root.querySelector<HTMLElement>('[data-editor-cycle-hint]');
+  if (el) {
+    el.textContent = L(
+      `自 ${draft.cycleStart} 起，每 ${draft.cycleDays} 天练一次`,
+      `${draft.cycleDays}-day cycle from ${draft.cycleStart}`
+    );
+  }
 }
 
 function exerciseSelect(ctx: UiContext, item: ItemDraft, index: number): string {
@@ -192,12 +223,17 @@ function bodyHTML(ctx: UiContext, draft: PlanDraft): string {
     `<button class="${draft.ruleType === 'date' ? 'on' : ''}" data-editor-action="rule" data-rule="date">${esc(
       L('指定日期', 'One date')
     )}</button>` +
+    `<button class="${draft.ruleType === 'cycle' ? 'on' : ''}" data-editor-action="rule" data-rule="cycle">${esc(
+      L('循环', 'Cycle')
+    )}</button>` +
     '</div>' +
     (draft.ruleType === 'weekday'
       ? weekdayChips(draft)
-      : `<div class="field" style="max-width:240px;margin-top:10px"><label>${esc(
-          L('日期', 'Date')
-        )}</label><input class="input" type="date" data-editor-date value="${esc(draft.date)}" /></div>`) +
+      : draft.ruleType === 'cycle'
+        ? cycleFields(draft)
+        : `<div class="field" style="max-width:240px;margin-top:10px"><label>${esc(
+            L('日期', 'Date')
+          )}</label><input class="input" type="date" data-editor-date value="${esc(draft.date)}" /></div>`) +
     '<div class="section-title" style="margin-top:22px">' +
     esc(L('训练动作与预设组', 'Exercises & preset sets')) +
     `<span class="faint">${esc(L(`${draft.items.length} 个动作`, `${draft.items.length} exercises`))}</span>` +
@@ -237,6 +273,16 @@ function save(ctx: UiContext, draft: PlanDraft): void {
     setError(L('请选择日期', 'Pick a date'));
     return;
   }
+  if (draft.ruleType === 'cycle') {
+    if (!Number.isInteger(draft.cycleDays) || draft.cycleDays < 1) {
+      setError(L('循环周期需为不小于 1 的整数', 'Cycle length must be an integer of at least 1'));
+      return;
+    }
+    if (!draft.cycleStart) {
+      setError(L('请选择循环起始日期', 'Pick a cycle start date'));
+      return;
+    }
+  }
 
   const unit = ctx.store.settings.unit;
   const items: TrainingPlanInstance['items'] = [];
@@ -271,7 +317,9 @@ function save(ctx: UiContext, draft: PlanDraft): void {
     timeRule:
       draft.ruleType === 'weekday'
         ? { type: 'weekday', weekdays: [...draft.weekdays].sort((a, b) => a - b) }
-        : { type: 'date', date: draft.date },
+        : draft.ruleType === 'cycle'
+          ? { type: 'cycle', cycleDays: draft.cycleDays, cycleStart: draft.cycleStart }
+          : { type: 'date', date: draft.date },
     sourceNote: draft.sourceNote.trim() || undefined,
     createdAt: draft.createdAt,
     items,
@@ -318,7 +366,8 @@ export function openPlanEditor(ctx: UiContext, planId?: string): void {
       if (!target) return;
       const action = target.dataset.editorAction;
       if (action === 'rule') {
-        draft.ruleType = target.dataset.rule === 'date' ? 'date' : 'weekday';
+        const rule = target.dataset.rule;
+        draft.ruleType = rule === 'date' ? 'date' : rule === 'cycle' ? 'cycle' : 'weekday';
         render();
       } else if (action === 'toggle-weekday') {
         const day = Number(target.dataset.day);
@@ -369,6 +418,12 @@ export function openPlanEditor(ctx: UiContext, planId?: string): void {
         draft.sourceNote = input.value;
       } else if (input.matches('[data-editor-date]')) {
         draft.date = input.value;
+      } else if (input.matches('[data-editor-cycle-days]')) {
+        draft.cycleDays = parseInt(input.value, 10);
+        refreshCycleHint(root, draft);
+      } else if (input.matches('[data-editor-cycle-start]')) {
+        draft.cycleStart = input.value;
+        refreshCycleHint(root, draft);
       } else if (input.matches('[data-editor-field]')) {
         const card = input.closest<HTMLElement>('[data-set-index]');
         const itemEl = input.closest<HTMLElement>('[data-item-index]');

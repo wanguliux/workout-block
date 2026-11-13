@@ -3,8 +3,9 @@
  * 所有数值都由真实记录计算，不在页面层写死示例数据。
  */
 
-import { LogRow } from '../../data/types';
+import { LogRow, TrainingPlanInstance } from '../../data/types';
 import { getExerciseNameById } from '../../data/display';
+import { cycleLength } from '../../data/planSchedule';
 import { icon } from '../icons';
 import { UiContext } from '../context';
 import { state } from '../state';
@@ -168,8 +169,13 @@ function todayPlanCard(ctx: UiContext, today: string): string {
   );
 }
 
-function planRuleShort(plan: { timeRule: { type: 'date' | 'weekday'; date?: string; weekdays?: number[] } }): string {
+function planRuleShort(plan: TrainingPlanInstance): string {
   if (plan.timeRule.type === 'date') return plan.timeRule.date || '';
+  if (plan.timeRule.type === 'cycle') {
+    if (!plan.timeRule.cycleStart) return '';
+    const n = cycleLength(plan.timeRule);
+    return L(`每 ${n} 天`, `every ${n}d`) + ` · ${plan.timeRule.cycleStart}`;
+  }
   const names = [L('一', 'Mon'), L('二', 'Tue'), L('三', 'Wed'), L('四', 'Thu'), L('五', 'Fri'), L('六', 'Sat'), L('日', 'Sun')];
   const days = [...new Set(plan.timeRule.weekdays ?? [])].sort((a, b) => a - b);
   return days.length ? L(`每周 ${days.map((d) => names[d - 1]).join(' / ')}`, days.map((d) => names[d - 1]).join(', ')) : '';

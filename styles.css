@@ -509,6 +509,13 @@
 .workout-plan-time-controls {
   margin: 4px 0;
 }
+/* 循环模式的参数（周期天数 / 起始日期）铺满整行，位于类型下拉下方 */
+.workout-plan-cycle {
+  margin: 4px 0 var(--workout-row-gap);
+}
+.workout-plan-cycle .workout-two-col {
+  margin-bottom: 0;
+}
 .workout-plan-weekdays {
   display: flex;
   gap: 6px;
@@ -654,6 +661,10 @@
   grid-template-columns: 1fr 1fr;
   gap: 14px;
   margin-bottom: var(--workout-row-gap);
+}
+/* 单列变体：右侧列没有内容时不让左侧缩成半格（循环模式的计划时间下拉） */
+.workout-two-col.is-single {
+  grid-template-columns: minmax(0, 1fr);
 }
 .workout-two-col .workout-field {
   margin-bottom: 0;
@@ -1102,6 +1113,12 @@ input[type="checkbox"].workout-switch:checked::after {
   align-items: stretch;
 }
 .is-mobile .workout-row > label { margin-bottom: 2px; }
+
+/* 双列网格在窄屏堆成单列：手机上一行塞两个输入框会被压到点不准、看不出内容 */
+.is-mobile .workout-two-col {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
 
 /* 时长三框：无论 .workout-duration-grid（RecordModal）还是 .workout-duration-row
    （NewPlanModal / PlanSetEditModal），移动端统一为可收缩的三列网格 */

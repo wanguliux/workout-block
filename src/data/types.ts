@@ -99,9 +99,11 @@ export interface PlanItem {
 }
 
 export interface TimeRule {
-  type: 'date' | 'weekday';
+  type: 'date' | 'weekday' | 'cycle';
   date?: string;                       // type='date'：YYYY-MM-DD
   weekdays?: number[];                 // type='weekday'：ISO 周几，周一=1 … 周日=7，如 [1,3,5]
+  cycleDays?: number;                  // type='cycle'：每几天练一次（≥1，自由设置）
+  cycleStart?: string;                 // type='cycle'：循环起始日期 YYYY-MM-DD（当天即第 1 个训练日）
 }
 
 export interface TrainingPlanInstance {
