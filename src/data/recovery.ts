@@ -1,4 +1,5 @@
 import { Exercise, LogRow, Muscle, WorkoutConfig } from './types';
+import { DEFAULT_DOSE_WEIGHTS, DoseWeights, roleWeight } from './muscleStats';
 import { FITNESS_GROUPS, SVG_MUSCLE_CATALOG } from './svgMuscleCatalog';
 
 /*
@@ -94,13 +95,16 @@ export function fromDayNum(num: number): string {
 /**
  * 某主体每天的剂量（有效组数）。
  * 一条 LogRow = 一组，所以「当天该主体有几条记录」就是组数；
- * 主练肌肉记 1，辅练记 0.5（粗近似，别当精确刺激量）。
+ * 主练/辅练的折算系数取 `DoseWeights`（默认 1 / 0.5）——
+ * **这一份权重与热力图共用同一实现**（`muscleStats.roleWeight`），
+ * 两处若各写一套，热力图和曲线会给出两个不同的「这周练了多少组」。
  */
 export function collectDoses(
   logs: LogRow[],
   exercises: Exercise[],
   subjectMuscleIds: string[],
-  fromDay?: number
+  fromDay?: number,
+  weights: DoseWeights = DEFAULT_DOSE_WEIGHTS
 ): DoseEntry[] {
   const wanted = new Set(subjectMuscleIds);
   const exById = new Map(exercises.map((e) => [e.id, e]));
@@ -111,7 +115,8 @@ export function collectDoses(
     let weight = 0;
     for (const link of ex.muscles) {
       if (!wanted.has(link.muscleId)) continue;
-      weight = Math.max(weight, link.role === 'primary' ? 1 : 0.5);
+      // 同一动作对同一肌群重复登记时取最大权重（主练优先），不累加
+      weight = Math.max(weight, roleWeight(link.role, weights));
     }
     if (weight === 0) continue;
     const day = log.timestamp.slice(0, 10);

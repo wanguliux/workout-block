@@ -12,9 +12,23 @@ import { dateWithinRange } from './heatmapDefaults';
  * `contributesToCoverage` 字段不被计算消费（仅 UI 标签用）。
  */
 
-/** 角色加权：主练 1.0，辅练 0.5。 */
-export function roleWeight(role: 'primary' | 'secondary'): number {
-  return role === 'primary' ? 1.0 : 0.5;
+/**
+ * 剂量权重：一条记录算「几组」的折算系数。
+ * **热力图与恢复曲线共用这一份口径**——同一个动作在两处必须算成同一个剂量，
+ * 否则「热力图说这周练了 20 组、曲线却按 16 组算」这种双口径没人能解释。
+ */
+export interface DoseWeights {
+  /** 主练肌肉的权重，默认 1（一组算一组） */
+  primary: number;
+  /** 辅练肌肉的权重，默认 0.5（一组算半组） */
+  secondary: number;
+}
+
+export const DEFAULT_DOSE_WEIGHTS: DoseWeights = { primary: 1, secondary: 0.5 };
+
+/** 角色加权：取 DoseWeights 里对应的系数（缺省用默认口径）。 */
+export function roleWeight(role: 'primary' | 'secondary', weights: DoseWeights = DEFAULT_DOSE_WEIGHTS): number {
+  return role === 'primary' ? weights.primary : weights.secondary;
 }
 
 /**
@@ -43,7 +57,8 @@ export function computeMuscleValue(
   range: string | undefined,
   logs: LogRow[],
   exerciseMuscleMap: Map<string, ExerciseMuscle[]>,
-  config: WorkoutConfig
+  config: WorkoutConfig,
+  weights: DoseWeights = DEFAULT_DOSE_WEIGHTS
 ): number {
   let total = 0;
   for (const log of logs) {
@@ -56,7 +71,7 @@ export function computeMuscleValue(
     const injected = materializeLogs([log], fieldsOfCategory(config, log.category))[0];
     const instanceValue = computeStat(stat, [injected]);
     if (!Number.isFinite(instanceValue)) continue;
-    total += instanceValue * roleWeight(hit.role);
+    total += instanceValue * roleWeight(hit.role, weights);
   }
   return Math.round(total * 100) / 100;
 }
@@ -66,12 +81,13 @@ export function computeAllMuscleValues(
   config: WorkoutConfig,
   logs: LogRow[],
   range: string | undefined,
-  stat: StatDef
+  stat: StatDef,
+  weights: DoseWeights = DEFAULT_DOSE_WEIGHTS
 ): Map<string, number> {
   const map = new Map<string, number>();
   const em = buildExerciseMuscleMap(config);
   for (const muscle of config.muscles) {
-    map.set(muscle.id, computeMuscleValue(muscle, stat, range, logs, em, config));
+    map.set(muscle.id, computeMuscleValue(muscle, stat, range, logs, em, config, weights));
   }
   return map;
 }
