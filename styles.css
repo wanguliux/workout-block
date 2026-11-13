@@ -1144,6 +1144,107 @@ input[type="checkbox"].workout-switch:checked::after {
   white-space: nowrap;
 }
 
+/* ---- workout-recovery 代码块（渐进恢复曲线）---- */
+.workout-recovery {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m, 8px);
+  background: var(--background-primary);
+}
+.workout-recovery-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.workout-recovery-title {
+  font-weight: 600;
+  font-size: var(--font-ui-medium, 15px);
+  color: var(--text-normal);
+}
+/* SVG 用 currentColor 画网格与基线，这里给它一个中性色 */
+.workout-recovery-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  color: var(--text-muted);
+}
+.workout-recovery-axis {
+  font-size: 11px;
+  fill: var(--text-faint);
+}
+.workout-recovery-today-label {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--interactive-accent);
+}
+.workout-recovery-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.workout-recovery-legend-item::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  margin-right: 5px;
+  vertical-align: middle;
+  border-top: 2px solid var(--interactive-accent);
+}
+.workout-recovery-legend-item.is-dashed::before {
+  border-top-style: dashed;
+  border-top-color: currentColor;
+}
+.workout-recovery-legend-item.is-today::before {
+  width: 0;
+  height: 12px;
+  border-top: 0;
+  border-left: 2px dashed currentColor;
+}
+.workout-recovery-table-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.workout-recovery-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-ui-small, 13px);
+}
+.workout-recovery-table th,
+.workout-recovery-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.workout-recovery-table th {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.workout-recovery-table td.is-num {
+  font-variant-numeric: tabular-nums;
+}
+.workout-recovery-status {
+  display: inline-block;
+  padding: 1px 7px;
+  font-size: 11px;
+  border: 1px solid currentColor;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.workout-recovery-status.is-fatigue { color: var(--color-red, #c2543c); }
+.workout-recovery-status.is-recovering { color: var(--color-orange, #c9762a); }
+.workout-recovery-status.is-surplus { color: var(--color-green, #2f8f5b); }
+.workout-recovery-status.is-na {
+  color: var(--text-faint);
+  border-color: var(--background-modifier-border);
+}
+
 /* ============================================================
    移动端适配（根类 .is-mobile 由 main.ts 在 app.isMobile 时注入 <body>）
    桌面端不添加该 class，故以下规则对桌面端零回归。
@@ -1160,6 +1261,11 @@ input[type="checkbox"].workout-switch:checked::after {
 .is-mobile .workout-two-col {
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+/* 恢复曲线块：手机上左右留白收紧，给曲线更多横向空间 */
+.is-mobile .workout-recovery {
+  padding: 8px 6px;
 }
 
 /* 进阶折叠区的标题行当作按钮用，补足 44px 触控靶 */

@@ -1535,6 +1535,27 @@ var zh = {
       emptyFields: "\uFF08\u672A\u8BBE\u7F6E\u9884\u8BBE\u503C\uFF09",
       completePartial: "\u5B8C\u6210\u72B6\u6001\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u8BAD\u7EC3\u8BB0\u5F55\u672A\u5199\u5165\uFF08CSV \u5199\u5165\u5931\u8D25\uFF09\uFF0C\u8BF7\u518D\u70B9\u4E00\u6B21\u91CD\u8BD5"
     },
+    recovery: {
+      needMuscle: "\u8BF7\u6307\u5B9A\u808C\u8089\uFF1A\u5728\u4EE3\u7801\u5757\u91CC\u5199 muscle: \u80A1\u56DB\u5934\u808C\uFF08\u4E5F\u652F\u6301\u808C\u7FA4\u540D\uFF0C\u5982 \u80F8\u90E8 / \u80CC\u90E8 / \u817F\uFF09",
+      unknownMuscle: "\u627E\u4E0D\u5230\u300C{name}\u300D\u8FD9\u5757\u808C\u8089\u6216\u808C\u7FA4\uFF0C\u68C0\u67E5\u62FC\u5199\uFF0C\u6216\u5148\u5728\u8BBE\u7F6E\u91CC\u5EFA\u8FD9\u5757\u808C\u8089",
+      noData: "\u8FD9\u6761\u808C\u8089\u8FD8\u6CA1\u6709\u8BAD\u7EC3\u8BB0\u5F55\u2014\u2014\u5148\u5728 workout-log \u91CC\u8BB0\u51E0\u7EC4\uFF0C\u66F2\u7EBF\u624D\u6709\u4E1C\u897F\u53EF\u7B97",
+      trainingDay: "{day} \xB7 {n} \u7EC4 \xB7 \u72B6\u6001 {v}",
+      todayState: "\u4ECA\u5929 {v}",
+      legendCurve: "\u808C\u8089\u72B6\u6001",
+      legendBaseline: "\u5B8C\u5168\u6062\u590D\u57FA\u7EBF 100",
+      legendToday: "\u4ECA\u5929",
+      col: {
+        muscle: "\u808C\u8089",
+        state: "\u5F53\u524D\u72B6\u6001",
+        status: "\u72B6\u6001",
+        eta: "\u8DDD\u6062\u590D\u5B8C\u6210"
+      },
+      etaDays: "{n} \u5929",
+      statusFatigue: "\u75B2\u52B3",
+      statusRecovering: "\u6062\u590D\u4E2D",
+      statusSurplus: "\u8D85\u91CF\u6062\u590D",
+      statusNoData: "\u6570\u636E\u4E0D\u8DB3"
+    },
     day: {
       viewing: "\u67E5\u770B\u65E5\u671F\uFF1A{date}",
       project: "\u9879\u76EE",
@@ -2040,6 +2061,27 @@ var en = {
       editTitle: "Edit \xB7 {exercise} \xB7 Set {n}",
       emptyFields: "(no presets set)",
       completePartial: "Marked complete, but the log was not saved (CSV write failed). Click complete again to retry."
+    },
+    recovery: {
+      needMuscle: "Specify a muscle: write muscle: Quads in the block (group names like Chest / Back work too)",
+      unknownMuscle: 'No muscle or group named "{name}" \u2014 check the spelling, or create it in settings first',
+      noData: "No logs for this muscle yet \u2014 record a few sets in workout-log and the curve will have data",
+      trainingDay: "{day} \xB7 {n} sets \xB7 state {v}",
+      todayState: "Today {v}",
+      legendCurve: "Muscle state",
+      legendBaseline: "Fully recovered baseline 100",
+      legendToday: "Today",
+      col: {
+        muscle: "Muscle",
+        state: "State",
+        status: "Status",
+        eta: "Until recovered"
+      },
+      etaDays: "{n} d",
+      statusFatigue: "Fatigued",
+      statusRecovering: "Recovering",
+      statusSurplus: "Supercompensated",
+      statusNoData: "No data"
     },
     day: {
       viewing: "Viewing date: {date}",
@@ -5827,6 +5869,23 @@ var CODE_BLOCK_DEFS = [
     desc: "\u5C55\u793A\u67D0\u4E2A\u8BAD\u7EC3\u8BA1\u5212\u7684\u5B8C\u6210\u8FDB\u5EA6\u4E0E\u6BCF\u7EC4\u6253\u5361",
     params: [
       { key: "plan", label: "\u8BA1\u5212\u540D\u79F0", type: "select", dynamic: "plan" }
+    ]
+  },
+  {
+    id: "workout-recovery",
+    icon: "activity",
+    title: "\u6062\u590D\u66F2\u7EBF",
+    desc: "\u808C\u8089\u72B6\u6001\u6298\u7EBF\uFF1A\u7EC3\u5B8C\u6389\u4E0B\u53BB\u3001\u51E0\u5929\u56DE\u5230\u57FA\u7EBF\u3001\u4E4B\u540E\u8D85\u91CF\u6062\u590D\uFF1B\u4E5F\u53EF\u5207\u8868\u683C\u770B\u300C\u8FD8\u8981\u51E0\u5929\u6062\u590D\u300D",
+    params: [
+      { key: "muscle", label: "\u808C\u8089 / \u808C\u7FA4", type: "text", placeholder: "\u5982 \u80A1\u56DB\u5934\u808C\u3001\u80F8\u5927\u808C\u3001\u80F8\u90E8\uFF08\u7559\u7A7A + view: table \u53EF\u5217\u5168\u90E8\uFF09" },
+      { key: "days", label: "\u56DE\u6EAF\u5929\u6570", type: "number", placeholder: "\u9ED8\u8BA4 28\uFF087\u2013365\uFF09" },
+      {
+        key: "view",
+        label: "\u663E\u793A\u5F62\u6001",
+        type: "select",
+        options: ["chart", "table", "both"],
+        optionLabels: { chart: "\u6298\u7EBF\u56FE", table: "\u8868\u683C", both: "\u4E24\u8005\u90FD\u8981" }
+      }
     ]
   }
 ];

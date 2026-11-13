@@ -1,5 +1,6 @@
 import { Exercise, LogRow, Muscle, RecoveryTuning, WorkoutConfig } from './types';
 import { DEFAULT_DOSE_WEIGHTS, DoseWeights, effectiveWeight } from './muscleStats';
+import { getMuscleName } from './display';
 import { FITNESS_GROUPS, SVG_MUSCLE_CATALOG } from './svgMuscleCatalog';
 
 /*
@@ -246,29 +247,37 @@ export function resolveSubject(config: WorkoutConfig, key: string): { label: str
   if (!raw) return { label: '', muscleIds: [] };
   const lower = raw.toLowerCase();
 
-  // ① 直接命中单块肌肉（id / name）
+  // ① 直接命中单块肌肉（id / 显示名）
   const muscle = config.muscles.find(
-    (m) => m.id.toLowerCase() === lower || (m.name || '').toLowerCase() === lower
+    (m) => m.id.toLowerCase() === lower || getMuscleName(m).toLowerCase() === lower
   );
-  if (muscle) return { label: displayName(muscle), muscleIds: [muscle.id] };
+  if (muscle) return { label: getMuscleName(muscle), muscleIds: [muscle.id] };
 
   // ② 命中肌群（key / 中英文名）
   const group = FITNESS_GROUP_LOOKUP().find(
     (g) => g.key === lower || g.zh === raw || g.en.toLowerCase() === lower
   );
   if (group) {
-    const ids = config.muscles.filter((m) => muscleGroupOf(m) === group.key).map((m) => m.id);
-    return { label: group.zh, muscleIds: ids };
+    const matched = config.muscles.filter((m) => muscleGroupOf(m) === group.key);
+    const ids = matched.map((m) => m.id);
+    // 肌群只对应一块肌肉时，用这块肌肉自己的名字——否则同一块肌肉会在「单块视图」里叫
+    // 肌群名（股四头肌）、在「全部肌肉表格」里叫肌肉名（股四头），两处不一致
+    const label = ids.length === 1 && matched[0] ? getMuscleName(matched[0]) : group.zh;
+    return { label, muscleIds: ids };
   }
 
-  // ③ 模糊：肌肉名包含关键字
-  const fuzzy = config.muscles.filter((m) => displayName(m).includes(raw) || m.id.includes(lower));
-  if (fuzzy.length === 1) return { label: displayName(fuzzy[0]), muscleIds: [fuzzy[0].id] };
+  // ③ 模糊：显示名 / id 包含关键字，或它的 SVG 区域中英文名能对上
+  //（未命名肌肉（只有 id 如 quads）可因此用「股四头肌」这类解剖名引用）
+  const fuzzy = config.muscles.filter((m) => {
+    if (getMuscleName(m).includes(raw) || m.id.includes(lower)) return true;
+    return (m.svgRegionIds ?? []).some((regionId) => {
+      const entry = SVG_MUSCLE_CATALOG.find((e) => e.id === regionId);
+      if (!entry) return false;
+      return entry.zh === raw || entry.zh.includes(raw) || entry.en.toLowerCase() === lower;
+    });
+  });
+  if (fuzzy.length === 1) return { label: getMuscleName(fuzzy[0]), muscleIds: [fuzzy[0].id] };
   return { label: raw, muscleIds: [] };
-}
-
-function displayName(m: Muscle): string {
-  return m.name || m.id;
 }
 
 /** 单块肌肉归属的肌群（取第一条 svgRegionId 的 fitnessGroup；纯肌肉无映射时返回空串）。 */

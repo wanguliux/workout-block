@@ -260,6 +260,20 @@ export class SuggestModal<T> extends Modal {}
 export class FuzzySuggestModal<T> extends SuggestModal<T> {}
 
 // 文件对象占位（测试里基本只用到其 path）
+// MarkdownRenderChild：代码块渲染器用它挂载/卸载生命周期钩子。
+// 真实 Obsidian 里它是个 Component 子类；测试只需要 onunload 能被赋值与调用。
+export class MarkdownRenderChild {
+  containerEl: HTMLElement;
+  onunload?: () => void;
+  constructor(containerEl: HTMLElement) {
+    this.containerEl = containerEl;
+  }
+  load(): void {}
+  unload(): void {
+    this.onunload?.();
+  }
+}
+
 export class TFile {}
 
 // 文件夹对象：带一个 path 字段，对应 VaultFolderSuggestModal 使用的内容

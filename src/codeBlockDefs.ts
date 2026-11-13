@@ -75,6 +75,23 @@ export const CODE_BLOCK_DEFS: CodeBlockDef[] = [
       { key: 'plan', label: '计划名称', type: 'select', dynamic: 'plan' },
     ],
   },
+  {
+    id: 'workout-recovery',
+    icon: 'activity',
+    title: '恢复曲线',
+    desc: '肌肉状态折线：练完掉下去、几天回到基线、之后超量恢复；也可切表格看「还要几天恢复」',
+    params: [
+      { key: 'muscle', label: '肌肉 / 肌群', type: 'text', placeholder: '如 股四头肌、胸大肌、胸部（留空 + view: table 可列全部）' },
+      { key: 'days', label: '回溯天数', type: 'number', placeholder: '默认 28（7–365）' },
+      {
+        key: 'view',
+        label: '显示形态',
+        type: 'select',
+        options: ['chart', 'table', 'both'],
+        optionLabels: { chart: '折线图', table: '表格', both: '两者都要' },
+      },
+    ],
+  },
 ];
 
 /**

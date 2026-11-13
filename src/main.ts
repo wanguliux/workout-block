@@ -7,6 +7,7 @@ import { renderWorkoutLog } from './codeblock/workoutLog';
 import { renderWorkoutDay } from './codeblock/workoutDay';
 import { renderWorkoutHeatmap } from './codeblock/workoutHeatmap';
 import { renderWorkoutPlan } from './codeblock/workoutPlan';
+import { renderWorkoutRecovery } from './codeblock/workoutRecovery';
 import { LogRow, FieldDef, WorkoutConfig } from './data/types';
 import { applyMappingTier } from './data/muscleMapping';
 import { RecordModal } from './ui/RecordModal';
@@ -234,6 +235,14 @@ export default class WorkoutPlugin extends Plugin {
     registerCodeBlock('workout-plan', planHandler);
     this.registerMarkdownCodeBlockProcessor('workout-plan', async (source, el, ctx) => {
       planHandler(source, el, ctx);
+    });
+
+    const recoveryHandler = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+      void renderWorkoutRecovery(source, el, ctx, this.dataManager).catch(() => {});
+    };
+    registerCodeBlock('workout-recovery', recoveryHandler);
+    this.registerMarkdownCodeBlockProcessor('workout-recovery', async (source, el, ctx) => {
+      recoveryHandler(source, el, ctx);
     });
   }
 
