@@ -1,5 +1,6 @@
 import { App, TFile } from 'obsidian';
 import { LogRow, CSV_FILENAME } from './types';
+import { joinVaultPath } from './paths';
 import { DataManager } from './DataManager';
 import {
   CSV_HEADER,
@@ -37,10 +38,11 @@ export class CSVStore {
     this.app = dm.app;
   }
 
-  // CSV 文件路径（基于设置里的 csvDirectory，空 = vault 根目录）
+  // CSV 文件路径：归一规则统一走 paths.joinVaultPath（反斜杠→正斜杠、去尾斜杠），
+  // 与 DataManager.getCsvPath() / 设置页输入共用同一份实现，保证
+  // 「读、写、modify 事件匹配」三处指向同一个路径。
   private get path(): string {
-    const dir = this.dm.getSettings().csvDirectory || '';
-    return dir ? `${dir}/${CSV_FILENAME}` : CSV_FILENAME;
+    return joinVaultPath(this.dm.getSettings().csvDirectory || '', CSV_FILENAME);
   }
 
   // 解析 CSV 文本为 LogRow[]（含脏行计数与墓碑 id 集合）。实现收敛在纯模块 csvFormat，

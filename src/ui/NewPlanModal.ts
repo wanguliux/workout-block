@@ -5,6 +5,7 @@ import { getExerciseName, getFieldLabel, getFieldUnit, formatTimeRule, getTraini
 import { t } from '../i18n';
 import { parseDuration, secondsToParts } from '../util/duration';
 import { formatMass, parseMass } from '../util/units';
+import { parseNumberInput } from '../util/number';
 import { generateId } from '../util/id';
 import { normalizeTimeRule } from '../data/planSchedule';
 import { ensureSchemeIndex, getSchemeNotes, extractSchemeExercises, invalidateSchemeCache, onSchemeIndexChanged } from '../data/planScanner';
@@ -440,7 +441,7 @@ export class NewPlanModal extends Modal {
           } else {
             num.value = value != null ? String(value) : '';
             num.addEventListener('change', () => {
-              set.fields[field.key] = parseFloat(num.value);
+              set.fields[field.key] = parseNumberInput(num.value);
             });
           }
           break;

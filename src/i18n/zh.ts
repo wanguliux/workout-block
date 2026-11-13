@@ -141,6 +141,7 @@ export const zh = {
       edit: '编辑',
       editTitle: '编辑 · {exercise} · 第 {n} 组',
       emptyFields: '（未设置预设值）',
+      completePartial: '完成状态已保存，但训练记录未写入（CSV 写入失败），请再点一次重试',
     },
     day: {
       viewing: '查看日期：{date}',
@@ -501,6 +502,7 @@ export const zh = {
 
   decision: {
     domainLabel: '运动',
+    openFailed: '打开录入弹窗失败：配置读取异常，请稍后重试或重载插件',
   },
 
   common: {

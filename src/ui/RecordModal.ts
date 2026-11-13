@@ -6,6 +6,7 @@ import { evalFieldExpr } from '../data/statExpr';
 import { t } from '../i18n';
 import { secondsToParts, parseDuration } from '../util/duration';
 import { formatMass, parseMass } from '../util/units';
+import { isBlankValue, parseNumberInput } from '../util/number';
 
 /*
  * RecordModal.ts —— "记录一组"录入弹窗
@@ -426,7 +427,8 @@ export class RecordModal extends Modal {
             // 普通数字：直接存 parseFloat
             numInput.value = fieldValue != null ? String(fieldValue) : '';
             numInput.addEventListener('change', () => {
-              this.fieldValues[field.key] = parseFloat(numInput.value);
+              // 空/非法输入存 undefined（=未填），不存 NaN（否则会被写成 null 且绕过必填校验）
+              this.fieldValues[field.key] = parseNumberInput(numInput.value);
               this.refreshComputedPreviews();
             });
           }
@@ -574,7 +576,7 @@ export class RecordModal extends Modal {
 
     // 必填校验：遍历该类型的字段，required 且值为空（undefined/null）则拦截并提示
     for (const field of type.fields) {
-      if (field.required && (this.fieldValues[field.key] === undefined || this.fieldValues[field.key] === null)) {
+      if (field.required && isBlankValue(this.fieldValues[field.key])) {
         new Notice(`${getFieldLabel(field)} ${t('modal.recordSet.requiredField')}`);
         return;
       }

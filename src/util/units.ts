@@ -11,9 +11,12 @@ export function kgToLb(kg: number): number {
   return Math.round(kg * 2.2 * 10) / 10;
 }
 
-// lb → kg：除以 2.2 后四舍五入到整数
+// lb → kg：保留 2 位小数。
+// 旧实现 `Math.round(lb / 2.2)` 把结果取整到「整公斤」——1 kg ≈ 2.2 lb，
+// 等于把用户输入量化成 2.2 lb 一档：输入 135 lb 存成 61 kg，回头显示 134.2 lb，
+// 输入值当场被改写。与 kgToLb 的 0.1 lb 精度对称后，往返误差 < 0.1 lb。
 export function lbToKg(lb: number): number {
-  return Math.round(lb / 2.2);
+  return Math.round((lb / 2.2) * 100) / 100;
 }
 
 // 把内部 kg 数值格式化成界面显示文字
@@ -26,9 +29,13 @@ export function formatMass(value: number, unit: 'kg' | 'lb'): string {
 }
 
 // 解析用户输入的字符串（如输入框里填的 "150"）成内部存储的 kg 数值
-// 若用户偏好 lb，则先把输入当 lb 转成 kg 存储；否则直接当 kg
-export function parseMass(value: string, unit: 'kg' | 'lb'): number {
+// 若用户偏好 lb，则先把输入当 lb 转成 kg 存储；否则直接当 kg。
+// 空输入 / 非法输入一律返回 undefined（=「未填」），**不要返回 NaN**：
+// NaN 经 JSON.stringify 会变成 null 写进 CSV，界面上是「填了但没值」，
+// 且必填校验（判 undefined/null）拦不住它——这是清空数字框后仍能保存的根因。
+export function parseMass(value: string, unit: 'kg' | 'lb'): number | undefined {
   const numValue = parseFloat(value);
+  if (!Number.isFinite(numValue)) return undefined;
   if (unit === 'lb') {
     return lbToKg(numValue);
   }

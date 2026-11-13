@@ -1,5 +1,6 @@
 import { App, TFile } from 'obsidian';
 import { WorkoutConfig, CONFIG_FILENAME } from './types';
+import { joinVaultPath } from './paths';
 
 import { DataManager } from './DataManager';
 import { migrateConfig } from './configMigrate';
@@ -21,10 +22,9 @@ export class ConfigStore {
     this.app = dm.app;
   }
 
-  // 配置文件路径（基于设置里的 configDirectory，空 = vault 根目录）
+  // 配置文件路径：归一规则同 CSVStore，统一走 paths.joinVaultPath。
   private get path(): string {
-    const dir = this.dm.getSettings().configDirectory || '';
-    return dir ? `${dir}/${CONFIG_FILENAME}` : CONFIG_FILENAME;
+    return joinVaultPath(this.dm.getSettings().configDirectory || '', CONFIG_FILENAME);
   }
 
   // 读取配置文件文本：优先走 vault 缓存层，兜底走 adapter 直接读磁盘。

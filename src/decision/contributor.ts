@@ -173,7 +173,11 @@ export function createWorkoutContributor(
         config.exercises.find((e) => e.muscles?.some((m) => m.muscleId === muscleId && m.role === 'primary')) ??
         config.exercises.find((e) => e.muscles?.some((m) => m.muscleId === muscleId));
       new RecordModal(dataManager, { exercise: exercise?.id }).open();
-    })();
+    })().catch((e: unknown) => {
+      // 配置读取失败时旧实现是「点了没反应」——没有提示、没有日志，用户不知道发生了什么
+      console.error('[workout] 决策中心打开录入弹窗失败:', e);
+      new Notice(t('decision.openFailed'));
+    });
   }
 
   function openRecordModalForPlan(planId: string): void {
@@ -181,7 +185,10 @@ export function createWorkoutContributor(
       const config = await dataManager.getConfig();
       const plan = config.plans?.find((p) => p.id === planId);
       new RecordModal(dataManager, { plan: plan?.name }).open();
-    })();
+    })().catch((e: unknown) => {
+      console.error('[workout] 决策中心打开计划录入弹窗失败:', e);
+      new Notice(t('decision.openFailed'));
+    });
   }
 
   function openRecordModal(): void {

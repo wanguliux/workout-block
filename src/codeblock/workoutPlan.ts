@@ -1,4 +1,4 @@
-import { MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, TFile, setIcon } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, Notice, TFile, setIcon } from 'obsidian';
 import { DataManager } from '../data/DataManager';
 import { FieldDef, TrainingPlanInstance, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
@@ -242,16 +242,25 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
         setIcon(completeBtn, 'check');
         completeBtn.addEventListener('click', () => {
           void (async () => {
-            // 1) 持久化「已完成」状态到计划配置（独立于训练记录，删除记录不影响）
-            await dataManager.markPlanSetCompleted(plan, item.exerciseId, set.id);
-            // 2) 同时往训练记录库写一条数据；plan 存稳定方案标识（sourceNote 或 id），而非可改的计划名
-            await dataManager.addLog({
-              exerciseId: item.exerciseId,
-              category: item.category,
-              fields: { ...set.fields, _planSet: set.id },
-              plan: plan.sourceNote || plan.id,
-            });
-            rerenderBlocksByType('workout-plan');
+            try {
+              // 1) 持久化「已完成」状态到计划配置（独立于训练记录，删除记录不影响）
+              await dataManager.markPlanSetCompleted(plan, item.exerciseId, set.id);
+              // 2) 同时往训练记录库写一条数据；plan 存稳定方案标识（sourceNote 或 id），而非可改的计划名
+              await dataManager.addLog({
+                exerciseId: item.exerciseId,
+                category: item.category,
+                fields: { ...set.fields, _planSet: set.id },
+                plan: plan.sourceNote || plan.id,
+              });
+              rerenderBlocksByType('workout-plan');
+            } catch (e) {
+              // 两处写入是两件事：完成态可能已落盘、训练记录却没写成（CSV 写入失败）。
+              // 旧实现让异常冒成未处理的 rejection——界面已经打勾、CSV 没记录、用户零反馈。
+              // 这里必须显式告知「哪一半成了」，否则用户以为记录进了库。
+              console.error('[workout] 计划组标记完成失败:', e);
+              new Notice(t('codeblock.plan.completePartial'));
+              rerenderBlocksByType('workout-plan');
+            }
           })();
         });
       }

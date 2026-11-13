@@ -140,6 +140,7 @@ export const en = {
       edit: 'Edit',
       editTitle: 'Edit · {exercise} · Set {n}',
       emptyFields: '(no presets set)',
+      completePartial: 'Marked complete, but the log was not saved (CSV write failed). Click complete again to retry.',
     },
     day: {
       viewing: 'Viewing date: {date}',
@@ -499,7 +500,8 @@ export const en = {
   },
 
   decision: {
-    domainLabel: 'Exercise',
+    domainLabel: 'Workout',
+    openFailed: 'Could not open the entry dialog: config read failed. Retry or reload the plugin.',
   },
 
   common: {

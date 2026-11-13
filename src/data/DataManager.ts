@@ -4,6 +4,8 @@ import { generateId } from '../util/id';
 import { CSVStore } from './CSVStore';
 import { ConfigStore } from './ConfigStore';
 import { getDefaultConfig } from './seed';
+import { joinVaultPath } from './paths';
+import { rewritePlanRefInContent } from './planRefs';
 
 /*
  * DataManager.ts —— 插件的「数据中枢」。
@@ -191,24 +193,15 @@ export class DataManager {
     return this.selfWriting;
   }
 
-  // 统一目录分隔符：设置里可能以 Windows 反斜杠存入（如 ".block\workout"）。
-  // 若直接拼进路径会得到 ".block\workout/workout_logs.csv" 这种混用分隔符路径，
-  // 导致 vault 的 getAbstractFileByPath/vault.append 解析不到（返回 null），
-  // 写入静默失败——记录能显示（进了内存缓存）却落不进 CSV。这里归一到正斜杠，
-  // 保证读取与写入、监听匹配都指向同一个规范路径。空目录直接返回空串。
-  private static normalizeDir(dir: string): string {
-    return dir.replace(/\\/g, '/').replace(/\/+$/, '');
-  }
-
-  // 记录 CSV 文件路径（供 main.ts 监听匹配）。
+  // 记录 CSV 文件路径（供 main.ts 监听匹配、CSVStore 读写）。
+  // 归一规则统一在 paths.joinVaultPath：反斜杠→正斜杠、去尾斜杠。三处（读/写/事件匹配）
+  // 必须是同一套实现，否则会出现「写入落了 .block\workout/…、监听匹配 .block/workout/…」分叉。
   getCsvPath(): string {
-    const dir = DataManager.normalizeDir(this.settings.csvDirectory || '');
-    return dir ? `${dir}/${CSV_FILENAME}` : CSV_FILENAME;
+    return joinVaultPath(this.settings.csvDirectory || '', CSV_FILENAME);
   }
-  // 配置 JSON 文件路径（供 main.ts 监听匹配）。
+  // 配置 JSON 文件路径（同上）。
   getConfigPath(): string {
-    const dir = DataManager.normalizeDir(this.settings.configDirectory || '');
-    return dir ? `${dir}/${CONFIG_FILENAME}` : CONFIG_FILENAME;
+    return joinVaultPath(this.settings.configDirectory || '', CONFIG_FILENAME);
   }
 
   // 生成一个与现有记录不重复的短 id（默认基于内存缓存 + 软删除集合，避免与已删 id 撞车；
@@ -300,11 +293,15 @@ export class DataManager {
   // 更新一条记录：按稳定主键 id 定位旧行，合并更新后广播变化，写盘走防抖合并（编辑需改中间行，属低频）。
   async updateLog(id: string, updates: Partial<LogRow>): Promise<void> {
     const index = this.logsCache.findIndex((r) => r.id === id);
-    if (index !== -1) {
-      this.logsCache[index] = { ...this.logsCache[index], ...updates };
+    if (index === -1) {
+      // 旧实现会「凭空造一条只有 updates + id 的行」广播出去——既不在缓存里（不会被 flushLogsToDisk
+      // 写入），字段也不全（缺 timestamp/category），界面上还显示得像更新成功。
+      // 找不到就是找不到：报错返回，让调用方知道自己改了不存在的记录。
+      console.error('[workout] updateLog 未找到记录，已跳过:', id);
+      throw new Error(`log not found: ${id}`);
     }
-    const updated = index !== -1 ? this.logsCache[index] : ({ ...updates, id } as LogRow);
-    this.emit('data-changed', { type: 'update', row: updated });
+    this.logsCache[index] = { ...this.logsCache[index], ...updates };
+    this.emit('data-changed', { type: 'update', row: this.logsCache[index] });
     this.scheduleLogsFlush();
   }
 
@@ -626,45 +623,17 @@ export class DataManager {
 
   // 级联改名：扫描 vault 内所有 markdown 文件，把引用了 oldName 的 workout-plan 代码块的
   // plan: 参数改写为 newName。只改代码块、不触碰 CSV 历史记录。
+  // 用 vault.process 做读-改-写：它与编辑器共享同一把锁，改名期间用户在文件里打的字不会被
+  // 旧的 read 快照覆盖（旧实现 read+modify 存在「整篇回写吞掉未保存输入」的窗口）。
   private async renamePlanInCodeBlocks(oldName: string, newName: string): Promise<number> {
     const files = this.app.vault.getMarkdownFiles();
     let updated = 0;
     for (const file of files) {
-      const content = await this.app.vault.read(file);
-      const lines = content.split('\n');
-      let changed = false;
-      let i = 0;
-      while (i < lines.length) {
-        if (lines[i].trim().startsWith('```workout-plan')) {
-          // 在代码块内查找 plan: 参数行（只处理第一个）
-          let j = i + 1;
-          let closing = -1;
-          while (j < lines.length) {
-            if (lines[j].trim().startsWith('```')) { closing = j; break; }
-            const trimmed = lines[j].trim();
-            const colonIdx = trimmed.indexOf(':');
-            if (colonIdx > 0) {
-              const key = trimmed.slice(0, colonIdx).trim();
-              if (key === 'plan') {
-                const val = trimmed.slice(colonIdx + 1).trim();
-                if (val === oldName) {
-                  lines[j] = 'plan: ' + newName;
-                  changed = true;
-                  updated++;
-                }
-                break; // 只处理第一个 plan: 参数
-              }
-            }
-            j++;
-          }
-          i = closing >= 0 ? closing + 1 : lines.length;
-        } else {
-          i++;
-        }
-      }
-      if (changed) {
-        await this.app.vault.modify(file, lines.join('\n'));
-      }
+      await this.app.vault.process(file, (content) => {
+        const { content: next, updated: count } = rewritePlanRefInContent(content, oldName, newName);
+        updated += count;
+        return next;
+      });
     }
     return updated;
   }

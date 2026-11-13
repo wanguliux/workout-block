@@ -163,39 +163,7 @@ export function applyPlanDelete(config: WorkoutConfig, nameOrId: string): Traini
 }
 
 /**
- * 改写一段笔记文本里 workout-plan 代码块的 plan 参数（oldName → newName）。
- * 规则与 DataManager.renamePlanInCodeBlocks 完全一致：
- * 每个 ```workout-plan 代码块只处理第一个 plan: 参数行；命中才返回新文本。
+ * 改写笔记文本里 workout-plan 代码块的 plan 参数（oldName → newName）。
+ * 实现（含改名规则）在 data/planRefs.ts，与插件侧 DataManager 共用同一份——此处仅保留导出名。
  */
-export function rewritePlanReferences(content: string, oldName: string, newName: string): { content: string; updated: number } {
-  const lines = content.split('\n');
-  let updated = 0;
-  let i = 0;
-  while (i < lines.length) {
-    if (lines[i].trim().startsWith('```workout-plan')) {
-      let j = i + 1;
-      let closing = -1;
-      while (j < lines.length) {
-        if (lines[j].trim().startsWith('```')) { closing = j; break; }
-        const trimmed = lines[j].trim();
-        const colonIdx = trimmed.indexOf(':');
-        if (colonIdx > 0) {
-          const key = trimmed.slice(0, colonIdx).trim();
-          if (key === 'plan') {
-            const val = trimmed.slice(colonIdx + 1).trim();
-            if (val === oldName) {
-              lines[j] = 'plan: ' + newName;
-              updated++;
-            }
-            break; // 只处理第一个 plan: 参数
-          }
-        }
-        j++;
-      }
-      i = closing >= 0 ? closing + 1 : lines.length;
-    } else {
-      i++;
-    }
-  }
-  return { content: updated > 0 ? lines.join('\n') : content, updated };
-}
+export { rewritePlanRefInContent as rewritePlanReferences } from '../data/planRefs';

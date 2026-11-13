@@ -3,6 +3,7 @@ import type { SettingDefinitionItem, SettingGroupItem } from 'obsidian';
 import type WorkoutPlugin from '../main';
 import { rerenderAllBlocks } from '../codeblock/registry';
 import { DataManager } from '../data/DataManager';
+import { normalizeDirPath } from '../data/paths';
 import { WorkoutConfig } from '../data/types';
 import { setLocale, t } from '../i18n';
 import { ExerciseManagerModal } from './ExerciseManagerModal';
@@ -25,6 +26,8 @@ import { VaultFolderSuggestModal } from './VaultFolderSuggestModal';
 export class SettingsTab extends PluginSettingTab {
   // dataManager：本插件的核心数据管家，负责读取/保存配置与记录。
   private dataManager: DataManager;
+  // 目录输入去抖定时器：见 scheduleFolderSave。
+  private folderSaveTimer: number | null = null;
 
   constructor(app: App, plugin: WorkoutPlugin, dataManager: DataManager) {
     super(app, plugin);
@@ -211,6 +214,26 @@ export class SettingsTab extends PluginSettingTab {
     this.renderGeneralSection(containerEl, settings);
   }
 
+  // 目录输入去抖：旧实现每次按键都 saveSettings()，而 saveSettings 会广播 settings-changed
+  // → main.ts 重渲染所有 workout-plan / workout-log 代码块。输入 13 个字符的长路径＝13 次
+  // data.json 写盘 + 13 轮全量重画，设置页会明显发粘。合并为 400ms 一次。
+  private scheduleFolderSave(): void {
+    if (this.folderSaveTimer !== null) window.clearTimeout(this.folderSaveTimer);
+    this.folderSaveTimer = window.setTimeout(() => {
+      this.folderSaveTimer = null;
+      void this.dataManager.saveSettings();
+    }, 400);
+  }
+
+  // 离开设置页时把待存的目录值立刻落盘，避免「改完就关」丢设置。
+  hide(): void {
+    if (this.folderSaveTimer !== null) {
+      window.clearTimeout(this.folderSaveTimer);
+      this.folderSaveTimer = null;
+      void this.dataManager.saveSettings();
+    }
+  }
+
   private renderDataPathSection(containerEl: HTMLElement, settings: Record<string, unknown>): void {
     new Setting(containerEl).setName(t('settings.dataPath')).setHeading();
     this.renderFolderSetting(containerEl, settings, 'csvDirectory', t('settings.csvDirectory'), t('settings.csvDirectoryDesc'));
@@ -234,17 +257,18 @@ export class SettingsTab extends PluginSettingTab {
       text
         .setPlaceholder(t('settings.dataDirectoryPlaceholder'))
         .setValue((settings[key] as string) ?? '')
-        .onChange(async (v) => {
-          settings[key] = v;
-          await this.dataManager.saveSettings();
+        .onChange((v) => {
+          // 输入即归一（反斜杠→正斜杠、去尾斜杠），避免存进带分隔符分叉的路径
+          settings[key] = normalizeDirPath(v);
+          this.scheduleFolderSave();
         });
     });
 
     // 实时输入建议：边打字边列出匹配的 vault 文件夹路径。
     if (textComp) {
-      new VaultPathSuggest(this.app, textComp.inputEl, async (v) => {
-        settings[key] = v;
-        await this.dataManager.saveSettings();
+      new VaultPathSuggest(this.app, textComp.inputEl, (v) => {
+        settings[key] = normalizeDirPath(v);
+        this.scheduleFolderSave();
       });
     }
 

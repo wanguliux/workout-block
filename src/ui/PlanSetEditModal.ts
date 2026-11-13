@@ -5,6 +5,7 @@ import { getFieldLabel, getFieldUnit } from '../data/display';
 import { t } from '../i18n';
 import { secondsToParts, parseDuration } from '../util/duration';
 import { formatMass, parseMass } from '../util/units';
+import { parseNumberInput } from '../util/number';
 
 /*
  * PlanSetEditModal.ts —— 训练计划代码块里「编辑」单组时弹出的小窗。
@@ -87,7 +88,7 @@ export class PlanSetEditModal extends Modal {
           } else {
             num.value = value != null ? String(value) : '';
             num.addEventListener('change', () => {
-              this.fieldValues[field.key] = parseFloat(num.value);
+              this.fieldValues[field.key] = parseNumberInput(num.value);
             });
           }
           break;

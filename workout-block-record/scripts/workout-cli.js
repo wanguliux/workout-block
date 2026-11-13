@@ -1532,7 +1532,8 @@ var zh = {
       complete: "\u5B8C\u6210",
       edit: "\u7F16\u8F91",
       editTitle: "\u7F16\u8F91 \xB7 {exercise} \xB7 \u7B2C {n} \u7EC4",
-      emptyFields: "\uFF08\u672A\u8BBE\u7F6E\u9884\u8BBE\u503C\uFF09"
+      emptyFields: "\uFF08\u672A\u8BBE\u7F6E\u9884\u8BBE\u503C\uFF09",
+      completePartial: "\u5B8C\u6210\u72B6\u6001\u5DF2\u4FDD\u5B58\uFF0C\u4F46\u8BAD\u7EC3\u8BB0\u5F55\u672A\u5199\u5165\uFF08CSV \u5199\u5165\u5931\u8D25\uFF09\uFF0C\u8BF7\u518D\u70B9\u4E00\u6B21\u91CD\u8BD5"
     },
     day: {
       viewing: "\u67E5\u770B\u65E5\u671F\uFF1A{date}",
@@ -1889,7 +1890,8 @@ var zh = {
     delete: "\u5220\u9664"
   },
   decision: {
-    domainLabel: "\u8FD0\u52A8"
+    domainLabel: "\u8FD0\u52A8",
+    openFailed: "\u6253\u5F00\u5F55\u5165\u5F39\u7A97\u5931\u8D25\uFF1A\u914D\u7F6E\u8BFB\u53D6\u5F02\u5E38\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u6216\u91CD\u8F7D\u63D2\u4EF6"
   },
   common: {
     cancel: "\u53D6\u6D88",
@@ -2028,7 +2030,8 @@ var en = {
       complete: "Complete",
       edit: "Edit",
       editTitle: "Edit \xB7 {exercise} \xB7 Set {n}",
-      emptyFields: "(no presets set)"
+      emptyFields: "(no presets set)",
+      completePartial: "Marked complete, but the log was not saved (CSV write failed). Click complete again to retry."
     },
     day: {
       viewing: "Viewing date: {date}",
@@ -2385,7 +2388,8 @@ var en = {
     delete: "Delete"
   },
   decision: {
-    domainLabel: "Exercise"
+    domainLabel: "Workout",
+    openFailed: "Could not open the entry dialog: config read failed. Retry or reload the plugin."
   },
   common: {
     cancel: "Cancel",
@@ -2473,7 +2477,7 @@ function kgToLb(kg) {
   return Math.round(kg * 2.2 * 10) / 10;
 }
 function lbToKg(lb) {
-  return Math.round(lb / 2.2);
+  return Math.round(lb / 2.2 * 100) / 100;
 }
 function formatMass(value, unit) {
   if (unit === "lb") {
@@ -2483,6 +2487,8 @@ function formatMass(value, unit) {
 }
 function parseMass(value, unit) {
   const numValue = parseFloat(value);
+  if (!Number.isFinite(numValue))
+    return void 0;
   if (unit === "lb") {
     return lbToKg(numValue);
   }
@@ -5385,6 +5391,43 @@ function extractSchemeExercisesFromContent(content, config) {
   return result;
 }
 
+// src/data/planRefs.ts
+function rewritePlanRefInContent(content, oldName, newName) {
+  const lines = content.split("\n");
+  let updated = 0;
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i].trim().startsWith("```workout-plan")) {
+      let j = i + 1;
+      let closing = -1;
+      while (j < lines.length) {
+        if (lines[j].trim().startsWith("```")) {
+          closing = j;
+          break;
+        }
+        const trimmed = lines[j].trim();
+        const colonIdx = trimmed.indexOf(":");
+        if (colonIdx > 0) {
+          const key = trimmed.slice(0, colonIdx).trim();
+          if (key === "plan") {
+            const val = trimmed.slice(colonIdx + 1).trim();
+            if (val === oldName) {
+              lines[j] = "plan: " + newName;
+              updated++;
+            }
+            break;
+          }
+        }
+        j++;
+      }
+      i = closing >= 0 ? closing + 1 : lines.length;
+    } else {
+      i++;
+    }
+  }
+  return { content: updated > 0 ? lines.join("\n") : content, updated };
+}
+
 // src/cli/planOps.ts
 function parseItemsJson(json, config) {
   let raw;
@@ -5502,41 +5545,6 @@ function applyPlanDelete(config, nameOrId) {
   }
   config.plans = plans.filter((p) => p.id !== target.id);
   return target;
-}
-function rewritePlanReferences(content, oldName, newName) {
-  const lines = content.split("\n");
-  let updated = 0;
-  let i = 0;
-  while (i < lines.length) {
-    if (lines[i].trim().startsWith("```workout-plan")) {
-      let j = i + 1;
-      let closing = -1;
-      while (j < lines.length) {
-        if (lines[j].trim().startsWith("```")) {
-          closing = j;
-          break;
-        }
-        const trimmed = lines[j].trim();
-        const colonIdx = trimmed.indexOf(":");
-        if (colonIdx > 0) {
-          const key = trimmed.slice(0, colonIdx).trim();
-          if (key === "plan") {
-            const val = trimmed.slice(colonIdx + 1).trim();
-            if (val === oldName) {
-              lines[j] = "plan: " + newName;
-              updated++;
-            }
-            break;
-          }
-        }
-        j++;
-      }
-      i = closing >= 0 ? closing + 1 : lines.length;
-    } else {
-      i++;
-    }
-  }
-  return { content: updated > 0 ? lines.join("\n") : content, updated };
 }
 
 // src/cli/commands/planCmd.ts
@@ -5732,7 +5740,7 @@ async function planUpdate(env, args) {
   if (nameChanged) {
     for (const file of await walkMarkdownFiles(env.vault.vaultPath)) {
       const content = await fs2.readFile(file, "utf8");
-      const { content: next, updated } = rewritePlanReferences(content, oldName, plan.name);
+      const { content: next, updated } = rewritePlanRefInContent(content, oldName, plan.name);
       if (updated > 0) {
         await env.vault.writeAtomic(file, next);
         blocksUpdated += updated;
