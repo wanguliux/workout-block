@@ -73,6 +73,9 @@ export interface ExerciseMuscle {
   muscleId: string;            // 关联到的 Muscle 的 id
   role: 'primary' | 'secondary';    // 主练(primary)还是辅练(secondary)
   contributesToCoverage?: boolean;  // 该关联是否计入覆盖统计
+  // 该动作对这块肌肉的剂量折算系数（一条记录算几组）。留空 = 按 role 取全局默认（主 1 / 辅 0.5）。
+  // 典型用法：深蹲对臀的参与远弱于对股四头，可单独把这一个 link 调到 0.3，而不动全局。
+  weight?: number;
 }
 
 // 训练项（动作）：如"深蹲""卧推"。属于某个训练类型，并关联若干肌肉。

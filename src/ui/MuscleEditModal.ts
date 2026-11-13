@@ -3,7 +3,12 @@ import { DataManager } from '../data/DataManager';
 import { getMuscleName } from '../data/display';
 import { FITNESS_GROUPS, formatSvgMuscleLabel, SVG_MUSCLE_CATALOG, SvgMuscleEntry } from '../data/svgMuscleCatalog';
 import { DEFAULT_HEATMAP_SCALE, colorToCss } from '../data/heatmapDefaults';
-import { HeatmapLevel, Muscle, StatDef, WorkoutConfig } from '../data/types';
+import { HeatmapLevel, Muscle, RecoveryTuning, StatDef, WorkoutConfig } from '../data/types';
+import { DEFAULT_RECOVERY_PARAMS } from '../data/recovery';
+import { parseNumberInput } from '../util/number';
+
+/** 折叠区里可编辑的四个数值参数（RecoveryTuning 中的非 levels 字段）。 */
+type NumericTuningKey = 'fatiguePerSet' | 'fatigueTau' | 'fitnessPerSet' | 'fitnessTau';
 import { getLocale, t } from '../i18n';
 
 /* MuscleEditModal —— 编辑单个肌肉的弹窗（新增或编辑共用）。
@@ -47,6 +52,8 @@ export class MuscleEditModal extends Modal {
   private rangeValue = '';
   private customRange = '';
   private muscleLevels: HeatmapLevel[] | null = null; // 该肌的 4 色分档（逐肌可配）
+  // 逐肌恢复曲线微调（留空＝跟随默认；与热力图设置同层，同在「恢复设置」折叠区）
+  private recoveryTuning: RecoveryTuning = {};
 
   private mappingContainer!: HTMLDivElement;
   private countEl!: HTMLElement;
@@ -70,6 +77,7 @@ export class MuscleEditModal extends Modal {
       this.metricId = muscle.heatmapMetric ?? '';
       this.rangeValue = muscle.heatmapRange ?? '';
       this.muscleLevels = muscle.heatmapLevels ? this.normalizeLevels(muscle.heatmapLevels) : null;
+      this.recoveryTuning = muscle.recovery ? { ...muscle.recovery } : {};
       if (!RANGE_OPTIONS.includes(this.rangeValue) && this.rangeValue) {
         this.customRange = this.rangeValue;
         this.rangeValue = 'custom';
@@ -140,6 +148,9 @@ export class MuscleEditModal extends Modal {
     contentEl.createEl('h3', { text: t('modal.muscleManager.heatmapSettings'), cls: 'workout-section-title' });
     this.heatmapSection = contentEl.createDiv();
     this.renderHeatmapSettings();
+
+    // 恢复设置（进阶）：与热力图设置同层，默认收起——四个数字参数平时没人改，展开会把这页拉得很长
+    this.renderRecoverySection(contentEl);
 
     // 底部按钮
     const btnRow = contentEl.createDiv();
@@ -250,6 +261,66 @@ export class MuscleEditModal extends Modal {
         }
       }
     }
+  }
+
+  // —— 恢复设置（进阶折叠区）——
+  // 四个形状参数逐肌可覆盖，留空＝跟随默认（与热力图 heatmapMetric/heatmapLevels 同形态）。
+  // 默认收起：这页已有 ID/名称/覆盖/阈值/SVG 映射/热力图设置，四个数字常驻只会把页面拉长。
+  private renderRecoverySection(parent: HTMLElement): void {
+    const details = parent.createEl('details');
+    details.addClass('workout-advanced');
+
+    const summary = details.createEl('summary');
+    summary.addClass('workout-advanced-summary');
+    summary.createSpan({ text: t('modal.muscleManager.recoverySettings') });
+    const badge = summary.createSpan({ text: t('modal.muscleManager.recoveryFollowDefault') });
+    badge.addClass('workout-hint');
+    if (this.hasRecoveryTuning()) badge.setText(t('modal.muscleManager.recoveryOverridden'));
+
+    details.createEl('p', { text: t('modal.muscleManager.recoveryHint'), cls: 'workout-hint' });
+
+    const grid = details.createDiv();
+    grid.addClass('workout-two-col');
+
+    // 只列四个数值参数（levels 不在这个折叠区，避免把色阶编辑器做两遍）
+    const fields: Array<{ key: NumericTuningKey; label: string; def: number }> = [
+      { key: 'fatiguePerSet', label: t('modal.muscleManager.recoveryFatiguePerSet'), def: DEFAULT_RECOVERY_PARAMS.fatiguePerSet },
+      { key: 'fatigueTau', label: t('modal.muscleManager.recoveryFatigueTau'), def: DEFAULT_RECOVERY_PARAMS.fatigueTau },
+      { key: 'fitnessPerSet', label: t('modal.muscleManager.recoveryFitnessPerSet'), def: DEFAULT_RECOVERY_PARAMS.fitnessPerSet },
+      { key: 'fitnessTau', label: t('modal.muscleManager.recoveryFitnessTau'), def: DEFAULT_RECOVERY_PARAMS.fitnessTau },
+    ];
+
+    for (const f of fields) {
+      const row = grid.createDiv();
+      row.addClass('workout-field');
+      row.createEl('label', { text: f.label });
+      const input = row.createEl('input', { type: 'number' });
+      input.addClass('workout-input');
+      input.setAttribute('step', 'any');
+      input.setAttribute('inputmode', 'decimal'); // 移动端弹小数键盘
+      const current = this.recoveryTuning[f.key];
+      input.value = typeof current === 'number' ? String(current) : '';
+      input.placeholder = String(f.def);
+      input.addEventListener('input', () => {
+        const v = parseNumberInput(input.value);
+        if (v === undefined || v <= 0) {
+          delete this.recoveryTuning[f.key];
+        } else {
+          this.recoveryTuning[f.key] = v;
+        }
+        badge.setText(this.hasRecoveryTuning() ? t('modal.muscleManager.recoveryOverridden') : t('modal.muscleManager.recoveryFollowDefault'));
+      });
+    }
+  }
+
+  private hasRecoveryTuning(): boolean {
+    const tune = this.recoveryTuning;
+    return (
+      typeof tune.fatiguePerSet === 'number' ||
+      typeof tune.fatigueTau === 'number' ||
+      typeof tune.fitnessPerSet === 'number' ||
+      typeof tune.fitnessTau === 'number'
+    );
   }
 
   private renderHeatmapSettings(): void {
@@ -469,6 +540,7 @@ export class MuscleEditModal extends Modal {
       heatmapMetric: this.metricId || undefined,
       heatmapRange: range || undefined,
       heatmapLevels: this.muscleLevels ? (JSON.parse(JSON.stringify(this.muscleLevels)) as HeatmapLevel[]) : undefined,
+      recovery: this.hasRecoveryTuning() ? { ...this.recoveryTuning } : undefined,
     };
 
     try {

@@ -1,5 +1,5 @@
 import { Exercise, LogRow, Muscle, RecoveryTuning, WorkoutConfig } from './types';
-import { DEFAULT_DOSE_WEIGHTS, DoseWeights, roleWeight } from './muscleStats';
+import { DEFAULT_DOSE_WEIGHTS, DoseWeights, effectiveWeight } from './muscleStats';
 import { FITNESS_GROUPS, SVG_MUSCLE_CATALOG } from './svgMuscleCatalog';
 
 /*
@@ -116,7 +116,7 @@ export function collectDoses(
     for (const link of ex.muscles) {
       if (!wanted.has(link.muscleId)) continue;
       // 同一动作对同一肌群重复登记时取最大权重（主练优先），不累加
-      weight = Math.max(weight, roleWeight(link.role, weights));
+      weight = Math.max(weight, effectiveWeight(link, weights));
     }
     if (weight === 0) continue;
     const day = log.timestamp.slice(0, 10);

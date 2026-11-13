@@ -32,6 +32,20 @@ export function roleWeight(role: 'primary' | 'secondary', weights: DoseWeights =
 }
 
 /**
+ * 某条「训练项 → 肌肉」关联实际生效的折算系数（**唯一口径**，热力图与恢复曲线共用）。
+ * 优先级：link.weight（逐关联可调，比如深蹲对臀只算 0.3）→ 按 role 取全局默认（主 1 / 辅 0.5）。
+ * 非法值（0、负数、NaN）视为未设置，回落到 role 默认。
+ */
+export function effectiveWeight(
+  link: Pick<ExerciseMuscle, 'role' | 'weight'>,
+  weights: DoseWeights = DEFAULT_DOSE_WEIGHTS
+): number {
+  const custom = link.weight;
+  if (typeof custom === 'number' && Number.isFinite(custom) && custom > 0) return custom;
+  return roleWeight(link.role, weights);
+}
+
+/**
  * 预构建 exerciseId → 训练项肌肉映射，供 computeMuscleValue 做 O(1) 查找
  * （避免逐日志 O(exercises) 线性扫描），把整体复杂度从 O(muscles × logs × exercises)
  * 降到 O(muscles × logs)。
@@ -40,7 +54,7 @@ export function buildExerciseMuscleMap(config: WorkoutConfig): Map<string, Exerc
   const map = new Map<string, ExerciseMuscle[]>();
   for (const ex of config.exercises) {
     if (ex.muscles && ex.muscles.length) {
-      map.set(ex.id, ex.muscles.map((m) => ({ muscleId: m.muscleId, role: m.role })));
+      map.set(ex.id, ex.muscles.map((m) => ({ muscleId: m.muscleId, role: m.role, weight: m.weight })));
     }
   }
   return map;
@@ -71,7 +85,7 @@ export function computeMuscleValue(
     const injected = materializeLogs([log], fieldsOfCategory(config, log.category))[0];
     const instanceValue = computeStat(stat, [injected]);
     if (!Number.isFinite(instanceValue)) continue;
-    total += instanceValue * roleWeight(hit.role, weights);
+    total += instanceValue * effectiveWeight(hit, weights);
   }
   return Math.round(total * 100) / 100;
 }

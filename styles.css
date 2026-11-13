@@ -1005,6 +1005,48 @@ input[type="checkbox"].workout-switch:checked::after {
   flex-direction: column;
 }
 
+/* ---- 进阶折叠区（编辑肌肉弹窗「恢复设置」）----
+   默认收起：summary 是唯一可见行，触控靶在移动端补到 44px。 */
+.workout-advanced {
+  margin-top: 14px;
+  padding: 0 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 6px);
+  background: var(--background-secondary);
+}
+.workout-advanced:not([open]) {
+  background: transparent;
+}
+.workout-advanced-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 2px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+.workout-advanced-summary::-webkit-details-marker,
+.workout-advanced-summary::marker {
+  display: none;
+}
+/* 自绘箭头：展开时翻转 90°，避免依赖浏览器默认三角在不同主题下的样式差异 */
+.workout-advanced-summary::after {
+  content: '▸';
+  margin-left: auto;
+  color: var(--text-faint);
+  transition: transform 0.15s ease;
+}
+.workout-advanced[open] > .workout-advanced-summary::after {
+  transform: rotate(90deg);
+}
+.workout-advanced > p {
+  margin: 0 0 10px;
+}
+.workout-advanced .workout-two-col {
+  margin-bottom: 12px;
+}
+
 /* ---- 热力图颜色分级行（编辑肌肉弹窗：色块 / 十六进制 / ≤ / 阈值）---- */
 /* 对应重设计稿「编辑肌肉」页面的 scale-row 网格：32 / 100 / 24 / 1fr */
 .workout-scale-row {
@@ -1118,6 +1160,19 @@ input[type="checkbox"].workout-switch:checked::after {
 .is-mobile .workout-two-col {
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+/* 进阶折叠区的标题行当作按钮用，补足 44px 触控靶 */
+.is-mobile .workout-advanced-summary {
+  min-height: 44px;
+  padding: 12px 2px;
+}
+
+/* 颜色分级行（色块 / 十六进制 / ≤ / 阈值）：手机上把固定 100px 的 hex 列改成弹性，
+   否则 16px 字号下 hex 会被截断，而阈值列又被挤到只剩几十像素 */
+.is-mobile .workout-scale-row {
+  grid-template-columns: 28px minmax(84px, 1fr) 14px 72px;
+  gap: 6px;
 }
 
 /* 时长三框：无论 .workout-duration-grid（RecordModal）还是 .workout-duration-row

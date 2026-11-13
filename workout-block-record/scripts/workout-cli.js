@@ -1730,6 +1730,14 @@ var zh = {
       colorLevels: "\u989C\u8272\u5206\u7EA7",
       colorHex: "\u5341\u516D\u8FDB\u5236\u989C\u8272\uFF0C\u5982 #3b82f6",
       scaleHint: "\u989C\u8272\u7531\u8F7B\u5230\u91CD\uFF0C\u6BCF\u6863\u5BF9\u5E94\u4E00\u4E2A\u9608\u503C\uFF1A\u5DE6\u4FA7\u4E3A\u989C\u8272\uFF08\u70B9\u8272\u5757\u53EF\u62FE\u53D6\uFF0C\u6216\u76F4\u63A5\u586B\u5341\u516D\u8FDB\u5236\uFF09\uFF0C\u53F3\u4FA7\u4E3A\u9608\u503C\uFF08\u2264\uFF09\u3002\u5206\u7EA7\u6570\u51B3\u5B9A\u989C\u8272\u6863\u6570\u91CF\u3002",
+      recoverySettings: "\u6062\u590D\u8BBE\u7F6E\uFF08\u8FDB\u9636\uFF09",
+      recoveryFollowDefault: "\u8DDF\u968F\u9ED8\u8BA4",
+      recoveryOverridden: "\u5DF2\u81EA\u5B9A\u4E49",
+      recoveryHint: "\u7559\u7A7A\uFF1D\u8DDF\u968F\u9ED8\u8BA4\u3002\u53EA\u5F71\u54CD\u8FD9\u5757\u808C\u8089\u7684\u6062\u590D\u66F2\u7EBF\uFF1B\u808C\u7FA4\u66F2\u7EBF\u4E0D\u8BFB\u8FD9\u91CC\u3002",
+      recoveryFatiguePerSet: "\u75B2\u52B3\u52A8\u529B\u5EA6\uFF08\u70B9/\u7EC4\uFF09",
+      recoveryFatigueTau: "\u75B2\u52B3\u6D88\u9000\uFF08\u5929\uFF09",
+      recoveryFitnessPerSet: "\u9002\u5E94\u7559\u5B58\uFF08\u70B9/\u7EC4\uFF09",
+      recoveryFitnessTau: "\u9002\u5E94\u6D88\u9000\uFF08\u5929\uFF09",
       initScale: "\u7528\u9ED8\u8BA4 4 \u6863",
       scaleMaxHint: "\u2264",
       scaleUnbounded: "\uFF08\u65E0\u7A77\u5927\uFF09"
@@ -2228,6 +2236,14 @@ var en = {
       colorLevels: "Color levels",
       colorHex: "Hex color, e.g. #3b82f6",
       scaleHint: "Color light\u2192heavy, each level has a threshold: left is the color (click the swatch to pick, or type a hex), right is the threshold (\u2264). Level count sets how many color tiers.",
+      recoverySettings: "Recovery tuning (advanced)",
+      recoveryFollowDefault: "Following defaults",
+      recoveryOverridden: "Customized",
+      recoveryHint: "Blank = follow defaults. Affects this muscle only; group curves ignore it.",
+      recoveryFatiguePerSet: "Fatigue per set (pts)",
+      recoveryFatigueTau: "Fatigue decay (days)",
+      recoveryFitnessPerSet: "Fitness per set (pts)",
+      recoveryFitnessTau: "Fitness decay (days)",
       initScale: "Use default 4 levels",
       scaleMaxHint: "\u2264",
       scaleUnbounded: "(unbounded)"
@@ -6037,19 +6053,26 @@ function getToolCapability() {
 }
 
 // src/data/muscleStats.ts
-function roleWeight(role) {
-  return role === "primary" ? 1 : 0.5;
+var DEFAULT_DOSE_WEIGHTS = { primary: 1, secondary: 0.5 };
+function roleWeight(role, weights = DEFAULT_DOSE_WEIGHTS) {
+  return role === "primary" ? weights.primary : weights.secondary;
+}
+function effectiveWeight(link, weights = DEFAULT_DOSE_WEIGHTS) {
+  const custom = link.weight;
+  if (typeof custom === "number" && Number.isFinite(custom) && custom > 0)
+    return custom;
+  return roleWeight(link.role, weights);
 }
 function buildExerciseMuscleMap(config) {
   const map = /* @__PURE__ */ new Map();
   for (const ex of config.exercises) {
     if (ex.muscles && ex.muscles.length) {
-      map.set(ex.id, ex.muscles.map((m) => ({ muscleId: m.muscleId, role: m.role })));
+      map.set(ex.id, ex.muscles.map((m) => ({ muscleId: m.muscleId, role: m.role, weight: m.weight })));
     }
   }
   return map;
 }
-function computeMuscleValue(muscle, stat2, range, logs, exerciseMuscleMap, config) {
+function computeMuscleValue(muscle, stat2, range, logs, exerciseMuscleMap, config, weights = DEFAULT_DOSE_WEIGHTS) {
   let total = 0;
   for (const log of logs) {
     if (!log.timestamp || !log.exerciseId || !dateWithinRange(log.timestamp.split(" ")[0], range))
@@ -6064,7 +6087,7 @@ function computeMuscleValue(muscle, stat2, range, logs, exerciseMuscleMap, confi
     const instanceValue = computeStat(stat2, [injected]);
     if (!Number.isFinite(instanceValue))
       continue;
-    total += instanceValue * roleWeight(hit.role);
+    total += instanceValue * effectiveWeight(hit, weights);
   }
   return Math.round(total * 100) / 100;
 }

@@ -123,6 +123,7 @@ describe('management UI regressions', async () => {
   const { TypeModal } = await import('./TypeModal');
   const { TypeManagerModal } = await import('./TypeManagerModal');
   const { resolveLogExerciseName } = await import('../data/display');
+  const { MuscleEditModal } = await import('./MuscleEditModal');
 
   // 构造一个假的 App 对象：只提供测试需要的 vault.getFolders / loadData / saveData
   function createApp() {
@@ -341,4 +342,51 @@ describe('management UI regressions', async () => {
   });
 
   // 用例 F1（原 PlanRecordModal 保存写多条记录）已随 Modal 重构移除，理由同上。
+
+  // 用例：编辑肌肉页的「恢复设置」折叠区——默认收起、四个数值参数、留空跟随默认、填了才落库
+  it('renders the recovery tuning section collapsed, and saves overrides only when filled', async () => {
+    setLocale('zh');
+    const dataManager = createDataManager();
+    const config = await dataManager.getConfig();
+    const muscle = config.muscles[0];
+    const modal = new MuscleEditModal(dataManager as any, { muscle } as any);
+
+    await modal.onOpen();
+
+    const details = modal.contentEl.querySelector('.workout-advanced') as HTMLDetailsElement | null;
+    expect(details).toBeTruthy();
+    expect(details!.open).toBe(false); // 默认收起
+    expect(details!.querySelector('summary')!.textContent).toContain('恢复设置');
+
+    const inputs = Array.from(details!.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
+    expect(inputs.length).toBe(4);
+    expect(inputs.map((i) => i.placeholder)).toEqual(['2.8', '2.5', '1', '18']);
+    expect(inputs.every((i) => i.value === '')).toBe(true); // 未设置 → 全部留空
+
+    // 只填一个：保存时只落这一个字段，其余仍不写（跟随默认）
+    inputs[1].value = '4';
+    inputs[1].dispatchEvent(new Event('input'));
+    await (modal as any).save();
+
+    const payload = (dataManager.updateMuscle as any).mock.calls[0][1];
+    expect(payload.recovery).toEqual({ fatigueTau: 4 });
+  });
+
+  // 用例：已有逐肌参数时，折叠区标题显示「已自定义」并把值回填到输入框
+  it('prefills recovery overrides and marks the section as customized', async () => {
+    setLocale('zh');
+    const dataManager = createDataManager();
+    const config = await dataManager.getConfig();
+    const muscle = { ...config.muscles[0], recovery: { fatiguePerSet: 3.5, fitnessTau: 21 } };
+    const modal = new MuscleEditModal(dataManager as any, { muscle } as any);
+
+    await modal.onOpen();
+
+    const details = modal.contentEl.querySelector('.workout-advanced') as HTMLDetailsElement;
+    expect(details.querySelector('summary')!.textContent).toContain('已自定义');
+    const inputs = Array.from(details.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
+    expect(inputs[0].value).toBe('3.5');
+    expect(inputs[1].value).toBe('');
+    expect(inputs[3].value).toBe('21');
+  });
 });
