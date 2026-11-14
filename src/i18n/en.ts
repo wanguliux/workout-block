@@ -150,7 +150,7 @@ export const en = {
       todayState: 'Today {v}',
       legendCurve: 'Muscle state',
       legendBaseline: 'Trained level 100',
-      legendFloor: 'Pre-training level {v}',
+      legendFloor: 'Pre-training level (yellow dashed)',
       legendToday: 'Today',
       legendForecast: 'If you stop for {n} d',
       todayLine: 'Today · the dashed part projects {n} days without training',

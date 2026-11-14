@@ -145,7 +145,7 @@ export async function renderWorkoutRecovery(
 
 const VIEW_W = 690;
 const VIEW_H = 250;
-const PAD_L = 44;
+const PAD_L = 18; // 纵轴不再标数字，左侧只需留一点呼吸空间
 const PAD_R = 14;
 const PAD_T = 16;
 const PAD_B = 34;
@@ -199,28 +199,19 @@ function renderChart(
     : '';
 
   const parts: string[] = [];
-  // 纵轴网格 + 刻度（按步长均匀分布，不会出现 85 这种随机数）
-  for (let v = lo; v <= hi + 1e-9; v += step) {
-    parts.push(
-      `<line x1="${PAD_L}" y1="${y(v).toFixed(1)}" x2="${VIEW_W - PAD_R}" y2="${y(v).toFixed(1)}" stroke="currentColor" stroke-opacity="0.12"/>` +
-        `<text x="${PAD_L - 8}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end" class="workout-recovery-axis">${v}</text>`
-    );
-  }
+  // 纵坐标不标数值、不画网格：这个轴只承载「相对高低」，绝对数字没有决策意义。
+  // 整张图唯一的参考线是底部那条黄色虚线（运动前水平），其余只看形状。
   // 横轴：每 7 天一个刻度
   for (let d = Math.ceil(from); d <= to; d += 7) {
     parts.push(
       `<text x="${x(d).toFixed(1)}" y="${VIEW_H - PAD_B + 18}" text-anchor="middle" class="workout-recovery-axis">${fromDayNum(d).slice(5)}</text>`
     );
   }
-  // 面积（只覆盖历史段）+ 练到位水平（虚线）+ 运动前水平（点线，停训掉到这里就不再掉）+ 曲线
+  // 面积（只覆盖历史段）+ 运动前水平（黄色虚线，唯一参考线）+ 曲线
   if (area) parts.push(`<path d="${area}" fill="var(--interactive-accent)" fill-opacity="0.08"/>`);
-  parts.push(
-    `<line x1="${PAD_L}" y1="${y(p.baseline).toFixed(1)}" x2="${VIEW_W - PAD_R}" y2="${y(p.baseline).toFixed(1)}" stroke="currentColor" stroke-opacity="0.35" stroke-dasharray="6 4"/>`
-  );
   if (p.detrainDepth > 0) {
     parts.push(
-      `<line x1="${PAD_L}" y1="${y(summary.floor).toFixed(1)}" x2="${VIEW_W - PAD_R}" y2="${y(summary.floor).toFixed(1)}" stroke="currentColor" stroke-opacity="0.22" stroke-dasharray="1 4" stroke-linecap="round"/>` +
-        `<text x="${VIEW_W - PAD_R}" y="${(y(summary.floor) - 4).toFixed(1)}" text-anchor="end" class="workout-recovery-axis">${t('codeblock.recovery.legendFloor', { v: String(Math.round(summary.floor)) })}</text>`
+      `<line x1="${PAD_L}" y1="${y(summary.floor).toFixed(1)}" x2="${VIEW_W - PAD_R}" y2="${y(summary.floor).toFixed(1)}" stroke="var(--color-yellow, #eab308)" stroke-opacity="0.85" stroke-width="1.6" stroke-dasharray="7 5"/>`
     );
   }
   if (linePast) {
@@ -254,9 +245,6 @@ function renderChart(
     `<circle cx="${x(today).toFixed(1)}" cy="${y(summary.state).toFixed(1)}" r="4.6" fill="var(--interactive-accent)">` +
       `<title>${t('codeblock.recovery.todayState', { v: summary.state.toFixed(1) })}</title></circle>`
   );
-  parts.push(
-    `<text x="${x(today).toFixed(1)}" y="${(y(summary.state) - 10).toFixed(1)}" text-anchor="middle" class="workout-recovery-today-label">${Math.round(summary.state)}</text>`
-  );
 
   // 十字准线（默认隐藏）：最近采样点为十字中心，旁边浮一个日期气泡。
   // 放在最后画，保证压在曲线之上。
@@ -285,9 +273,8 @@ function renderChart(
   const legend = container.createDiv();
   legend.addClass('workout-recovery-legend');
   legend.createSpan({ text: t('codeblock.recovery.legendCurve'), cls: 'workout-recovery-legend-item' });
-  legend.createSpan({ text: t('codeblock.recovery.legendBaseline'), cls: 'workout-recovery-legend-item is-dashed' });
   if (p.detrainDepth > 0) {
-    legend.createSpan({ text: t('codeblock.recovery.legendFloor', { v: String(Math.round(summary.floor)) }), cls: 'workout-recovery-legend-item is-dotted' });
+    legend.createSpan({ text: t('codeblock.recovery.legendFloor'), cls: 'workout-recovery-legend-item is-floor' });
   }
   legend.createSpan({ text: t('codeblock.recovery.legendToday'), cls: 'workout-recovery-legend-item is-today' });
   if (forecast > 0) {

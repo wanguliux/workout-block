@@ -151,7 +151,7 @@ export const zh = {
       todayState: '今天 {v}',
       legendCurve: '肌肉状态',
       legendBaseline: '练到位水平 100',
-      legendFloor: '运动前水平 {v}',
+      legendFloor: '运动前水平（黄色虚线）',
       legendToday: '今天',
       legendForecast: '如果不练（{n} 天）',
       todayLine: '今天 · 右侧虚线＝假设从现在起不再练的推算（{n} 天）',
