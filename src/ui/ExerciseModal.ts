@@ -4,6 +4,8 @@ import { getExerciseName, getMuscleName, getTrainingTypeName } from '../data/dis
 import { Exercise, TrainingType, Muscle, ExerciseMuscle } from '../data/types';
 import { t } from '../i18n';
 import { INVALID_ID_RE, isInvalidId } from './idValidation';
+import { DEFAULT_DOSE_WEIGHTS } from '../data/muscleStats';
+import { parseNumberInput } from '../util/number';
 
 /*
  * ExerciseModal.ts —— "新建/编辑训练项"弹窗
@@ -145,29 +147,62 @@ export class ExerciseModal extends Modal {
       ?.filter((m) => m.role === 'secondary')
       .map((m) => m.muscleId) || [];
 
+    // 已有的练度（weight），按 "role:muscleId" 索引，用于回填
+    const existingWeight = new Map<string, number>();
+    for (const m of this.options.editExercise?.muscles ?? []) {
+      if (typeof m.weight === 'number') existingWeight.set(`${m.role}:${m.muscleId}`, m.weight);
+    }
+
     for (const muscle of this.muscles) {
       const muscleName = getMuscleName(muscle) || muscle.id;
-
-      // 主练复选框：每个肌肉一个 label 包裹 checkbox + 文字
-      const primaryLabel = this.primaryMusclesContainer.createEl('label');
-      primaryLabel.addClass('workout-check-item');
-      const primaryCheckbox = primaryLabel.createEl('input', { type: 'checkbox' });
-      primaryCheckbox.value = muscle.id; // 用 muscle.id 作为值，保存时取这个
-      if (selectedPrimary.includes(muscle.id)) {
-        primaryCheckbox.checked = true;
-      }
-      primaryLabel.createSpan({ text: muscleName });
-
-      // 辅助复选框：结构同上
-      const secondaryLabel = this.secondaryMusclesContainer.createEl('label');
-      secondaryLabel.addClass('workout-check-item');
-      const secondaryCheckbox = secondaryLabel.createEl('input', { type: 'checkbox' });
-      secondaryCheckbox.value = muscle.id;
-      if (selectedSecondary.includes(muscle.id)) {
-        secondaryCheckbox.checked = true;
-      }
-      secondaryLabel.createSpan({ text: muscleName });
+      this.renderMuscleItem(this.primaryMusclesContainer, muscle, muscleName, 'primary',
+        selectedPrimary.includes(muscle.id), existingWeight.get(`primary:${muscle.id}`));
+      this.renderMuscleItem(this.secondaryMusclesContainer, muscle, muscleName, 'secondary',
+        selectedSecondary.includes(muscle.id), existingWeight.get(`secondary:${muscle.id}`));
     }
+  }
+
+  /**
+   * 一个「肌肉 + 练度」条目：勾选后右侧出现练度输入框（留空＝按角色默认）。
+   * 练度＝这条训练项对这块肌肉的参与程度：1 练度 ≈ 1 组标准动作对该肌肉的有效刺激，
+   * 用来替代「组数」做跨动作比较（8 组深蹲与 8 组弯举对股四头的意义本就不同）。
+   * 数字框在 label 内，必须拦住点击冒泡，否则点输入框会把复选框点掉。
+   */
+  private renderMuscleItem(
+    container: HTMLElement,
+    muscle: Muscle,
+    muscleName: string,
+    role: 'primary' | 'secondary',
+    checked: boolean,
+    weight?: number
+  ): void {
+    const label = container.createEl('label');
+    label.addClass('workout-check-item');
+
+    const checkbox = label.createEl('input', { type: 'checkbox' });
+    checkbox.value = muscle.id; // 用 muscle.id 作为值，保存时取这个
+    checkbox.checked = checked;
+    label.createSpan({ text: muscleName });
+
+    const weightInput = label.createEl('input', { type: 'number' });
+    weightInput.addClass('workout-muscle-weight');
+    weightInput.setAttribute('step', 'any');
+    weightInput.setAttribute('min', '0.1');
+    weightInput.setAttribute('inputmode', 'decimal'); // 移动端弹小数键盘
+    weightInput.setAttribute('aria-label', t('modal.newExercise.stimulus'));
+    weightInput.placeholder = String(role === 'primary' ? DEFAULT_DOSE_WEIGHTS.primary : DEFAULT_DOSE_WEIGHTS.secondary);
+    weightInput.title = t('modal.newExercise.stimulusHint');
+    weightInput.value = typeof weight === 'number' ? String(weight) : '';
+    // 点数字框不能连带切换复选框
+    for (const evt of ['click', 'mousedown', 'pointerdown']) {
+      weightInput.addEventListener(evt, (e) => e.stopPropagation());
+    }
+
+    const sync = (): void => {
+      weightInput.style.display = checkbox.checked ? '' : 'none';
+    };
+    checkbox.addEventListener('change', sync);
+    sync();
   }
 
   // 保存：先做必填校验（名称、类型），再用 querySelectorAll 收集两组中被勾选的肌肉，
@@ -214,13 +249,18 @@ export class ExerciseModal extends Modal {
     const primaryCheckboxes = this.primaryMusclesContainer.querySelectorAll('input[type="checkbox"]:checked');
     const secondaryCheckboxes = this.secondaryMusclesContainer.querySelectorAll('input[type="checkbox"]:checked');
 
-    // 把勾选结果组装成肌肉关系数组
+    // 把勾选结果组装成肌肉关系数组（含练度 weight）
+    const readWeight = (cb: Element): number | undefined => {
+      const input = cb.parentElement?.querySelector<HTMLInputElement>('.workout-muscle-weight');
+      const v = parseNumberInput(input?.value ?? '');
+      return v === undefined || v <= 0 ? undefined : v;
+    };
     const muscles: ExerciseMuscle[] = [];
     primaryCheckboxes.forEach((cb) => {
-      muscles.push({ muscleId: (cb as HTMLInputElement).value, role: 'primary' });
+      muscles.push({ muscleId: (cb as HTMLInputElement).value, role: 'primary', weight: readWeight(cb) });
     });
     secondaryCheckboxes.forEach((cb) => {
-      muscles.push({ muscleId: (cb as HTMLInputElement).value, role: 'secondary' });
+      muscles.push({ muscleId: (cb as HTMLInputElement).value, role: 'secondary', weight: readWeight(cb) });
     });
 
     try {

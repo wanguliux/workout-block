@@ -1,6 +1,8 @@
 import { MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian';
 import { HeatmapLevel, LogRow, Muscle, StatDef, WorkoutConfig } from '../data/types';
 import { buildExerciseMuscleMap, computeMuscleValue } from '../data/muscleStats';
+import { GROWTH_SCALE, computeGrowthRatio } from '../data/muscleGrowth';
+import { DEFAULT_RECOVERY_PARAMS, collectDoses, paramsForSubject, recoverySummary, toDayNum } from '../data/recovery';
 import {
   formatSvgMuscleLabel,
   HIDDEN_SVG_GROUP_IDS,
@@ -19,6 +21,8 @@ import { DEFAULT_HEATMAP_SCALE, colorToCss, dateWithinRange } from '../data/heat
 interface HeatmapParams {
   metric?: string;
   range?: string;
+  /** 视图：recovery＝练了多少/还有多久恢复；growth＝跟自己比练得够不够 */
+  view?: 'recovery' | 'growth';
 }
 
 function parseParams(source: string): HeatmapParams {
@@ -31,6 +35,7 @@ function parseParams(source: string): HeatmapParams {
     if (!key || !value) continue;
     if (key === 'metric') params.metric = value;
     if (key === 'range') params.range = value;
+    if (key === 'view') params.view = value === 'growth' ? 'growth' : 'recovery';
   }
   return params;
 }
@@ -70,7 +75,7 @@ function ensureHeatmapTooltip(): HTMLElement {
   return tip;
 }
 
-function bindMuscleTooltips(wrap: HTMLElement, side: 'front' | 'back'): void {
+function bindMuscleTooltips(wrap: HTMLElement, side: 'front' | 'back', extra?: Map<string, string>): void {
   const tip = ensureHeatmapTooltip();
 
   const entryFor = (target: EventTarget | null): SvgMuscleEntry | null => {
@@ -100,7 +105,10 @@ function bindMuscleTooltips(wrap: HTMLElement, side: 'front' | 'back'): void {
     const entry = entryFor(ev.target);
     if (!entry) return;
     const me = ev as MouseEvent;
+    // 第一行肌肉名，第二行按当前视图追加（恢复：N 天 / 练度配比 X%）
     tip.textContent = formatSvgMuscleLabel(entry, getLocale());
+    const extraText = extra?.get(side + ':' + entry.id);
+    if (extraText) tip.createDiv({ text: extraText, cls: 'workout-heatmap-tooltip-sub' });
     tip.setCssStyles({ display: 'block' });
     locate(me);
   });
@@ -110,6 +118,12 @@ function bindMuscleTooltips(wrap: HTMLElement, side: 'front' | 'back'): void {
   wrap.addEventListener('mouseleave', () => {
     tip.setCssStyles({ display: 'none' });
   });
+}
+
+/** 本地当天日期（YYYY-MM-DD）。 */
+function todayDateStr(): string {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
 function resolveDefaultMetric(config: WorkoutConfig): StatDef | undefined {
@@ -186,37 +200,83 @@ export async function renderWorkoutHeatmap(
   const container = el.createDiv();
   container.addClass('workout-heatmap-container');
 
-  // 头部：视图切换 + 图例
+  // 头部：正/背切换 + 视图切换（恢复 / 发展）+ 图例
   const header = container.createDiv();
   header.addClass('workout-heatmap-header');
 
-  const viewSwitch = header.createDiv();
-  viewSwitch.addClass('workout-heatmap-switch');
-  const frontBtn = viewSwitch.createEl('button', { text: t('modal.muscleManager.front') });
-  const backBtn = viewSwitch.createEl('button', { text: t('modal.muscleManager.back') });
+  const sideSwitch = header.createDiv();
+  sideSwitch.addClass('workout-heatmap-switch');
+  const frontBtn = sideSwitch.createEl('button', { text: t('modal.muscleManager.front') });
+  const backBtn = sideSwitch.createEl('button', { text: t('modal.muscleManager.back') });
   frontBtn.addClass('mod-cta');
+
+  // 恢复视图＝练了多少 + 还有多久恢复（绝对量，回答「现在能不能练」）
+  // 发展视图＝近 4 周练度相对自己 12 周中位数的比值（相对量，回答「练得够不够 / 偏不偏」）
+  const modeSwitch = header.createDiv();
+  modeSwitch.addClass('workout-heatmap-switch');
+  const recoveryBtn = modeSwitch.createEl('button', { text: t('codeblock.heatmap.viewRecovery') });
+  const growthBtn = modeSwitch.createEl('button', { text: t('codeblock.heatmap.viewGrowth') });
+  let mode: 'recovery' | 'growth' = params.view ?? 'recovery';
 
   const info = header.createDiv();
   info.addClass('workout-heatmap-info');
-  const metricName = metric?.name ?? t('modal.muscleManager.followDefaultMetric');
-  const rangeText = codeRange ?? '7d';
-  info.createSpan({ text: `${t('modal.muscleManager.heatmapMetric')}: ${metricName}` });
-  info.createSpan({ text: `${t('modal.muscleManager.heatmapRange')}: ${rangeText}` });
-
   const legend = header.createDiv();
   legend.addClass('workout-heatmap-legend');
-  // 阈值逐肌可配，单一图例无法呈现各肌不同刻度，故图例仅展示 4 色由轻→重，
-  // 具体阈值在各肌肉编辑页查看。
-  legend.createSpan({ text: t('codeblock.heatmap.legendLow'), cls: 'workout-heatmap-legend-end' });
-  const legendScale = [...DEFAULT_HEATMAP_SCALE].sort((a, b) => (a.max ?? Infinity) - (b.max ?? Infinity));
-  for (let i = 0; i < legendScale.length; i++) {
-    const level = legendScale[i];
-    const item = legend.createDiv();
-    item.addClass('workout-heatmap-legend-item');
-    const dot = item.createSpan();
-    dot.setCssStyles({ width: '14px', height: '14px', borderRadius: '50%', background: colorToCss(level.color) });
+
+  function renderInfo(): void {
+    info.empty();
+    if (mode === 'recovery') {
+      const metricName = metric?.name ?? t('modal.muscleManager.followDefaultMetric');
+      info.createSpan({ text: `${t('modal.muscleManager.heatmapMetric')}: ${metricName}` });
+      info.createSpan({ text: `${t('modal.muscleManager.heatmapRange')}: ${codeRange ?? '7d'}` });
+    } else {
+      // 发展视图不谈「指标」——说指标会被当成绝对练度来读
+      info.createSpan({ text: t('codeblock.heatmap.viewGrowthInfo') });
+    }
   }
-  legend.createSpan({ text: t('codeblock.heatmap.legendHigh'), cls: 'workout-heatmap-legend-end' });
+
+  function renderLegend(): void {
+    legend.empty();
+    if (mode === 'recovery') {
+      // 阈值逐肌可配，单一图例无法呈现各肌不同刻度，故图例仅展示 4 色由轻→重，
+      // 具体阈值在各肌肉编辑页查看。
+      legend.createSpan({ text: t('codeblock.heatmap.legendLow'), cls: 'workout-heatmap-legend-end' });
+      const scale = [...DEFAULT_HEATMAP_SCALE].sort((a, b) => (a.max ?? Infinity) - (b.max ?? Infinity));
+      for (const level of scale) {
+        const item = legend.createDiv();
+        item.addClass('workout-heatmap-legend-item');
+        item.createSpan().setCssStyles({
+          width: '14px',
+          height: '14px',
+          borderRadius: '50%',
+          background: colorToCss(level.color),
+        });
+      }
+      legend.createSpan({ text: t('codeblock.heatmap.legendHigh'), cls: 'workout-heatmap-legend-end' });
+      return;
+    }
+    // 发展视图：分档是比值，必须标百分数；色块用方块，与恢复视图的圆点在形状上也区分开
+    legend.createSpan({ text: t('codeblock.heatmap.legendLess'), cls: 'workout-heatmap-legend-end' });
+    GROWTH_SCALE.forEach((level, i) => {
+      const lo = i === 0 ? 0 : GROWTH_SCALE[i - 1].max;
+      const hi = level.max;
+      const label = Number.isFinite(hi)
+        ? i === 0
+          ? `<${Math.round(hi * 100)}%`
+          : `${Math.round(lo * 100)}–${Math.round(hi * 100)}%`
+        : `>${Math.round(lo * 100)}%`;
+      const item = legend.createDiv();
+      item.addClass('workout-heatmap-legend-item');
+      item.createSpan().setCssStyles({
+        width: '12px',
+        height: '12px',
+        borderRadius: '3px',
+        background: colorToCss(level.color),
+      });
+      item.createSpan({ text: label, cls: 'workout-heatmap-legend-band' });
+    });
+    legend.createSpan({ text: t('codeblock.heatmap.legendMore'), cls: 'workout-heatmap-legend-end' });
+  }
 
   const viewsWrap = container.createDiv();
   viewsWrap.addClass('workout-heatmap-views');
@@ -238,91 +298,168 @@ export async function renderWorkoutHeatmap(
     }
   }
 
-  // 给每块肌肉路径绑定悬停提示（骨架阶段绑定一次即可，正/背切换只是显隐，路径元素不变）。
-  // try/catch 兜底：提示气泡属增强体验，绝不应拖垮核心渲染（正/背切换、上色）。
+  // 悬停提示的追加信息（恢复天数 / 练度配比），键为 "side:svgRegionId"。
+  // 提示在骨架阶段就绑好了，切视图只更新这张表，不必重绑事件。
+  const extraTip = new Map<string, string>();
+
   try {
-    bindMuscleTooltips(frontWrap, 'front');
-    bindMuscleTooltips(backWrap, 'back');
+    bindMuscleTooltips(frontWrap, 'front', extraTip);
+    bindMuscleTooltips(backWrap, 'back', extraTip);
   } catch (err) {
     console.warn('[workout-heatmap] 绑定悬停提示失败，已跳过（不影响上色与视图切换）', err);
   }
 
   // 懒渲染占位：未进入视口前只显示骨架 + 一句提示，真正的「逐肌肉计算 + 上色」
-  // 延迟到代码块滚动进入视口时才执行（按需渲染）。这样即使在有热力图的笔记里删记录，
-  // 只要热力图不在视野内，就不会跟着每次数据变化做 O(muscles × logs) 的重计算，主线程更轻。
+  // 延迟到代码块滚动进入视口时才执行（按需渲染）。
   const lazyTip = container.createDiv({ cls: 'workout-heatmap-lazy' });
   lazyTip.setText(t('codeblock.heatmap.lazy'));
 
-  // —— 以下为「重计算 + 上色」，仅当代码块可见时执行 ——
-  function applyHeatmap(): void {
-    if (lazyTip.isConnected) lazyTip.remove();
+  interface MuscleEntry {
+    muscle: Muscle;
+    value: number;
+    scale: HeatmapLevel[];
+    tip: string;
+  }
 
-    // 预构建 exerciseId → 训练项肌肉映射（data/muscleStats.ts，O(1) 查找）
+  let recoveryEntries: MuscleEntry[] | null = null;
+  let growthEntries: MuscleEntry[] | null = null;
+  const todayDay = toDayNum(todayDateStr());
+
+  /** 恢复视图：按所选指标算绝对量（练了多少），提示里补「还有多久恢复」。 */
+  function buildRecoveryEntries(): MuscleEntry[] {
     const exerciseMuscleMap = buildExerciseMuscleMap(config);
-
-    // 计算每块肌肉的标量值
-    const muscleEntries: { muscle: Muscle; stat: StatDef; range: string; value: number; scale: HeatmapLevel[] }[] = [];
+    const out: MuscleEntry[] = [];
     for (const muscle of config.muscles) {
       const stat = resolveMetricId(config, muscle, params.metric);
       if (!stat) continue;
       const range = resolveRange(muscle, codeRange);
       const value = computeMuscleValue(muscle, stat, range, logs, exerciseMuscleMap, config);
-      // 逐肌分档：优先用该肌自己的 heatmapLevels，否则用所选 StatDef 的默认分档
       const scale = muscle.heatmapLevels ?? stat.heatmapScale ?? DEFAULT_HEATMAP_SCALE;
-      muscleEntries.push({ muscle, stat, range, value, scale });
+      let tip = t('codeblock.heatmap.metricValue', { name: stat.name, v: String(value) });
+      const doses = collectDoses(logs, config.exercises, [muscle.id]);
+      const sum = recoverySummary(paramsForSubject(config, [muscle.id], DEFAULT_RECOVERY_PARAMS), doses, todayDay);
+      if (sum.hasData) {
+        tip +=
+          sum.etaDays === null
+            ? ` · ${t('codeblock.heatmap.recovered')}`
+            : ` · ${t('codeblock.heatmap.recoverIn', { n: sum.etaDays.toFixed(1) })}`;
+      }
+      out.push({ muscle, value, scale, tip });
     }
+    return out;
+  }
 
-    const activeLogs = logs.filter((l) => l.timestamp && dateWithinRange(l.timestamp.split(' ')[0], codeRange ?? '7d'));
-    const hasData = activeLogs.length > 0 && muscleEntries.length > 0 && muscleEntries.some((e) => e.value > 0);
-    if (!hasData) {
-      const emptyMsg = codeRange === 'all'
-        ? t('codeblock.heatmap.emptyAll')
-        : t('codeblock.heatmap.emptyRange', { range: rangeText });
-      container.createDiv({ text: emptyMsg, cls: 'workout-heatmap-empty' });
+  /** 发展视图：近 4 周周均练度 ÷ 近 12 周周练度中位数（相对自己）。无基线时 value=NaN，不上色。 */
+  function buildGrowthEntries(): MuscleEntry[] {
+    const exerciseMuscleMap = buildExerciseMuscleMap(config);
+    const out: MuscleEntry[] = [];
+    for (const muscle of config.muscles) {
+      const g = computeGrowthRatio(muscle.id, logs, exerciseMuscleMap, todayDay);
+      const tip =
+        g.ratio === null
+          ? t('codeblock.heatmap.growthNoBaseline')
+          : t('codeblock.heatmap.growthTip', {
+              recent: g.recentWeekly.toFixed(1),
+              base: (g.baselineWeekly ?? 0).toFixed(1),
+              pct: String(Math.round(g.ratio * 100)),
+            });
+      out.push({ muscle, value: g.ratio === null ? NaN : g.ratio, scale: GROWTH_SCALE, tip });
     }
+    return out;
+  }
 
-    function applyColorToView(wrap: HTMLElement, side: 'front' | 'back'): void {
-      if (!hasData) return;
-      // 先聚合每个 SVG 路径的累计值，并记下「贡献最大的肌肉」的分档作为该路径的着色刻度。
-      // 注意：同一 id 可能在目录里同时存在 front 和 back 两条记录（同一肌群在正/背
-      // 两个 SVG 文件里都画了同名路径）。这里用 some() 判断「该 id 是否在目标 side
-      // 上存在」，避免 find() 命中第一条记录后误把另一侧的同名路径过滤掉。
-      const pathInfo = new Map<string, { value: number; scale: HeatmapLevel[]; winner: number }>();
-      for (const { muscle, value, scale } of muscleEntries) {
-        if (value <= 0) continue;
-        const ids = (muscle.svgRegionIds ?? []).filter((id) =>
-          SVG_MUSCLE_CATALOG.some((e) => e.id === id && e.side === side)
-        );
-        if (ids.length === 0) continue;
-        for (const id of ids) {
-          const ex = pathInfo.get(id);
-          if (!ex) {
-            pathInfo.set(id, { value, scale, winner: value });
-          } else {
-            ex.value += value;
-            // 多肌命中同路径时，用「单次贡献最大」的肌肉的分档来着色
-            if (value > ex.winner) {
-              ex.winner = value;
-              ex.scale = scale;
-            }
+  /** 把一组肌肉值画到一张 SVG 上（同一路径被多肌命中时值相加、按贡献最大者取刻度）。 */
+  function applyColorToView(wrap: HTMLElement, side: 'front' | 'back', entries: MuscleEntry[]): void {
+    const pathInfo = new Map<string, { value: number; scale: HeatmapLevel[]; winner: number }>();
+    for (const { muscle, value, scale } of entries) {
+      if (!Number.isFinite(value)) continue;
+      const ids = (muscle.svgRegionIds ?? []).filter((id) =>
+        SVG_MUSCLE_CATALOG.some((e) => e.id === id && e.side === side)
+      );
+      if (ids.length === 0) continue;
+      for (const id of ids) {
+        const ex = pathInfo.get(id);
+        if (!ex) {
+          pathInfo.set(id, { value, scale, winner: value });
+        } else {
+          ex.value += value;
+          // 多肌命中同路径时，用「单次贡献最大」的肌肉的分档来着色
+          if (value > ex.winner) {
+            ex.winner = value;
+            ex.scale = scale;
           }
         }
       }
-
-      for (const [id, info] of pathInfo) {
-        const pathEl = wrap.querySelector<SVGPathElement | SVGGElement>(`[id="${id}"]`);
-        if (!pathEl) {
-          console.warn(`[workout-heatmap] SVG path not found: ${id}`);
-          continue;
-        }
-        const colorName = colorForValue(info.value, info.scale);
-        pathEl.setCssStyles({ fill: colorToCss(colorName), opacity: '0.85' });
-      }
     }
 
-    applyColorToView(frontWrap, 'front');
-    applyColorToView(backWrap, 'back');
+    for (const [id, info2] of pathInfo) {
+      const pathEl = wrap.querySelector<SVGPathElement | SVGGElement>(`[id="${id}"]`);
+      if (!pathEl) {
+        console.warn(`[workout-heatmap] SVG path not found: ${id}`);
+        continue;
+      }
+      const colorName = colorForValue(info2.value, info2.scale);
+      pathEl.setCssStyles({ fill: colorToCss(colorName), opacity: '0.85' });
+    }
   }
+
+  /** 按当前视图重画：先清掉上一轮内联填充，再刷提示表与颜色。 */
+  function paint(): void {
+    for (const wrap of [frontWrap, backWrap]) {
+      for (const node of Array.from(wrap.querySelectorAll<SVGElement>('[id]'))) {
+        node.setCssStyles({ fill: '', opacity: '' });
+      }
+    }
+    extraTip.clear();
+    const entries = mode === 'recovery' ? recoveryEntries : growthEntries;
+    if (!entries) return;
+    for (const item of entries) {
+      for (const id of item.muscle.svgRegionIds ?? []) {
+        const entry = SVG_MUSCLE_CATALOG.find((e) => e.id === id);
+        if (entry) extraTip.set(`${entry.side}:${id}`, item.tip);
+      }
+    }
+    applyColorToView(frontWrap, 'front', entries);
+    applyColorToView(backWrap, 'back', entries);
+  }
+
+  function setMode(next: 'recovery' | 'growth'): void {
+    mode = next;
+    recoveryBtn.toggleClass('mod-cta', mode === 'recovery');
+    growthBtn.toggleClass('mod-cta', mode === 'growth');
+    recoveryBtn.toggleClass('mod-muted', mode === 'growth');
+    growthBtn.toggleClass('mod-muted', mode === 'recovery');
+    renderInfo();
+    renderLegend();
+    paint();
+  }
+
+  // —— 以下为「重计算 + 上色」，仅当代码块可见时执行 ——
+  function applyHeatmap(): void {
+    if (lazyTip.isConnected) lazyTip.remove();
+    recoveryEntries = buildRecoveryEntries();
+    growthEntries = buildGrowthEntries();
+    paint();
+
+    const entries = mode === 'recovery' ? recoveryEntries : growthEntries;
+    if (!entries.some((e) => Number.isFinite(e.value))) {
+      const msg =
+        mode === 'growth'
+          ? t('codeblock.heatmap.growthNoHistory')
+          : codeRange === 'all'
+            ? t('codeblock.heatmap.emptyAll')
+            : t('codeblock.heatmap.emptyRange', { range: codeRange ?? '7d' });
+      container.createDiv({ text: msg, cls: 'workout-heatmap-empty' });
+    }
+  }
+
+  renderInfo();
+  renderLegend();
+  recoveryBtn.toggleClass('mod-cta', mode === 'recovery');
+  growthBtn.toggleClass('mod-cta', mode === 'growth');
+  recoveryBtn.addEventListener('click', () => setMode('recovery'));
+  growthBtn.addEventListener('click', () => setMode('growth'));
+
 
   // 视图切换按钮（骨架阶段就可点，不依赖计算完成）
   function showSide(side: 'front' | 'back'): void {

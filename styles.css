@@ -370,6 +370,12 @@
   color: var(--text-muted);
 }
 
+.workout-heatmap-legend-band {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 .workout-heatmap-views {
   position: relative;
 }
@@ -397,6 +403,13 @@
 
 /* 肌肉悬停提示气泡：自定义黑框，进入肌肉即时显示、跟随光标。背景/文字硬编码深色，
    避免某些 Obsidian 主题下 --background-modifier-tooltip 变成浅色而显示成白框。 */
+/* 提示第二行（恢复天数 / 练度配比）：气泡背景是硬编码深色，文字也用浅灰 */
+.workout-heatmap-tooltip-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .workout-heatmap-tooltip {
   position: fixed;
   z-index: 9999;
@@ -816,6 +829,22 @@ input[type="checkbox"].workout-switch:checked::after {
   height: 15px;
   flex-shrink: 0;
   margin: 0;
+}
+
+/* 练度输入框（编辑训练项：勾选肌肉后出现在名称右侧）
+   必须盖掉上面 .workout-check-item input 的 15px 尺寸，否则数字框会缩成一个点 */
+.workout-check-item input[type='number'].workout-muscle-weight {
+  width: 58px;
+  height: 24px;
+  margin-left: auto;
+  padding: 1px 6px;
+  font-size: 12px;
+  text-align: right;
+  flex-shrink: 0;
+  accent-color: initial;
+}
+.workout-check-item:focus-within {
+  border-color: var(--interactive-accent);
 }
 
 /* ---- 字段卡片（新建/编辑训练类型的字段列表，替换旧表格）---- */
@@ -1279,6 +1308,17 @@ input[type="checkbox"].workout-switch:checked::after {
 .is-mobile .workout-two-col {
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+/* 练度输入框：移动端补触控靶（数字键盘直接弹出），网格改单列避免挤压 */
+.is-mobile .workout-muscle-weight,
+.is-mobile .workout-check-item input[type='number'].workout-muscle-weight {
+  width: 68px;
+  height: 32px;
+  font-size: 16px; /* 16px 以下 iOS 会自动放大页面 */
+}
+.is-mobile .workout-check-grid {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 /* 恢复曲线块：手机上左右留白收紧，给曲线更多横向空间 */

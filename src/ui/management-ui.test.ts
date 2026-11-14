@@ -390,4 +390,41 @@ describe('management UI regressions', async () => {
     expect(inputs[1].value).toBe('');
     expect(inputs[3].value).toBe('21');
   });
+
+  // 用例：训练项的练度（weight）——勾选后才出现输入框；填了就落库，没填不写字段
+  it('saves the per-muscle stimulus (weight) when filled, and omits it when blank', async () => {
+    setLocale('zh');
+    const { ExerciseModal } = await import('./ExerciseModal');
+    const dataManager = createDataManager();
+    const config = await dataManager.getConfig();
+    const modal = new ExerciseModal(dataManager as any, {});
+
+    await modal.onOpen();
+
+    (modal as any).nameInput.value = 'stimulus-test-exercise';
+    (modal as any).categorySelect.value = config.trainingTypes[0].id;
+
+    const items = Array.from(modal.contentEl.querySelectorAll('.workout-check-item'));
+    const firstCb = items[0].querySelector('input[type="checkbox"]') as HTMLInputElement;
+    const firstWeight = items[0].querySelector('.workout-muscle-weight') as HTMLInputElement;
+    const secondCb = items[1].querySelector('input[type="checkbox"]') as HTMLInputElement;
+
+    // 未勾选 → 练度框隐藏（避免一屏几十个空输入框）
+    expect(firstWeight.style.display).toBe('none');
+    firstCb.checked = true;
+    firstCb.dispatchEvent(new Event('change'));
+    expect(firstWeight.style.display).not.toBe('none');
+    firstWeight.value = '2.5';
+
+    // 第二块肌肉只勾选、不填练度 → 保存时不应写 weight（跟随角色默认）
+    secondCb.checked = true;
+    secondCb.dispatchEvent(new Event('change'));
+
+    await (modal as any).save();
+
+    const payload = (dataManager.addExercise as any).mock.calls[0][0];
+    const saved = payload.muscles as Array<{ muscleId: string; weight?: number }>;
+    expect(saved.find((m) => m.muscleId === firstCb.value)!.weight).toBe(2.5);
+    expect(saved.find((m) => m.muscleId === secondCb.value)!.weight).toBeUndefined();
+  });
 });
