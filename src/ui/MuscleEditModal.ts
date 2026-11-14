@@ -8,7 +8,14 @@ import { DEFAULT_RECOVERY_PARAMS } from '../data/recovery';
 import { parseNumberInput } from '../util/number';
 
 /** 折叠区里可编辑的四个数值参数（RecoveryTuning 中的非 levels 字段）。 */
-type NumericTuningKey = 'fatiguePerSet' | 'fatigueTau' | 'fitnessPerSet' | 'fitnessTau';
+type NumericTuningKey =
+  | 'fatiguePerSet'
+  | 'fatigueTau'
+  | 'fitnessPerSet'
+  | 'fitnessTau'
+  | 'detrainDepth'
+  | 'detrainTau'
+  | 'detrainRef';
 import { getLocale, t } from '../i18n';
 
 /* MuscleEditModal —— 编辑单个肌肉的弹窗（新增或编辑共用）。
@@ -282,12 +289,17 @@ export class MuscleEditModal extends Modal {
     const grid = details.createDiv();
     grid.addClass('workout-two-col');
 
-    // 只列四个数值参数（levels 不在这个折叠区，避免把色阶编辑器做两遍）
-    const fields: Array<{ key: NumericTuningKey; label: string; def: number }> = [
+    // 只列七个数值参数（levels 不在这个折叠区，避免把色阶编辑器做两遍）。
+    // 前四个＝急性（掉多深 / 多久缓 / 超量恢复多高 / 窗口多长）；后三个＝长期（消退多深 / 记忆多长 / 维持量）。
+    const fields: Array<{ key: NumericTuningKey; label: string; def: number; allowZero?: boolean }> = [
       { key: 'fatiguePerSet', label: t('modal.muscleManager.recoveryFatiguePerSet'), def: DEFAULT_RECOVERY_PARAMS.fatiguePerSet },
       { key: 'fatigueTau', label: t('modal.muscleManager.recoveryFatigueTau'), def: DEFAULT_RECOVERY_PARAMS.fatigueTau },
       { key: 'fitnessPerSet', label: t('modal.muscleManager.recoveryFitnessPerSet'), def: DEFAULT_RECOVERY_PARAMS.fitnessPerSet },
       { key: 'fitnessTau', label: t('modal.muscleManager.recoveryFitnessTau'), def: DEFAULT_RECOVERY_PARAMS.fitnessTau },
+      // 消退深度允许 0＝关掉消退（只想看急性疲劳/超量恢复的人用）
+      { key: 'detrainDepth', label: t('modal.muscleManager.recoveryDetrainDepth'), def: DEFAULT_RECOVERY_PARAMS.detrainDepth, allowZero: true },
+      { key: 'detrainTau', label: t('modal.muscleManager.recoveryDetrainTau'), def: DEFAULT_RECOVERY_PARAMS.detrainTau },
+      { key: 'detrainRef', label: t('modal.muscleManager.recoveryDetrainRef'), def: DEFAULT_RECOVERY_PARAMS.detrainRef },
     ];
 
     for (const f of fields) {
@@ -303,7 +315,8 @@ export class MuscleEditModal extends Modal {
       input.placeholder = String(f.def);
       input.addEventListener('input', () => {
         const v = parseNumberInput(input.value);
-        if (v === undefined || v <= 0) {
+        const valid = v !== undefined && (f.allowZero ? v >= 0 : v > 0);
+        if (!valid) {
           delete this.recoveryTuning[f.key];
         } else {
           this.recoveryTuning[f.key] = v;
@@ -319,7 +332,10 @@ export class MuscleEditModal extends Modal {
       typeof tune.fatiguePerSet === 'number' ||
       typeof tune.fatigueTau === 'number' ||
       typeof tune.fitnessPerSet === 'number' ||
-      typeof tune.fitnessTau === 'number'
+      typeof tune.fitnessTau === 'number' ||
+      typeof tune.detrainDepth === 'number' ||
+      typeof tune.detrainTau === 'number' ||
+      typeof tune.detrainRef === 'number'
     );
   }
 

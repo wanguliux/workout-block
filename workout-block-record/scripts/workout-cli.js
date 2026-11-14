@@ -1542,18 +1542,23 @@ var zh = {
       trainingDay: "{day} \xB7 {n} \u7EC4 \xB7 \u72B6\u6001 {v}",
       todayState: "\u4ECA\u5929 {v}",
       legendCurve: "\u808C\u8089\u72B6\u6001",
-      legendBaseline: "\u5B8C\u5168\u6062\u590D\u57FA\u7EBF 100",
+      legendBaseline: "\u7EC3\u5230\u4F4D\u6C34\u5E73 100",
+      legendFloor: "\u8FD0\u52A8\u524D\u6C34\u5E73 {v}",
       legendToday: "\u4ECA\u5929",
       col: {
         muscle: "\u808C\u8089",
         state: "\u5F53\u524D\u72B6\u6001",
         status: "\u72B6\u6001",
+        gap: "\u8DDD\u4E0A\u6B21\u8BAD\u7EC3",
         eta: "\u8DDD\u6062\u590D\u5B8C\u6210"
       },
       etaDays: "{n} \u5929",
+      gapDays: "{n} \u5929\u524D",
       statusFatigue: "\u75B2\u52B3",
       statusRecovering: "\u6062\u590D\u4E2D",
       statusSurplus: "\u8D85\u91CF\u6062\u590D",
+      statusMaintain: "\u7EF4\u6301",
+      statusDeclining: "\u6D88\u9000",
       statusNoData: "\u6570\u636E\u4E0D\u8DB3"
     },
     day: {
@@ -1759,6 +1764,9 @@ var zh = {
       recoveryFatigueTau: "\u75B2\u52B3\u6D88\u9000\uFF08\u5929\uFF09",
       recoveryFitnessPerSet: "\u9002\u5E94\u7559\u5B58\uFF08\u70B9/\u7EC4\uFF09",
       recoveryFitnessTau: "\u9002\u5E94\u6D88\u9000\uFF08\u5929\uFF09",
+      recoveryDetrainDepth: "\u6D88\u9000\u6DF1\u5EA6\uFF08\u70B9\uFF09",
+      recoveryDetrainTau: "\u6D88\u9000\u8BB0\u5FC6\uFF08\u5929\uFF09",
+      recoveryDetrainRef: "\u7EF4\u6301\u91CF\uFF08\u7EC4\uFF09",
       initScale: "\u7528\u9ED8\u8BA4 4 \u6863",
       scaleMaxHint: "\u2264",
       scaleUnbounded: "\uFF08\u65E0\u7A77\u5927\uFF09"
@@ -2069,18 +2077,23 @@ var en = {
       trainingDay: "{day} \xB7 {n} sets \xB7 state {v}",
       todayState: "Today {v}",
       legendCurve: "Muscle state",
-      legendBaseline: "Fully recovered baseline 100",
+      legendBaseline: "Trained level 100",
+      legendFloor: "Pre-training level {v}",
       legendToday: "Today",
       col: {
         muscle: "Muscle",
         state: "State",
         status: "Status",
+        gap: "Last trained",
         eta: "Until recovered"
       },
       etaDays: "{n} d",
+      gapDays: "{n} d ago",
       statusFatigue: "Fatigued",
       statusRecovering: "Recovering",
       statusSurplus: "Supercompensated",
+      statusMaintain: "Maintaining",
+      statusDeclining: "Detraining",
       statusNoData: "No data"
     },
     day: {
@@ -2286,6 +2299,9 @@ var en = {
       recoveryFatigueTau: "Fatigue decay (days)",
       recoveryFitnessPerSet: "Fitness per set (pts)",
       recoveryFitnessTau: "Fitness decay (days)",
+      recoveryDetrainDepth: "Detraining depth (pts)",
+      recoveryDetrainTau: "Detraining memory (days)",
+      recoveryDetrainRef: "Maintenance dose (sets)",
       initScale: "Use default 4 levels",
       scaleMaxHint: "\u2264",
       scaleUnbounded: "(unbounded)"

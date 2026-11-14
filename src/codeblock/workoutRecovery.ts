@@ -16,14 +16,19 @@ import {
   sampleCurve,
   stateAt,
   toDayNum,
+  type RecoveryStatus,
 } from '../data/recovery';
 
 /*
  * workoutRecovery.ts —— 把 ```workout-recovery 代码块渲染成「渐进恢复曲线」。
  *
  * 两种形态（可同时开）：
- *   - 折线图：横轴时间、纵轴肌肉状态（100 = 完全恢复）；训练日打点，今天画竖线 + 实心点；
- *   - 表格：肌肉 / 当前状态 / 状态 / 距恢复完成——直接回答「我现在能不能练」。
+ *   - 折线图：横轴时间、纵轴肌肉状态（100 = 练到位时的完全恢复水平，下面那条点线是「运动前水平」）；
+ *     训练日打点，今天画竖线 + 实心点；
+ *   - 表格：肌肉 / 当前状态 / 状态 / 距上次训练 / 距恢复完成——直接回答「我现在练没练到位」。
+ *
+ * 状态分档（六个）：疲劳 → 恢复中 → 超量恢复（短窗口）→ 维持 → 消退 → 数据不足。
+ * 「消退」＝太久没练，底子在下滑；这是长期账，靠 detrain* 三个参数控制，与急性疲劳/适应无关。
  *
  * 主体（muscle:）可以是单块肌肉名/ID，也可以是健身群名（胸部/腿…）。不写 muscle 且 view: table
  * 时列出全部肌肉，按状态从低到高排（最该歇的排最前）。
@@ -115,7 +120,7 @@ export async function renderWorkoutRecovery(
   const summary = recoverySummary(p, doses, today);
 
   if (params.view !== 'table') {
-    renderHeader(container, subject.label);
+    renderHeader(container, subject.label, summary);
     if (!summary.hasData) {
       container.createDiv({ text: t('codeblock.recovery.noData'), cls: 'workout-hint' });
     } else {
@@ -139,11 +144,15 @@ const PAD_T = 16;
 const PAD_B = 34;
 const FORECAST_DAYS = 7; // 未来段只是把已发生的账往后算，不是预测
 
-function renderHeader(container: HTMLElement, label: string): void {
+function renderHeader(container: HTMLElement, label: string, summary: RecoverySummary): void {
   const header = container.createDiv();
   header.addClass('workout-recovery-header');
   header.createSpan({ text: label, cls: 'workout-recovery-title' });
-  void label;
+  // 状态徽章直接摆在标题旁：不用读表格就知道这块肌肉现在处在哪个阶段
+  header.createSpan({
+    text: statusLabel(summary.status),
+    cls: `workout-recovery-status ${statusClass(summary.status)}`,
+  });
 }
 
 function renderChart(
@@ -159,8 +168,8 @@ function renderChart(
   const to = today + FORECAST_DAYS;
   const pts = sampleCurve(p, doses, from, to, 0.25);
 
-  // 纵轴：数据极值 + 基线，各留 2 点余量，避免曲线贴边
-  const states = pts.map((q) => q.state).concat([p.baseline]);
+  // 纵轴：数据极值 + 练到位水平 + 运动前水平，各留 2 点余量，避免曲线贴边
+  const states = pts.map((q) => q.state).concat([p.baseline, summary.floor]);
   const lo = Math.floor(Math.min(...states)) - 2;
   const hi = Math.ceil(Math.max(...states)) + 2;
   const x = (day: number) => PAD_L + ((day - from) / Math.max(1, to - from)) * (VIEW_W - PAD_L - PAD_R);
@@ -185,11 +194,17 @@ function renderChart(
       `<text x="${x(d).toFixed(1)}" y="${VIEW_H - PAD_B + 18}" text-anchor="middle" class="workout-recovery-axis">${fromDayNum(d).slice(5)}</text>`
     );
   }
-  // 面积 + 基线 + 曲线
+  // 面积 + 练到位水平（虚线）+ 运动前水平（点线，停训掉到这里就不再掉）+ 曲线
   parts.push(`<path d="${area}" fill="var(--interactive-accent)" fill-opacity="0.08"/>`);
   parts.push(
     `<line x1="${PAD_L}" y1="${y(p.baseline).toFixed(1)}" x2="${VIEW_W - PAD_R}" y2="${y(p.baseline).toFixed(1)}" stroke="currentColor" stroke-opacity="0.35" stroke-dasharray="6 4"/>`
   );
+  if (p.detrainDepth > 0) {
+    parts.push(
+      `<line x1="${PAD_L}" y1="${y(summary.floor).toFixed(1)}" x2="${VIEW_W - PAD_R}" y2="${y(summary.floor).toFixed(1)}" stroke="currentColor" stroke-opacity="0.22" stroke-dasharray="1 4" stroke-linecap="round"/>` +
+        `<text x="${VIEW_W - PAD_R}" y="${(y(summary.floor) - 4).toFixed(1)}" text-anchor="end" class="workout-recovery-axis">${t('codeblock.recovery.legendFloor', { v: String(Math.round(summary.floor)) })}</text>`
+    );
+  }
   parts.push(
     `<path d="${line}" fill="none" stroke="var(--interactive-accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`
   );
@@ -229,6 +244,9 @@ function renderChart(
   legend.addClass('workout-recovery-legend');
   legend.createSpan({ text: t('codeblock.recovery.legendCurve'), cls: 'workout-recovery-legend-item' });
   legend.createSpan({ text: t('codeblock.recovery.legendBaseline'), cls: 'workout-recovery-legend-item is-dashed' });
+  if (p.detrainDepth > 0) {
+    legend.createSpan({ text: t('codeblock.recovery.legendFloor', { v: String(Math.round(summary.floor)) }), cls: 'workout-recovery-legend-item is-dotted' });
+  }
   legend.createSpan({ text: t('codeblock.recovery.legendToday'), cls: 'workout-recovery-legend-item is-today' });
 }
 
@@ -249,7 +267,7 @@ function renderTable(container: HTMLElement, rows: TableRow[]): void {
   table.addClass('workout-recovery-table');
 
   const hr = table.createEl('thead').createEl('tr');
-  for (const key of ['muscle', 'state', 'status', 'eta'] as const) {
+  for (const key of ['muscle', 'state', 'status', 'gap', 'eta'] as const) {
     hr.createEl('th', { text: t(`codeblock.recovery.col.${key}`) });
   }
 
@@ -260,8 +278,15 @@ function renderTable(container: HTMLElement, rows: TableRow[]): void {
     tr.createEl('td', { text: row.summary.hasData ? String(Math.round(row.summary.state)) : '—', cls: 'is-num' });
     const statusCell = tr.createEl('td');
     statusCell.createSpan({
-      text: statusLabel(row.summary),
-      cls: `workout-recovery-status ${statusClass(row.summary)}`,
+      text: statusLabel(row.summary.status),
+      cls: `workout-recovery-status ${statusClass(row.summary.status)}`,
+    });
+    tr.createEl('td', {
+      text:
+        row.summary.gapDays === null
+          ? '—'
+          : t('codeblock.recovery.gapDays', { n: String(Math.round(row.summary.gapDays)) }),
+      cls: 'is-num',
     });
     tr.createEl('td', {
       text: row.summary.etaDays === null ? '—' : t('codeblock.recovery.etaDays', { n: row.summary.etaDays.toFixed(1) }),
@@ -288,18 +313,32 @@ function renderAllMusclesTable(container: HTMLElement, config: WorkoutConfig, lo
 
 // ─────────────────────────── 文案 ───────────────────────────
 
-function statusLabel(sum: RecoverySummary): string {
-  if (!sum.hasData) return t('codeblock.recovery.statusNoData');
-  if (sum.state < 94) return t('codeblock.recovery.statusFatigue');
-  if (sum.state < 100) return t('codeblock.recovery.statusRecovering');
-  return t('codeblock.recovery.statusSurplus');
+/** 六个状态的中文/英文标签（分档逻辑在 data/recovery.ts 的 statusAt，这里只负责翻译）。 */
+const STATUS_LABEL_KEY: Record<RecoveryStatus, string> = {
+  noData: 'codeblock.recovery.statusNoData',
+  fatigue: 'codeblock.recovery.statusFatigue',
+  recovering: 'codeblock.recovery.statusRecovering',
+  supercomp: 'codeblock.recovery.statusSurplus',
+  maintain: 'codeblock.recovery.statusMaintain',
+  declining: 'codeblock.recovery.statusDeclining',
+};
+
+/** 状态 → 样式类（is-na / is-fatigue / is-recovering / is-surplus / is-maintain / is-declining）。 */
+const STATUS_CLASS: Record<RecoveryStatus, string> = {
+  noData: 'is-na',
+  fatigue: 'is-fatigue',
+  recovering: 'is-recovering',
+  supercomp: 'is-surplus',
+  maintain: 'is-maintain',
+  declining: 'is-declining',
+};
+
+function statusLabel(status: RecoveryStatus): string {
+  return t(STATUS_LABEL_KEY[status]);
 }
 
-function statusClass(sum: RecoverySummary): string {
-  if (!sum.hasData) return 'is-na';
-  if (sum.state < 94) return 'is-fatigue';
-  if (sum.state < 100) return 'is-recovering';
-  return 'is-surplus';
+function statusClass(status: RecoveryStatus): string {
+  return STATUS_CLASS[status];
 }
 
 function todayStr(): string {

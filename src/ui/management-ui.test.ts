@@ -359,8 +359,9 @@ describe('management UI regressions', async () => {
     expect(details!.querySelector('summary')!.textContent).toContain('恢复设置');
 
     const inputs = Array.from(details!.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
-    expect(inputs.length).toBe(4);
-    expect(inputs.map((i) => i.placeholder)).toEqual(['2.8', '2.5', '1', '18']);
+    // 七个数值参数：急性四个（疲劳/适应各两项）＋ 长期三个（消退深度/记忆/维持量）
+    expect(inputs.length).toBe(7);
+    expect(inputs.map((i) => i.placeholder)).toEqual(['2.8', '2.5', '1', '10', '8', '60', '8']);
     expect(inputs.every((i) => i.value === '')).toBe(true); // 未设置 → 全部留空
 
     // 只填一个：保存时只落这一个字段，其余仍不写（跟随默认）

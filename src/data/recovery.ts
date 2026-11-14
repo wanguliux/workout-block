@@ -6,33 +6,49 @@ import { FITNESS_GROUPS, SVG_MUSCLE_CATALOG } from './svgMuscleCatalog';
 /*
  * recovery.ts —— 渐进恢复曲线的计算内核（纯函数，零 IO、零 DOM）。
  *
- * 一句话模型：**双指数冲激-响应**（Banister 模型的简化版）。
- * 每次训练给某块肌肉留下两笔账，各自按指数衰减：
- *   ① 疲劳 F = kf·组数·e^(−Δt/τf)   —— 幅度大、退得快（τf 约 2~3 天）
- *   ② 适应 A = ka·组数·e^(−Δt/τa)   —— 幅度小、退得慢（τa 约 2~3 周）
- * 肌肉状态 S(t) = 100 + ΣA − ΣF。
+ * 三条时间尺度的账，状态是它们的代数和：
+ *   ① 疲劳 F = kf·组数·e^(−Δt/τf)   —— 掉得猛、退得快（τf≈2.5 天）
+ *   ② 急性适应 A = ka·组数·e^(−Δt/τa) —— 冲得高、窗口短（τa≈10 天）→ 超量恢复
+ *   ③ 长期底子：练着时基准＝100；停训后基准按「近期负荷 R / 维持量」线性下移，最多掉消退深度
+ *      R = Σ 组数·e^(−Δt/τc) 是「近期负荷」，τc≈60 天
  *
- * 为什么这条公式能画出「掉→回升→超过基线→慢慢回落」：
- *   练完当下 F 远大于 A，所以 S 掉到 100 以下；随天数推移 F 先退光、A 还在，
- *   S 穿过 100 冲到峰值（超量恢复），之后 A 也慢慢退，S 回落到 100 附近；
- *   如果下次训练在 A 没退完时插进来，A 会叠加，基线就被顶上去——这正是渐进超负荷。
+ * 状态 S(t) = (100 − 消退深度·(1 − 保有能力)) + ΣA − ΣF
+ *   练着的时候「保有能力」≈1 → 基准回到 100；
+ *   长期不练「保有能力」→0 → 基准滑到 100 − 消退深度（运动前水平）。
+ *
+ * 为什么这样能画出用户要的那张图：
+ *   练完当下 F ≫ A → 掉到 100 以下；F 先退光 A 还在 → 穿过基线冲到峰（超量恢复，这是短窗口，
+ *   因为 τa 只有 10 天量级）；之后 A 退 → 回落到 100 附近（维持）；再往后 R 衰减、基准下移 →
+ *   曲线缓慢下坡直到运动前水平（消退）。中途再练一次，R 立刻补回、基准抬回 100。
+ *
+ * 科学口径（见设计方案 §2/§5.2 证据栏）：
+ *   · 力量在停训 ≤4 周内基本保持，之后才显著下降（Bosquet 2013 meta，PMID 23347054）；
+ *   · 肌横截面积消退更慢，数月量级（20 周停训回到训练前水平，PMID 30991013）；
+ *   · 停训不会掉到比训练前更低——所以有下限「运动前水平」而不是无限下降（Mujika & Padilla 2000）；
+ *   · 「超量恢复窗口」没有 36–72h 的证据，只是疲劳退光而适应未退的一小段（Kiely 2018）。
  *
  * 多天训练直接线性叠加（每笔账独立衰减），所以「练得太密 → 一直在欠债」是模型自然结果，
  * 不需要额外规则。这也意味着：**曲线不做预测性调整，只把已发生的剂量如实折算成状态。**
  */
 
-/** 曲线参数：前两个管「掉多少/掉多久」，后两个管「抬多少/抬多久」。 */
+/** 曲线参数：疲劳两项、急性适应两项、消退三项。 */
 export interface RecoveryParams {
   /** 每组带来的疲劳幅度（点）。默认 2.8 → 8 组约掉 14 点。 */
   fatiguePerSet: number;
   /** 疲劳消退时间常数（天）。默认 2.5 → 约 3 天回到基线。 */
   fatigueTau: number;
-  /** 每组带来的适应幅度（点）。默认 1.0 → 8 组约 8 点。 */
+  /** 每组带来的急性适应幅度（点）。默认 1.0 → 8 组约 8 点。 */
   fitnessPerSet: number;
-  /** 适应消退时间常数（天）。默认 18 → 抬升的基线约 3 周退平。 */
+  /** 急性适应消退时间常数（天）。默认 10 → 超量恢复窗口约 1 周量级。 */
   fitnessTau: number;
-  /** 完全恢复时的状态值（纵轴基准线）。 */
+  /** 完全恢复时的状态值（纵轴基准线，也是「练到位」的水平）。 */
   baseline: number;
+  /** 停训到底会比「练着时」低多少点。默认 8 → 运动前水平 = baseline − 8。 */
+  detrainDepth: number;
+  /** 近期负荷的记忆长度（天）。默认 60 → 停训 4 周内几乎不掉，之后才明显下滑。 */
+  detrainTau: number;
+  /** 维持水平所需的近期负荷量（组）。默认 8 → 近期累计 8 组（按 τd 折现）就算保住。 */
+  detrainRef: number;
 }
 
 export const DEFAULT_RECOVERY_PARAMS: RecoveryParams = {
@@ -40,8 +56,23 @@ export const DEFAULT_RECOVERY_PARAMS: RecoveryParams = {
   fatiguePerSet: 2.8,
   fatigueTau: 2.5,
   fitnessPerSet: 1.0,
-  fitnessTau: 18,
+  fitnessTau: 10,
+  detrainDepth: 8,
+  detrainTau: 60,
+  detrainRef: 8,
 };
+
+/** 超量恢复窗口（天）：距上次训练超过这个天数，就不再算「超量恢复」，转入维持/消退。 */
+export const SUPERCOMP_WINDOW_DAYS = 10;
+
+/** 状态分档（表格与热力图共用一套口径）。 */
+export type RecoveryStatus =
+  | 'noData' // 没有训练记录
+  | 'fatigue' // 刚练完，还在坑里
+  | 'recovering' // 正在往回爬
+  | 'supercomp' // 超量恢复（短窗口）
+  | 'maintain' // 维持：过了窗口但水平还在
+  | 'declining'; // 消退：太久没练，水平在下滑
 
 /** 一天里练到某主体的剂量。 */
 export interface DoseEntry {
@@ -61,9 +92,17 @@ export interface CurvePoint {
 
 /** 表格/悬浮提示要的一行摘要。 */
 export interface RecoverySummary {
-  /** 当前状态（点），100 = 完全恢复 */
+  /** 当前状态（点），100 = 练到位时完全恢复的水平 */
   state: number;
-  /** 距回基线还需几天；已回到基线以上（超量恢复窗口）或没有训练数据时返回 null */
+  /** 当前基准（练着时＝baseline，长期不练会向下滑向 floor） */
+  baselineNow: number;
+  /** 运动前水平（状态下滑的下限） */
+  floor: number;
+  /** 距上次训练多少天；从没练过时为 null */
+  gapDays: number | null;
+  /** 状态分档：疲劳 / 恢复中 / 超量恢复 / 维持 / 消退 / 数据不足 */
+  status: RecoveryStatus;
+  /** 距回基准还需几天；已在基准以上或正在消退（不练不会自己回升）时返回 null */
   etaDays: number | null;
   /** 未来一段时间内的峰值状态与到达日期（无数据时为 null） */
   peak: { day: string; state: number } | null;
@@ -129,21 +168,74 @@ export function collectDoses(
     .sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
 }
 
+/** 某时刻的完整求值结果（状态 + 基准 + 距上次训练），供 statusAt / recoverySummary 复用。 */
+export interface StateEval {
+  /** 状态（点） */
+  state: number;
+  /** 当前基准：练着时≈baseline，长期不练向下滑向 baseline−detrainDepth */
+  base: number;
+  /** 距上次训练的天数；从没练过为 null */
+  gapDays: number | null;
+}
+
 /**
- * 任意时刻的肌肉状态。
- * 只累加「该时刻之前」的剂量——未来还没练，账还没发生。
+ * 任意时刻求值。只累加「该时刻之前」的剂量——未来还没练，账还没发生。
+ *
+ * 近期负荷 R 用同一个递减窗口累加，再经 1−e^(−R/维持量) 饱和成「保有能力」0..1：
+ * 练得够 → 1（基准＝100）；停了 → 0（基准＝100−消退深度）。饱和函数而不是线性，
+ * 是因为停训前期的损失本来就很小（4 周内基本保持），越往后掉得越快，最后触底不再掉。
  */
-export function stateAt(params: RecoveryParams, doses: DoseEntry[], atDay: number): number {
-  let state = params.baseline;
+export function evalAt(params: RecoveryParams, doses: DoseEntry[], atDay: number): StateEval {
+  let fitness = 0;
+  let fatigue = 0;
+  let recentDose = 0;
+  let lastDay: number | null = null;
   for (const d of doses) {
     const start = toDayNum(d.day);
     if (start > atDay) break; // doses 已按日期升序，后面的更晚
     const dt = atDay - start;
-    state +=
-      params.fitnessPerSet * d.dose * Math.exp(-dt / params.fitnessTau) -
-      params.fatiguePerSet * d.dose * Math.exp(-dt / params.fatigueTau);
+    fitness += params.fitnessPerSet * d.dose * Math.exp(-dt / params.fitnessTau);
+    fatigue += params.fatiguePerSet * d.dose * Math.exp(-dt / params.fatigueTau);
+    recentDose += d.dose * Math.exp(-dt / params.detrainTau);
+    lastDay = start;
   }
-  return state;
+  // 「保有能力」＝min(1, 近期负荷 / 维持量)：达到维持量就算保住，超出不额外加成。
+  // 用线性封顶而不是饱和曲线，是为了不让「偶尔练一次」被算成半吊子水平——
+  // 只要近期负荷够了就视为练着，消退只在真的停下来之后才发生。
+  const keep = params.detrainRef > 0 ? Math.min(1, recentDose / params.detrainRef) : 1;
+  // 从没练过 → 就是「运动前水平」：100 是练到位的水平，没练过的底子本来就低一档。
+  // 这样曲线左端才不会出现「100 突然掉到 90」的假跳变（历史第一笔剂量之前就是未训练态）。
+  if (lastDay === null) {
+    const untrained = params.baseline - params.detrainDepth;
+    return { state: untrained, base: untrained, gapDays: null };
+  }
+  const base = params.baseline - params.detrainDepth * (1 - keep);
+  return { state: base + fitness - fatigue, base, gapDays: atDay - lastDay };
+}
+
+/** 任意时刻的肌肉状态（只要数值时用这个）。 */
+export function stateAt(params: RecoveryParams, doses: DoseEntry[], atDay: number): number {
+  return evalAt(params, doses, atDay).state;
+}
+
+/**
+ * 状态分档。判据是「距上次训练多久」＋「状态相对 100 的位置」，不是单纯看数值高低：
+ *   · ≤2 天还在坑里 → 疲劳；≤5 天还没超过基线 → 恢复中；
+ *   · 3~10 天且高于基线 → 超量恢复（**短窗口**，过了就不再叫超量恢复）；
+ *   · 超过 10 天且水平还在 → 维持；
+ *   · 超过 10 天且掉到基线以下 → 消退（太久没练）。
+ * 用固定 100 而不是漂移基准做比较：漂移基准和状态是同一根轴上的两条线，停久了两者一起下移，
+ * 就会永远判成「维持」，看不出消退。
+ */
+export function statusAt(params: RecoveryParams, doses: DoseEntry[], atDay: number): RecoveryStatus {
+  const { state, gapDays } = evalAt(params, doses, atDay);
+  if (gapDays === null) return 'noData';
+  const b = params.baseline;
+  if (gapDays <= 2) return state < b - 3 ? 'fatigue' : 'recovering';
+  if (gapDays <= SUPERCOMP_WINDOW_DAYS) {
+    return state >= b + 0.5 ? 'supercomp' : gapDays <= 5 ? 'recovering' : 'maintain';
+  }
+  return state >= b - 1 ? 'maintain' : 'declining';
 }
 
 /**
@@ -165,9 +257,10 @@ export function sampleCurve(
 }
 
 /**
- * 当前状态 / 距回基线天数 / 峰值。
- * 「恢复完成」的口径＝状态重新站回基线（100）：那一刻之后进入超量恢复窗口。
- * 已经在基线以上（或从没练过）时 etaDays = null——悬浮提示据此不显示「恢复：N 天」。
+ * 当前状态 / 距离基准的天数 / 峰值。
+ * 「恢复完成」的口径＝状态重新站回**当时的基准**（练着时是 100，长期不练时基准本身在下移）。
+ * 已经在基准以上（超量恢复窗口）或正在消退时 etaDays = null——悬浮提示据此不显示「恢复：N 天」
+ * （消退不练是回不来的，报一个「还差 200 天」只会误导）。
  */
 export function recoverySummary(
   params: RecoveryParams,
@@ -175,10 +268,12 @@ export function recoverySummary(
   todayDay: number,
   lookAheadDays = 30
 ): RecoverySummary {
-  const state = stateAt(params, doses, todayDay);
+  const now = evalAt(params, doses, todayDay);
   const hasData = doses.length > 0;
+  const status = statusAt(params, doses, todayDay);
+  const floor = params.baseline - params.detrainDepth;
 
-  // 往前后各找峰值：只关心「从现在起」的窗口，历史峰值没决策意义
+  // 往后扫峰值：只关心「从现在起」的窗口，历史峰值没决策意义
   let peak: { day: string; state: number } | null = null;
   let etaDays: number | null = null;
 
@@ -186,22 +281,33 @@ export function recoverySummary(
     let maxState = -Infinity;
     let maxAt = todayDay;
     const step = 0.05;
+    let wasBelow = false;
     for (let t = todayDay; t <= todayDay + lookAheadDays + 1e-9; t += step) {
-      const s = stateAt(params, doses, t);
-      if (s > maxState) {
-        maxState = s;
+      const e = evalAt(params, doses, t);
+      if (e.state > maxState) {
+        maxState = e.state;
         maxAt = t;
       }
-      if (etaDays === null && state < params.baseline && s >= params.baseline) {
-        etaDays = t - todayDay;
+      // 交点：从基准下方穿到基准上方的那一刻
+      if (etaDays === null) {
+        if (e.state < e.base) wasBelow = true;
+        else if (wasBelow) etaDays = t - todayDay;
       }
     }
-    // 已在基线以上 → 正在超量恢复窗口，不需要「还差几天」
-    if (state >= params.baseline) etaDays = null;
-    if (maxState > params.baseline) peak = { day: fromDayNum(maxAt), state: maxState };
+    if (now.state >= now.base || status === 'declining') etaDays = null;
+    if (maxState > now.base) peak = { day: fromDayNum(maxAt), state: maxState };
   }
 
-  return { state, etaDays, peak, hasData };
+  return {
+    state: now.state,
+    baselineNow: now.base,
+    floor,
+    gapDays: now.gapDays,
+    status,
+    etaDays,
+    peak,
+    hasData,
+  };
 }
 
 /**
@@ -218,6 +324,13 @@ export function mergeRecoveryParams(base: RecoveryParams, tuning?: RecoveryTunin
     fatigueTau: pick(tuning.fatigueTau, base.fatigueTau),
     fitnessPerSet: pick(tuning.fitnessPerSet, base.fitnessPerSet),
     fitnessTau: pick(tuning.fitnessTau, base.fitnessTau),
+    // 消退深度允许 0（=关掉消退），其余两项必须为正，否则除零
+    detrainDepth:
+      typeof tuning.detrainDepth === 'number' && Number.isFinite(tuning.detrainDepth) && tuning.detrainDepth >= 0
+        ? tuning.detrainDepth
+        : base.detrainDepth,
+    detrainTau: pick(tuning.detrainTau, base.detrainTau),
+    detrainRef: pick(tuning.detrainRef, base.detrainRef),
   };
 }
 

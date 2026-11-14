@@ -65,6 +65,9 @@ export interface RecoveryTuning {
   fatigueTau?: number;      // 疲劳消退时间常数（天）
   fitnessPerSet?: number;   // 每组留下多少适应点
   fitnessTau?: number;      // 适应消退时间常数（天）
+  detrainDepth?: number;    // 停训到底比练着时低多少点（0 = 关掉消退）
+  detrainTau?: number;      // 近期负荷记忆长度（天）：越长越耐停训
+  detrainRef?: number;      // 维持水平所需的近期负荷量（组）
   levels?: HeatmapLevel[];  // 恢复色标分档（仅当热力图指标选「恢复状态」时使用）
 }
 
