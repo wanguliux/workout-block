@@ -351,16 +351,22 @@ export async function renderWorkoutHeatmap(
     return out;
   }
 
-  /** 发展视图：近 4 周周均练度 ÷ 近 12 周周练度中位数（相对自己）。无基线时 value=NaN，不上色。 */
+  /** 发展视图：近期窗口周均练度 ÷ 中位数窗口内周练度中位数（相对自己）。无基线时 value=NaN，不上色。 */
   function buildGrowthEntries(): MuscleEntry[] {
     const exerciseMuscleMap = buildExerciseMuscleMap(config);
     const out: MuscleEntry[] = [];
     for (const muscle of config.muscles) {
-      const g = computeGrowthRatio(muscle.id, logs, exerciseMuscleMap, todayDay);
+      // 两个时间窗逐肌可配（编辑肌肉 → 热力图设置 → 发展视图），留空跟随默认 28 / 84
+      const g = computeGrowthRatio(muscle.id, logs, exerciseMuscleMap, todayDay, undefined, {
+        recentDays: muscle.growthRecentDays,
+        baselineDays: muscle.growthBaselineDays,
+      });
       const tip =
         g.ratio === null
           ? t('codeblock.heatmap.growthNoBaseline')
           : t('codeblock.heatmap.growthTip', {
+              rd: String(g.window.recentDays),
+              bd: String(g.window.baselineDays),
               recent: g.recentWeekly.toFixed(1),
               base: (g.baselineWeekly ?? 0).toFixed(1),
               pct: String(Math.round(g.ratio * 100)),

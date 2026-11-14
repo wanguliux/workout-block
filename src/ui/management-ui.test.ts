@@ -397,11 +397,74 @@ describe('management UI regressions', async () => {
     const details = Array.from(modal.contentEl.querySelectorAll('details.workout-advanced')).find(
       (d) => d.querySelector('summary')!.textContent!.includes('恢复曲线设置')
     ) as HTMLDetailsElement;
-    expect(details.querySelector('summary')!.textContent).toContain('已自定义');
+    // 标题旁不再挂「跟随默认 / 已自定义」角标（用户要求去掉），标题只有自己
+    expect(details.querySelector('summary')!.textContent!.trim()).toBe('恢复曲线设置');
     const inputs = Array.from(details.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
     expect(inputs[0].value).toBe('3.5');
     expect(inputs[1].value).toBe('');
     expect(inputs[3].value).toBe('21');
+  });
+
+  // 用例：恢复曲线设置底部的预览图——默认就画出来，改参数立刻重画（形状随参数变）
+  it('recovery section renders a live preview that redraws when a parameter changes', async () => {
+    setLocale('zh');
+    const { MuscleEditModal } = await import('./MuscleEditModal');
+    const dataManager = createDataManager();
+    const config = await dataManager.getConfig();
+    const modal = new MuscleEditModal(dataManager as any, { muscle: config.muscles[0] } as any);
+
+    await modal.onOpen();
+
+    const details = Array.from(modal.contentEl.querySelectorAll('details.workout-advanced')).find((d) =>
+      d.querySelector('summary')!.textContent!.includes('恢复曲线设置')
+    ) as HTMLDetailsElement;
+    const preview = details.querySelector('.workout-recovery-preview')!;
+    expect(preview).toBeTruthy();
+    const path = preview.querySelector('path')!;
+    expect(path).toBeTruthy();
+    const before = path.getAttribute('d');
+    expect(before!.length).toBeGreaterThan(10);
+
+    // 一次标准训练：8 练度，说明行里有「练完 X」与恢复天数
+    expect(preview.querySelector('.workout-recovery-preview-caption')!.textContent).toContain('8 练度');
+    expect(preview.querySelector('.workout-recovery-preview-caption')!.textContent).toContain('练完');
+
+    // 改疲劳动力度（第 1 个数字框）→ 预览立刻重画，曲线形状不同
+    const fatigue = Array.from(details.querySelectorAll('input[type="number"]'))[0] as HTMLInputElement;
+    fatigue.value = '6';
+    fatigue.dispatchEvent(new Event('input'));
+
+    const after = preview.querySelector('path')!.getAttribute('d');
+    expect(after).not.toBe(before);
+  });
+
+  // 用例：发展视图的两个时间窗（天）——默认占位 28 / 84，填了才落库，且中位数窗不短于近期窗
+  it('growth view windows: default placeholders, persisted only when filled', async () => {
+    setLocale('zh');
+    const { MuscleEditModal } = await import('./MuscleEditModal');
+    const dataManager = createDataManager();
+    const config = await dataManager.getConfig();
+
+    const modal = new MuscleEditModal(dataManager as any, { muscle: config.muscles[0] } as any);
+    await modal.onOpen();
+    const hm = Array.from(modal.contentEl.querySelectorAll('details.workout-advanced')).find((d) =>
+      d.querySelector('summary')!.textContent!.includes('热力图设置')
+    )!;
+    Array.from(hm.querySelectorAll('button')).find((b) => b.textContent.includes('发展视图'))!.click();
+
+    const wins = Array.from(hm.querySelectorAll('input[type="number"]')).slice(0, 2) as HTMLInputElement[];
+    expect(wins.map((i) => i.placeholder)).toEqual(['28', '84']);
+    expect(wins.every((i) => i.value === '')).toBe(true); // 未设置 → 留空
+
+    wins[0].value = '14';
+    wins[0].dispatchEvent(new Event('input'));
+    wins[1].value = '56';
+    wins[1].dispatchEvent(new Event('input'));
+
+    await (modal as any).save();
+    const payload = (dataManager.updateMuscle as any).mock.calls[0][1];
+    expect(payload.growthRecentDays).toBe(14);
+    expect(payload.growthBaselineDays).toBe(56);
   });
 
   // 用例：训练项的练度（weight）——勾选后才出现输入框；填了就落库，没填不写字段

@@ -4,8 +4,9 @@ import { getMuscleName } from '../data/display';
 import { FITNESS_GROUPS, formatSvgMuscleLabel, SVG_MUSCLE_CATALOG, SvgMuscleEntry } from '../data/svgMuscleCatalog';
 import { DEFAULT_HEATMAP_SCALE, colorToCss } from '../data/heatmapDefaults';
 import { HeatmapLevel, Muscle, RecoveryTuning, StatDef, WorkoutConfig } from '../data/types';
-import { DEFAULT_RECOVERY_PARAMS } from '../data/recovery';
-import { GROWTH_SCALE } from '../data/muscleGrowth';
+import { DEFAULT_RECOVERY_PARAMS, mergeRecoveryParams } from '../data/recovery';
+import { DEFAULT_GROWTH_WINDOW, GROWTH_SCALE } from '../data/muscleGrowth';
+import { renderRecoveryPreview } from './recoveryPreview';
 import { parseNumberInput } from '../util/number';
 
 /** 折叠区里可编辑的四个数值参数（RecoveryTuning 中的非 levels 字段）。 */
@@ -64,11 +65,16 @@ export class MuscleEditModal extends Modal {
   private recoveryTuning: RecoveryTuning = {};
   // 发展视图色标（比值为分档）；null = 跟随内置那套（<50/50-80/80-120/120-160/>160%）
   private growthLevels: HeatmapLevel[] | null = null;
+  // 发展视图的两个时间窗（天）：近期窗算「最近练得怎么样」，中位数窗算「你的常态」。
+  // undefined = 跟随默认（28 / 84），不写进配置。
+  private growthRecentDays?: number;
+  private growthBaselineDays?: number;
   // 编辑中的草稿：只在真正改动时才写回 growthLevels，避免「展开看一眼」就变成自定义
   private growthDraft: HeatmapLevel[] = [];
 
   private mappingContainer!: HTMLDivElement;
   private countEl!: HTMLElement;
+  private recoveryPreviewEl?: HTMLDivElement;
   private heatmapSection!: HTMLDivElement;
   // 热力图设置区块内当前显示哪个视图（恢复 / 发展），只影响这一块的设置项
   private heatmapView: 'recovery' | 'growth' = 'recovery';
@@ -93,6 +99,8 @@ export class MuscleEditModal extends Modal {
       this.muscleLevels = muscle.heatmapLevels ? this.normalizeLevels(muscle.heatmapLevels) : null;
       this.recoveryTuning = muscle.recovery ? { ...muscle.recovery } : {};
       this.growthLevels = muscle.growthLevels ? this.normalizeLevels(muscle.growthLevels) : null;
+      this.growthRecentDays = muscle.growthRecentDays;
+      this.growthBaselineDays = muscle.growthBaselineDays;
       if (!RANGE_OPTIONS.includes(this.rangeValue) && this.rangeValue) {
         this.customRange = this.rangeValue;
         this.rangeValue = 'custom';
@@ -326,6 +334,37 @@ export class MuscleEditModal extends Modal {
   private renderGrowthSettings(container: HTMLElement): void {
     container.createEl('p', { text: t('modal.muscleManager.growthHint'), cls: 'workout-hint' });
 
+    // 两个时间窗（单位天）：近期窗决定「最近练得怎么样」看多长，中位数窗决定「你的常态」看多长。
+    // 留空＝跟随默认（28 / 84），不写进配置；填了才是逐肌自定义。
+    const winRow = container.createDiv();
+    winRow.addClass('workout-two-col');
+    const windowFields: Array<{ key: 'growthRecentDays' | 'growthBaselineDays'; label: string; def: number }> = [
+      { key: 'growthRecentDays', label: t('modal.muscleManager.growthRecentWindow'), def: DEFAULT_GROWTH_WINDOW.recentDays },
+      { key: 'growthBaselineDays', label: t('modal.muscleManager.growthBaselineWindow'), def: DEFAULT_GROWTH_WINDOW.baselineDays },
+    ];
+    for (const f of windowFields) {
+      const field = winRow.createDiv();
+      field.addClass('workout-field');
+      field.createEl('label', { text: f.label });
+      const input = field.createEl('input', { type: 'number' });
+      input.addClass('workout-input');
+      input.setAttribute('step', 'any');
+      input.setAttribute('inputmode', 'numeric'); // 移动端直接弹数字键盘
+      input.min = '7';
+      input.max = '730';
+      const current = this[f.key];
+      input.value = typeof current === 'number' ? String(current) : '';
+      input.placeholder = String(f.def);
+      input.addEventListener('input', () => {
+        const v = parseNumberInput(input.value);
+        if (v === undefined || v < 7) {
+          delete this[f.key];
+        } else {
+          this[f.key] = Math.min(730, Math.round(v));
+        }
+      });
+    }
+
     // 草稿与落库分开：只是展开看一眼不该把默认值写成「自定义」
     if (this.growthDraft.length === 0) {
       this.growthDraft = this.growthLevels
@@ -386,9 +425,6 @@ export class MuscleEditModal extends Modal {
     const summary = details.createEl('summary');
     summary.addClass('workout-advanced-summary');
     summary.createSpan({ text: t('modal.muscleManager.recoverySettings') });
-    const badge = summary.createSpan({ text: t('modal.muscleManager.recoveryFollowDefault') });
-    badge.addClass('workout-hint');
-    if (this.hasRecoveryTuning()) badge.setText(t('modal.muscleManager.recoveryOverridden'));
 
     details.createEl('p', { text: t('modal.muscleManager.recoveryHint'), cls: 'workout-hint' });
 
@@ -438,9 +474,21 @@ export class MuscleEditModal extends Modal {
         } else {
           this.recoveryTuning[f.key] = f.invert ? f.invert - v : v;
         }
-        badge.setText(this.hasRecoveryTuning() ? t('modal.muscleManager.recoveryOverridden') : t('modal.muscleManager.recoveryFollowDefault'));
+        // 参数一变就重画预览：这是这组数字唯一的「说人话」方式
+        this.renderRecoveryPreviewNow();
       });
     }
+
+    // 底部预览：一次标准训练（8 练度）之后曲线的样子。改哪个参数都能立刻看出形状怎么动。
+    this.recoveryPreviewEl = details.createDiv();
+    this.recoveryPreviewEl.addClass('workout-recovery-preview');
+    this.renderRecoveryPreviewNow();
+  }
+
+  /** 用当前草稿参数重画预览（未填的字段自动回落默认）。 */
+  private renderRecoveryPreviewNow(): void {
+    if (!this.recoveryPreviewEl) return;
+    renderRecoveryPreview(this.recoveryPreviewEl, mergeRecoveryParams(DEFAULT_RECOVERY_PARAMS, this.recoveryTuning));
   }
 
   private hasRecoveryTuning(): boolean {
@@ -685,6 +733,8 @@ export class MuscleEditModal extends Modal {
       heatmapRange: range || undefined,
       heatmapLevels: this.muscleLevels ? (JSON.parse(JSON.stringify(this.muscleLevels)) as HeatmapLevel[]) : undefined,
       growthLevels: this.growthLevels ? (JSON.parse(JSON.stringify(this.growthLevels)) as HeatmapLevel[]) : undefined,
+      growthRecentDays: this.growthRecentDays,
+      growthBaselineDays: this.growthBaselineDays,
       recovery: this.hasRecoveryTuning() ? { ...this.recoveryTuning } : undefined,
     };
 

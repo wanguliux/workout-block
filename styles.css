@@ -1097,6 +1097,27 @@ input[type="checkbox"].workout-switch:checked::after {
   margin-bottom: 12px;
 }
 
+/* ---- 恢复曲线设置底部的迷你预览（改参数即变，用来讲清每个参数的作用）----
+   图内不写字（与主图同口径），关键数字全放在下面这行说明里。 */
+.workout-recovery-preview {
+  margin: 6px 0 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.workout-recovery-preview-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 130px;
+}
+.workout-recovery-preview-caption {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- 热力图颜色分级行（编辑肌肉弹窗：色块 / 十六进制 / ≤ / 阈值）---- */
 /* 对应重设计稿「编辑肌肉」页面的 scale-row 网格：32 / 100 / 24 / 1fr */
 .workout-scale-row {
