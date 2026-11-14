@@ -4,6 +4,7 @@ import { Muscle, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
 import { getMuscleName } from '../data/display';
 import {
+  CurvePoint,
   DEFAULT_RECOVERY_PARAMS,
   DoseEntry,
   RecoveryParams,
@@ -176,19 +177,21 @@ function renderChart(
   const to = today + forecast;
   const pts = sampleCurve(p, doses, from, to, 0.25);
 
-  // 纵轴：数据极值 + 练到位水平 + 运动前水平，各留 2 点余量，避免曲线贴边
+  // 纵轴：数据极值 + 练到位水平 + 运动前水平；上下各留余量，且刻度取整到步长，
+  // 否则轴上会出现 85 / 100 / 107 这种「不成规律」的数，看着像错位。
   const states = pts.map((q) => q.state).concat([p.baseline, summary.floor]);
-  const lo = Math.floor(Math.min(...states)) - 2;
-  const hi = Math.ceil(Math.max(...states)) + 2;
-  const x = (day: number) => PAD_L + ((day - from) / Math.max(1, to - from)) * (VIEW_W - PAD_L - PAD_R);
+  const step = niceStep(Math.max(...states) - Math.min(...states));
+  const lo = Math.floor((Math.min(...states) - 2) / step) * step;
+  const hi = Math.ceil((Math.max(...states) + 2) / step) * step;
+  const x = (t: number) => PAD_L + ((t - from) / Math.max(1e-6, to - from)) * (VIEW_W - PAD_L - PAD_R);
   const y = (s: number) => VIEW_H - PAD_B - ((s - lo) / Math.max(1, hi - lo)) * (VIEW_H - PAD_T - PAD_B);
 
   // 历史段（实线 + 面积）与未来段（虚线）分开画：未来那段是「假设从今天起不练」的推算，
   // 不能和已经发生的事实长得一样，否则看图的人分不清哪截是记录、哪截是推演。
   const toPath = (list: typeof pts): string =>
-    list.map((q, i) => `${i ? 'L' : 'M'}${x(toDayNum(q.day)).toFixed(1)},${y(q.state).toFixed(1)}`).join('');
-  const past = pts.filter((q) => toDayNum(q.day) <= today);
-  const future = forecast > 0 ? pts.filter((q) => toDayNum(q.day) >= today) : [];
+    list.map((q, i) => `${i ? 'L' : 'M'}${x(q.t).toFixed(1)},${y(q.state).toFixed(1)}`).join('');
+  const past = pts.filter((q) => q.t <= today);
+  const future = forecast > 0 ? pts.filter((q) => q.t >= today) : [];
   const linePast = toPath(past);
   const lineFuture = toPath(future);
   const area = past.length
@@ -196,8 +199,8 @@ function renderChart(
     : '';
 
   const parts: string[] = [];
-  // 纵轴网格 + 刻度
-  for (const v of [lo, p.baseline, hi]) {
+  // 纵轴网格 + 刻度（按步长均匀分布，不会出现 85 这种随机数）
+  for (let v = lo; v <= hi + 1e-9; v += step) {
     parts.push(
       `<line x1="${PAD_L}" y1="${y(v).toFixed(1)}" x2="${VIEW_W - PAD_R}" y2="${y(v).toFixed(1)}" stroke="currentColor" stroke-opacity="0.12"/>` +
         `<text x="${PAD_L - 8}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end" class="workout-recovery-axis">${v}</text>`
@@ -255,6 +258,20 @@ function renderChart(
     `<text x="${x(today).toFixed(1)}" y="${(y(summary.state) - 10).toFixed(1)}" text-anchor="middle" class="workout-recovery-today-label">${Math.round(summary.state)}</text>`
   );
 
+  // 十字准线（默认隐藏）：最近采样点为十字中心，旁边浮一个日期气泡。
+  // 放在最后画，保证压在曲线之上。
+  parts.push(
+    `<g class="workout-recovery-crosshair" style="display:none">` +
+      `<line class="ch-v" stroke="currentColor" stroke-opacity="0.45" stroke-dasharray="3 3" y1="${PAD_T}" y2="${VIEW_H - PAD_B}"/>` +
+      `<line class="ch-h" stroke="currentColor" stroke-opacity="0.45" stroke-dasharray="3 3" x1="${PAD_L}" x2="${VIEW_W - PAD_R}"/>` +
+      `<circle class="ch-dot" r="4" fill="var(--interactive-accent)" stroke="var(--background-primary)" stroke-width="1.5"/>` +
+      `<g class="ch-tip">` +
+      `<rect class="ch-tip-bg" rx="4" ry="4" height="18" fill="rgba(0,0,0,0.82)"/>` +
+      `<text class="ch-tip-text" font-size="11" fill="#fff" dominant-baseline="middle"></text>` +
+      `</g>` +
+      `</g>`
+  );
+
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', `0 0 ${VIEW_W} ${VIEW_H}`);
   svg.setAttribute('class', 'workout-recovery-chart');
@@ -262,6 +279,8 @@ function renderChart(
   svg.setAttribute('aria-label', label);
   svg.innerHTML = parts.join('');
   container.appendChild(svg);
+
+  bindCrosshair(svg, pts, { from, to, today, x, y });
 
   const legend = container.createDiv();
   legend.addClass('workout-recovery-legend');
@@ -277,6 +296,95 @@ function renderChart(
       cls: 'workout-recovery-legend-item is-forecast',
     });
   }
+}
+
+/** 纵轴刻度步长：按跨度取 2 / 5 / 10，保证刻度是整数且数量不过密。 */
+function niceStep(span: number): number {
+  // 250px 高的图最多放 6~7 条网格线；再密就变成条纹背景，读不出曲线
+  if (span <= 10) return 2;
+  if (span <= 25) return 5;
+  if (span <= 60) return 10;
+  if (span <= 150) return 20;
+  return 50;
+}
+
+interface CrosshairGeom {
+  from: number;
+  to: number;
+  today: number;
+  x: (t: number) => number;
+  y: (s: number) => number;
+}
+
+/**
+ * 十字准线：鼠标移动时吸附到最近的采样点，画横竖两条虚线 + 中心点，
+ * 并在中心旁浮一个日期气泡。移动端按 pointer 事件同样可用（手指按住拖动）。
+ */
+function bindCrosshair(svg: SVGSVGElement, pts: CurvePoint[], geom: CrosshairGeom): void {
+  const group = svg.querySelector<SVGGElement>('.workout-recovery-crosshair');
+  if (!group) return;
+  const vLine = group.querySelector<SVGLineElement>('.ch-v')!;
+  const hLine = group.querySelector<SVGLineElement>('.ch-h')!;
+  const dot = group.querySelector<SVGCircleElement>('.ch-dot')!;
+  const tip = group.querySelector<SVGGElement>('.ch-tip')!;
+  const tipBg = group.querySelector<SVGRectElement>('.ch-tip-bg')!;
+  const tipText = group.querySelector<SVGTextElement>('.ch-tip-text')!;
+
+  const hide = (): void => {
+    group.setCssStyles({ display: 'none' });
+  };
+
+  const show = (ev: PointerEvent): void => {
+    const rect = svg.getBoundingClientRect();
+    if (rect.width === 0) return;
+    // 屏幕坐标 → viewBox 坐标（SVG 用 viewBox 等比缩放，必须按宽度换算）
+    const vx = ((ev.clientX - rect.left) / rect.width) * VIEW_W;
+    if (vx < PAD_L || vx > VIEW_W - PAD_R) {
+      hide();
+      return;
+    }
+    const t = geom.from + ((vx - PAD_L) / (VIEW_W - PAD_L - PAD_R)) * (geom.to - geom.from);
+    // 吸附到最近采样点：十字永远落在曲线上，而不是悬在空白处
+    let best = pts[0];
+    let bestD = Infinity;
+    for (const q of pts) {
+      const d = Math.abs(q.t - t);
+      if (d < bestD) {
+        bestD = d;
+        best = q;
+      }
+    }
+    const cx = geom.x(best.t);
+    const cy = geom.y(best.state);
+
+    vLine.setAttribute('x1', String(cx));
+    vLine.setAttribute('x2', String(cx));
+    hLine.setAttribute('y1', String(cy));
+    hLine.setAttribute('y2', String(cy));
+    dot.setAttribute('cx', String(cx));
+    dot.setAttribute('cy', String(cy));
+
+    // 气泡：默认放在中心右上，靠右边界时翻到左侧，避免被裁掉
+    const text = fromDayNum(best.t);
+    tipText.textContent = text;
+    const padX = 6;
+    const textW = text.length * 6.2 + padX * 2;
+    const flip = cx + textW + 10 > VIEW_W - PAD_R;
+    const bx = flip ? cx - textW - 8 : cx + 8;
+    const by = Math.max(PAD_T, cy - 26);
+    tipBg.setAttribute('x', String(bx));
+    tipBg.setAttribute('y', String(by));
+    tipBg.setAttribute('width', String(textW));
+    tipText.setAttribute('x', String(bx + padX));
+    tipText.setAttribute('y', String(by + 9));
+    void tip;
+
+    group.setCssStyles({ display: '' });
+  };
+
+  svg.addEventListener('pointermove', show);
+  svg.addEventListener('pointerdown', show);
+  svg.addEventListener('pointerleave', hide);
 }
 
 // ─────────────────────────── 表格 ───────────────────────────

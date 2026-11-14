@@ -84,7 +84,9 @@ export interface DoseEntry {
 
 /** 折线上的一个采样点。 */
 export interface CurvePoint {
-  /** YYYY-MM-DD（含小数的时刻会保留到 day 精度，展示时按天取整） */
+  /** 该采样点的时刻（1970 起的天数，带小数）——画图横坐标必须用它，别用 day 反算 */
+  t: number;
+  /** YYYY-MM-DD（只用于标签展示，丢了日内精度） */
   day: string;
   /** 该时刻的肌肉状态（点） */
   state: number;
@@ -251,7 +253,9 @@ export function sampleCurve(
 ): CurvePoint[] {
   const points: CurvePoint[] = [];
   for (let t = fromDay; t <= toDay + 1e-9; t += stepDays) {
-    points.push({ day: fromDayNum(t), state: stateAt(params, doses, t) });
+    // t 必须原样带走：只留 day 会把同一天的 4 个采样点压成同一个横坐标，
+    // 画出来是每天一根竖线的「锯齿」，而不是曲线。
+    points.push({ t, day: fromDayNum(t), state: stateAt(params, doses, t) });
   }
   return points;
 }
