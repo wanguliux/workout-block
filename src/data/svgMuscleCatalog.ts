@@ -1,6 +1,7 @@
 /*
  * svgMuscleCatalog.ts —— SVG 肌肉路径目录（自动生成）
  * 来源：muscle_analysis/muscle_layer_front.svg + muscle_layer_back.svg
+ * 目录版本：flutter-body-atlas@main-2026-07-12
  * 共 143 条路径，14 个健身群，中英双语。
  */
 
@@ -11,8 +12,6 @@ export interface SvgMuscleEntry {
   zh: string;
   en: string;
 }
-
-export const SVG_CATALOG_VERSION = 'flutter-body-atlas@main-2026-07-12';
 
 export const FITNESS_GROUPS: { key: string; zh: string; en: string }[] = [
   { key: 'chest', zh: '胸部', en: 'Chest' },

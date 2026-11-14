@@ -9,7 +9,6 @@
 
 export const zh = {
   pluginName: 'Workout Block',
-  pluginDescription: '轻量、数据自有、可自定义的训练记录插件',
 
   command: {
     recordSet: '记录训练',

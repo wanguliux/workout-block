@@ -4,10 +4,8 @@
  * 页面用模板字符串拼 HTML，所有用户数据必须经 esc() 输出。
  */
 
-import type { FieldDef, LogRow, TrainingType, WorkoutConfig } from '../data/types';
-import { getFieldLabel, getFieldUnit, renderFieldValue } from '../data/display';
-import { materializeLog } from '../data/computedField';
-import { formatDuration } from '../util/duration';
+import type { FieldDef, LogRow, TrainingType } from '../data/types';
+import { getFieldUnit, renderFieldValue } from '../data/display';
 import { formatMass } from '../util/units';
 
 let lang: 'zh' | 'en' = 'zh';
@@ -18,10 +16,6 @@ export function setWebLang(next: 'zh' | 'en'): void {
   if (typeof document !== 'undefined') {
     document.documentElement.lang = next === 'en' ? 'en' : 'zh-CN';
   }
-}
-
-export function getWebLang(): 'zh' | 'en' {
-  return lang;
 }
 
 /** 行内双语：L('中文','English')。 */
@@ -100,10 +94,6 @@ export function dayLabel(dateStr: string): string {
   return dateStr.slice(5);
 }
 
-export function monthDay(dateStr: string): string {
-  return dateStr.slice(5);
-}
-
 export function formatNumber(value: number, decimals = 2): string {
   if (!Number.isFinite(value)) return '—';
   const factor = 10 ** Math.max(0, Math.min(6, decimals));
@@ -114,19 +104,6 @@ export function formatNumber(value: number, decimals = 2): string {
 export function formatInt(value: number): string {
   if (!Number.isFinite(value)) return '—';
   return Math.round(value).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN');
-}
-
-export function formatDecimals(value: number, decimals: number): string {
-  if (!Number.isFinite(value)) return '—';
-  const d = Math.max(0, Math.min(6, decimals));
-  return value.toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', {
-    minimumFractionDigits: d,
-    maximumFractionDigits: d,
-  });
-}
-
-export function durationText(seconds: number): string {
-  return formatDuration(seconds);
 }
 
 /** 当天训练跨度：多条记录取末组−首组；只有一条时取该条 duration_sec。 */
@@ -164,39 +141,6 @@ export function streakDays(logs: LogRow[]): number {
     cursor = addDays(cursor, -1);
   }
   return count;
-}
-
-export interface ValueChip {
-  label: string;
-  value: string;
-}
-
-/** 把一条记录按类型字段渲染成 [标签, 值]（含派生字段）。 */
-export function logValueChips(log: LogRow, config: WorkoutConfig): ValueChip[] {
-  const type = config.trainingTypes.find((t) => t.id === log.category);
-  const fields = type?.fields ?? [];
-  const materialized = materializeLog(log, fields);
-  const out: ValueChip[] = [];
-  for (const field of fields) {
-    const value = materialized.fields[field.key];
-    if (value === undefined || value === null || value === '') continue;
-    out.push({ label: getFieldLabel(field), value: renderFieldValue(value, field, unitOf(config)) });
-  }
-  if (out.length === 0) {
-    for (const [key, value] of Object.entries(log.fields ?? {})) {
-      if (value === undefined || value === null || value === '') continue;
-      out.push({ label: key, value: String(value) });
-    }
-  }
-  return out;
-}
-
-let unitGetter: (() => 'kg' | 'lb') | null = null;
-export function bindUnit(getter: () => 'kg' | 'lb'): void {
-  unitGetter = getter;
-}
-function unitOf(_config?: WorkoutConfig): 'kg' | 'lb' {
-  return unitGetter ? unitGetter() : 'kg';
 }
 
 /** 一组预设值的紧凑文字（如 60 kg × 8）。 */
@@ -256,10 +200,4 @@ export function slugId(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
   return ascii || `id-${Date.now().toString(36)}`;
-}
-
-/** 输入框里的时长展示：编辑既有秒值时回填数字秒，避免反复解析。 */
-export function durationInputValue(value: unknown): string {
-  if (value === undefined || value === null || value === '') return '';
-  return String(value);
 }

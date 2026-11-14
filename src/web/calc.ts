@@ -17,10 +17,8 @@ import { computeStat } from '../data/statExpr';
 import { materializeLog, fieldsOfCategory } from '../data/computedField';
 import { dateWithinRange } from '../data/heatmapDefaults';
 import {
-  getExerciseName,
   getExerciseNameById,
   getFieldLabel,
-  getMuscleName,
   getTrainingTypeName,
   renderFieldValue,
 } from '../data/display';
@@ -34,10 +32,6 @@ export function sortLogsDesc(logs: LogRow[]): LogRow[] {
     if (a.timestamp !== b.timestamp) return a.timestamp < b.timestamp ? 1 : -1;
     return a.id < b.id ? 1 : -1;
   });
-}
-
-export function sortLogsAsc(logs: LogRow[]): LogRow[] {
-  return [...logs].sort((a, b) => (a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0));
 }
 
 export function logsInRange(logs: LogRow[], range: WebRange | string | undefined): LogRow[] {
@@ -63,18 +57,6 @@ export function typeName(config: WorkoutConfig, id: string): string {
 
 export function logExerciseName(config: WorkoutConfig, log: LogRow): string {
   return getExerciseNameById(config.exercises, log.exerciseId) || L('未关联动作', 'Unlinked');
-}
-
-export function planExerciseName(config: WorkoutConfig, item: PlanItem): string {
-  return getExerciseName(exerciseOf(config, item.exerciseId)) || item.exerciseId;
-}
-
-export function muscleNamesOf(config: WorkoutConfig, exerciseId: string, role: 'primary' | 'secondary'): string[] {
-  const ex = exerciseOf(config, exerciseId);
-  if (!ex?.muscles) return [];
-  return ex.muscles
-    .filter((m) => m.role === role)
-    .map((m) => getMuscleName(config.muscles.find((x) => x.id === m.muscleId)) || m.muscleId);
 }
 
 export function materializedLog(config: WorkoutConfig, log: LogRow): LogRow {
@@ -317,10 +299,6 @@ export function isSetDone(
   return doneInPeriod(plan, plan.completedSets?.[completionKey(exerciseId, setId)], day);
 }
 
-export function setDoneDate(plan: TrainingPlanInstance, exerciseId: string, setId: string): string | undefined {
-  return plan.completedSets?.[completionKey(exerciseId, setId)];
-}
-
 /** 切换某组完成状态（直接修改传入的 plan；调用方负责 updateConfig 持久化）。 */
 export function toggleSetDone(plan: TrainingPlanInstance, exerciseId: string, setId: string, day: string): boolean {
   const key = completionKey(exerciseId, setId);
@@ -383,10 +361,6 @@ export function resolveMetric(config: WorkoutConfig, requested: string): StatDef
   );
 }
 
-export function statUnit(stat: StatDef | undefined): string {
-  return stat?.unit?.trim() ?? '';
-}
-
 export function statFormulaText(stat: StatDef): string {
   if (stat.formula.mode === 'expression') return stat.formula.expression || '';
   const b = stat.formula.builder;
@@ -424,11 +398,4 @@ export function statDelta(current: number, previous: number): { text: string; to
   return pct > 0
     ? { text: `↑ ${pct}%`, tone: 'delta-up' }
     : { text: `↓ ${Math.abs(pct)}%`, tone: 'delta-down' };
-}
-
-export function rangeDays(range: WebRange): number | null {
-  if (range === '7d') return 7;
-  if (range === '30d') return 30;
-  if (range === '90d') return 90;
-  return null;
 }

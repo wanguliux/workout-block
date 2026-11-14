@@ -75,24 +75,3 @@ export function applyMappingTier(config: WorkoutConfig, tier: MappingTier): void
     }
   }
 }
-
-// 读取某肌肉的 SVG 路径 id 集合（渲染层统一入口）
-export function getSvgRegionIds(muscle: Muscle): string[] {
-  return muscle.svgRegionIds ?? [];
-}
-
-// 由已映射路径的 side 派生肌肉 side（front / back / both）。
-// 同一 id 在目录里可能同时存在 front 和 back 两条记录，故需用 some() 收集两侧：
-// 只要该 id 在某一侧出现过，就认为该肌肉在该侧有覆盖。
-export function deriveMuscleSide(muscle: Muscle): 'front' | 'back' | 'both' {
-  const ids = getSvgRegionIds(muscle);
-  const sides = new Set<'front' | 'back'>();
-  for (const id of ids) {
-    if (SVG_MUSCLE_CATALOG.some((e) => e.id === id && e.side === 'front')) sides.add('front');
-    if (SVG_MUSCLE_CATALOG.some((e) => e.id === id && e.side === 'back')) sides.add('back');
-  }
-  if (sides.size === 1) {
-    return sides.has('front') ? 'front' : 'back';
-  }
-  return 'both';
-}

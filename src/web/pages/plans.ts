@@ -142,7 +142,3 @@ export function renderPlans(ctx: UiContext): string {
     `<div class="plan-grid">${cards}</div>`
   );
 }
-
-export function planCount(ctx: UiContext): number {
-  return (ctx.store.config.plans ?? []).length;
-}

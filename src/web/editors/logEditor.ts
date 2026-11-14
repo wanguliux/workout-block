@@ -7,7 +7,6 @@ import { LogRow, TrainingType } from '../../data/types';
 import { getExerciseName, getTrainingTypeName } from '../../data/display';
 import { icon } from '../icons';
 import { UiContext } from '../context';
-import { sortLogsDesc } from '../calc';
 import { L, esc, dateOf, timeOf } from '../format';
 import { computedBlockHTML, fieldGridHTML, fieldInputValue, parseDraft, refreshComputedIn } from '../fields';
 import { modalFrame, showModal, toast, confirmDialog } from '../ui';
@@ -163,9 +162,4 @@ export function openLogEditor(ctx: UiContext, logId: string): void {
     },
     { signal }
   );
-}
-
-/** 最近一条记录（供「沿用上一次」使用）。 */
-export function latestLog(ctx: UiContext, exerciseId: string) {
-  return sortLogsDesc(ctx.store.logs.filter((log) => log.exerciseId === exerciseId))[0];
 }

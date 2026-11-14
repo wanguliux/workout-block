@@ -8,7 +8,6 @@
 
 export const en = {
   pluginName: 'Workout Block',
-  pluginDescription: 'Lightweight, data-owning, customizable workout tracking plugin',
 
   command: {
     recordSet: 'Training Plan: Record Set',

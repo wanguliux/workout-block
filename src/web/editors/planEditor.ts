@@ -10,7 +10,7 @@ import { generateId } from '../../util/id';
 import { icon } from '../icons';
 import { UiContext } from '../context';
 import { L, esc, todayStr } from '../format';
-import { computedBlockHTML, fieldGridHTML, fieldInputValue, parsePlanFields, readDraftFrom, refreshComputedIn } from '../fields';
+import { computedBlockHTML, fieldGridHTML, fieldInputValue, parsePlanFields, refreshComputedIn } from '../fields';
 import { modalFrame, showModal, toast } from '../ui';
 import { editorSignal, closeEditor } from './editorHost';
 
@@ -470,9 +470,4 @@ export function openPlanEditor(ctx: UiContext, planId?: string): void {
     },
     { signal }
   );
-}
-
-/** 编辑器里读取一组预设字段（导出给测试/调试用）。 */
-export function readPlanSetValues(root: ParentNode): Record<string, string> {
-  return readDraftFrom(root, 'data-editor-field');
 }

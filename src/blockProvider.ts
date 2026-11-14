@@ -135,11 +135,6 @@ export function getPluginParamRenderer(
     : undefined;
 }
 
-/** 合并所有 provider 的 block 定义（扁平列表） */
-export function getAllBlockDefinitions(app: App): BlockDefinitionWithParams[] {
-  return getBlockProviders(app).flatMap((g) => g.blocks);
-}
-
 // ─── first-claim wins 宿主声明 ──────────────────────────────────
 
 /**

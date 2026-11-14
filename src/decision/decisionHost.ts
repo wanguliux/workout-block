@@ -50,13 +50,3 @@ export function initDecisionCenter(
   plugin._decisionHostApi = null;
   return { isHost: true, hostApi: null };
 }
-
-/** Pull 模型：聚合所有暴露 _decisionContributor 的插件（宿主侧聚合用；本插件作为 contributor 一般不主动调用）。 */
-export function collectContributors(app: App): DecisionContributor[] {
-  const plugins = (app as unknown as { plugins?: { plugins: Record<string, unknown> } }).plugins?.plugins ?? {};
-  const out: DecisionContributor[] = [];
-  for (const plugin of Object.values(plugins) as DecisionHostPlugin[]) {
-    if (plugin._decisionContributor) out.push(plugin._decisionContributor);
-  }
-  return out;
-}

@@ -15,12 +15,6 @@ import { DEFAULT_DOSE_WEIGHTS, DoseWeights, effectiveWeight } from './muscleStat
  *   中位数窗口太短 → 基线跟着近期一起动，比值恒为 100%；太长 → 半年前的加量还压着基准。默认 12 周。
  */
 
-/** 近 N 周练度：下标 0 ＝ 最近 7 天。 */
-export interface WeeklyDose {
-  weekIndex: number;
-  dose: number;
-}
-
 /** 发展视图的两个时间窗（单位：天）。 */
 export interface GrowthWindow {
   /** 近期窗口：算「最近练得怎么样」，默认 28 天（4 周） */

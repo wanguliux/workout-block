@@ -95,7 +95,3 @@ export function acceptConfirm(): void {
   closeModal();
   cb?.();
 }
-
-export function emptyState(text: string, hint?: string): string {
-  return `<div class="empty">${esc(text)}${hint ? `<div class="faint" style="margin-top:4px">${esc(hint)}</div>` : ''}</div>`;
-}
