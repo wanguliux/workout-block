@@ -19,6 +19,7 @@
  */
 
 import { t } from '../i18n';
+import { collectMuscleOptions } from '../data/muscleOptions';
 import { getExerciseName, getTrainingTypeName } from '../data/display';
 import type { BlockParamDef, ParamRenderContext } from '../blockProvider';
 import type { WorkoutConfig } from '../data/types';
@@ -41,11 +42,179 @@ export function renderParamControl(
       renderExerciseCombobox(field, param, ctx, config);
       break;
     }
+    case 'muscle': {
+      // 肌肉 / 肌群：点击即下拉、输入即过滤（候选含解剖别名，写「股四头肌」也能筛到「quads」）
+      const field = renderParamFieldShell(container, param);
+      renderSearchCombo(field, collectMuscleOptions(config), {
+        placeholder: param.placeholder,
+        initial: ctx.initial,
+        onChange: ctx.onChange,
+        emptyText: t('modal.insertCodeblock.noMatchingMuscle'),
+      });
+      break;
+    }
+    case 'choice': {
+      // 封闭选项：原生下拉，不允许手打（免得把「折线图」这种标签当成值写进代码块）
+      const field = renderParamFieldShell(container, param);
+      renderChoiceSelect(field, param, ctx);
+      break;
+    }
     default:
       // 防御：宿主理论上只委托「宿主不认识、定义方声明」的 type；漏网之鱼回落文本
       renderTextField(container, param, ctx);
       break;
   }
+}
+
+/** 字段壳：参数名 + 描述（被委托渲染时宿主不套自己的 label 结构）。 */
+function renderParamFieldShell(container: HTMLElement, param: BlockParamDef): HTMLElement {
+  const field = container.createDiv({ cls: 'block-param-ms' });
+  field.createDiv({ cls: 'block-param-field-name', text: param.label });
+  if (param.description) {
+    field.createDiv({ cls: 'block-param-field-desc', text: param.description });
+  }
+  return field;
+}
+
+/** 下拉候选（haystack ＝ 小写匹配串，含别名）。 */
+export interface SearchComboOption {
+  value: string;
+  label: string;
+  hint?: string;
+  haystack: string;
+}
+
+/** 封闭选项下拉（原生 select）：只能选、不能打字；空值代表「用默认」，所以留一个空选项。 */
+export function renderChoiceSelect(
+  container: HTMLElement,
+  param: BlockParamDef,
+  ctx: ParamRenderContext
+): HTMLSelectElement {
+  const select = container.createEl('select', { cls: 'workout-input workout-select' });
+  select.createEl('option', { value: '', text: t('modal.insertCodeblock.paramDefault') });
+  for (const option of param.options ?? []) {
+    select.createEl('option', { value: option, text: param.optionLabels?.[option] ?? option });
+  }
+  select.value = ctx.initial ?? param.defaultValue ?? '';
+  select.addEventListener('change', () => ctx.onChange(select.value));
+  return select;
+}
+
+/**
+ * 通用「可搜索下拉」：点击/聚焦展开候选，输入即过滤，↑↓ 高亮、回车选中。
+ * 关闭只靠 input blur（不用 document 监听：宿主弹窗关掉后无法回收，会泄漏）。
+ */
+export function renderSearchCombo(
+  container: HTMLElement,
+  options: SearchComboOption[],
+  opts: {
+    placeholder?: string;
+    initial?: string;
+    onChange?: (value: string) => void;
+    /** 无匹配时的提示（默认沿用「无匹配的训练项」） */
+    emptyText?: string;
+  } = {}
+): HTMLInputElement {
+  const wrapper = container.createDiv({ cls: 'workout-combo-wrapper' });
+  const input = wrapper.createEl('input', { type: 'text' });
+  input.addClass('workout-input');
+  input.addClass('workout-combo-input');
+  if (opts.placeholder) input.placeholder = opts.placeholder;
+  if (opts.initial) input.value = opts.initial;
+
+  const dropdown = wrapper.createDiv();
+  dropdown.addClass('workout-combo-dropdown');
+  dropdown.setCssStyles({ display: 'none' });
+
+  let filtered = [...options];
+  let highlighted = -1;
+
+  const renderDropdown = (): void => {
+    dropdown.empty();
+    const q = input.value.trim().toLowerCase();
+    filtered = q ? options.filter((o) => o.haystack.includes(q)) : [...options];
+    highlighted = -1;
+
+    if (filtered.length === 0) {
+      const empty = dropdown.createDiv({ text: opts.emptyText ?? t('modal.recordSet.noMatchingExercise') });
+      empty.addClass('workout-combo-item');
+      empty.addClass('workout-combo-empty');
+      return;
+    }
+
+    for (const option of filtered) {
+      const item = dropdown.createDiv();
+      item.addClass('workout-combo-item');
+      item.createSpan({ text: option.label });
+      if (option.hint) {
+        const hint = item.createSpan({ text: option.hint });
+        hint.addClass('workout-combo-type-tag');
+      }
+      // mousedown preventDefault：否则 input 先失焦触发 blur 关面板，click 就落空了
+      item.addEventListener('mousedown', (e) => e.preventDefault());
+      item.addEventListener('click', () => {
+        input.value = option.value;
+        dropdown.setCssStyles({ display: 'none' });
+        opts.onChange?.(input.value);
+      });
+      item.addEventListener('mouseenter', () => {
+        highlighted = filtered.indexOf(option);
+        const items = dropdown.querySelectorAll('.workout-combo-item');
+        items.forEach((el, i) => (el as HTMLElement).toggleClass('workout-combo-highlighted', i === highlighted));
+      });
+    }
+  };
+
+  const open = (): void => {
+    renderDropdown();
+    dropdown.setCssStyles({ display: 'block' });
+  };
+  const close = (): void => {
+    dropdown.setCssStyles({ display: 'none' });
+    highlighted = -1;
+  };
+
+  input.addEventListener('focus', open);
+  input.addEventListener('input', () => {
+    open();
+    opts.onChange?.(input.value.trim());
+  });
+  input.addEventListener('blur', close);
+  input.addEventListener('keydown', (e) => {
+    if (dropdown.style.display === 'none') {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        e.preventDefault();
+        open();
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+      return;
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const items = dropdown.querySelectorAll('.workout-combo-item');
+      if (items.length === 0) return;
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      highlighted = Math.min(Math.max(highlighted + step, 0), items.length - 1);
+      items.forEach((el, i) => (el as HTMLElement).toggleClass('workout-combo-highlighted', i === highlighted));
+      (items[highlighted] as HTMLElement).scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const picked = filtered[highlighted];
+      if (picked) {
+        input.value = picked.value;
+        opts.onChange?.(input.value);
+      }
+      close();
+    }
+  });
+
+  return input;
 }
 
 /**

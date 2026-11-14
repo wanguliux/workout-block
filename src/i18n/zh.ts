@@ -241,6 +241,8 @@ export const zh = {
       noMatch: '无匹配的代码块',
       paramTitle: '设置参数（全部可选，留空即用默认）',
       optional: '可选',
+      paramDefault: '（默认）',
+      noMatchingMuscle: '没有匹配的肌肉（清空可看全部）',
       skip: '跳过参数',
       insert: '插入到光标处',
       inserted: '已插入代码块到光标处',

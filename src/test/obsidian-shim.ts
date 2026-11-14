@@ -385,4 +385,21 @@ if (typeof HTMLElement !== 'undefined') {
       return this;
     };
   }
+  if (typeof proto.removeClass !== 'function') {
+    proto.removeClass = function (this: HTMLElement, ...cls: string[]) {
+      this.classList.remove(...cls);
+      return this;
+    };
+  }
+  if (typeof proto.toggleClass !== 'function') {
+    proto.toggleClass = function (this: HTMLElement, cls: string, value: boolean) {
+      this.classList.toggle(cls, value);
+      return this;
+    };
+  }
+  if (typeof proto.hasClass !== 'function') {
+    proto.hasClass = function (this: HTMLElement, cls: string) {
+      return this.classList.contains(cls);
+    };
+  }
 }

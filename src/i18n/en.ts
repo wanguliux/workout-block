@@ -240,6 +240,8 @@ export const en = {
       noMatch: 'No matching code block',
       paramTitle: 'Set parameters (all optional; blank = default)',
       optional: 'optional',
+      paramDefault: '(default)',
+      noMatchingMuscle: 'No matching muscle (clear the box to see all)',
       skip: 'Skip parameters',
       insert: 'Insert at cursor',
       inserted: 'Code block inserted at cursor',

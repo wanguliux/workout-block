@@ -4,6 +4,8 @@ import { DataManager } from '../data/DataManager';
 import { WorkoutConfig, Exercise, TrainingType } from '../data/types';
 import { getExerciseName, getTrainingTypeName } from '../data/display';
 import { t } from '../i18n';
+import { collectMuscleOptions } from '../data/muscleOptions';
+import { renderChoiceSelect, renderSearchCombo } from './paramRenderers';
 import { buildCodeBlock } from '../codeBlockDefs';
 import {
   getPluginParamRenderer,
@@ -36,7 +38,7 @@ interface ExerciseComboState {
  * 宿主认识的 type（其余一律按契约 v2 委托定义方插件渲染）。
  * 新增宿主本地控件时同步此处——未登记的类型不会被误吞，只会走委托/文本回落。
  */
-const KNOWN_PARAM_TYPES = new Set(['text', 'number', 'select', 'date', 'exercise']);
+const KNOWN_PARAM_TYPES = new Set(['text', 'number', 'select', 'date', 'exercise', 'muscle', 'choice']);
 
 export class InsertCodeBlockParamModal extends Modal {
   private dataManager: DataManager;
@@ -134,7 +136,27 @@ export class InsertCodeBlockParamModal extends Modal {
         row.createDiv({ text: p.description, cls: 'workout-insert-param-hint' });
       }
 
-      if (p.type === 'select') {
+      if (p.type === 'choice') {
+        // 封闭选项：原生下拉，只能三选一，不接受自由输入
+        const select = renderChoiceSelect(row, p, {
+          initial: this.values[p.key] ?? '',
+          onChange: (value) => {
+            this.values[p.key] = value;
+          },
+        });
+        this.inputs[p.key] = select;
+      } else if (p.type === 'muscle') {
+        // 肌肉 / 肌群：点击展开候选，输入即过滤
+        const input = renderSearchCombo(row, collectMuscleOptions(config), {
+          placeholder: p.placeholder,
+          initial: this.values[p.key] ?? '',
+          onChange: (value) => {
+            this.values[p.key] = value;
+          },
+          emptyText: t('modal.insertCodeblock.noMatchingMuscle'),
+        });
+        this.inputs[p.key] = input;
+      } else if (p.type === 'select') {
         // 可编辑下拉框（combobox）：既可从候选列表选择，也可直接手打任意值。
         // options 已由提供方在 getBlockRegistry 时物化（含跨插件场景），
         // 与 main.ts.resolveDynamicOptions 同源、单一真相，杜绝两处解析漂移（Pitfall #7）。

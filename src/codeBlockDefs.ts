@@ -9,7 +9,9 @@
  * 否则生成的参数不会被解析器识别而失效。
  */
 
-export type ParamType = 'text' | 'number' | 'select' | 'exercise';
+// select ＝可输入的下拉（动态候选，如计划名）；choice ＝封闭单选（只能选，不能打字）；
+// muscle ＝肌肉/肌群搜索下拉（候选含解剖别名）
+export type ParamType = 'text' | 'number' | 'select' | 'choice' | 'exercise' | 'muscle';
 
 export interface CodeBlockParamDef {
   key: string;                          // 写入代码块正文、解析器可识别的参数名（下划线风格）
@@ -40,11 +42,11 @@ export const CODE_BLOCK_DEFS: CodeBlockDef[] = [
     params: [
       { key: 'exercise', label: '训练项', type: 'exercise', placeholder: '如：卧推（必填，缺失时提示未指定）' },
       { key: 'day', label: '最近训练日', type: 'number', placeholder: '如 30，显示最近 N 个有记录的日' },
-      { key: 'group_by', label: '分组方式', type: 'select', options: ['date', 'week'], optionLabels: { date: '按日期', week: '按周' } },
-      { key: 'sort', label: '排序', type: 'select', options: ['desc', 'asc'], optionLabels: { desc: '最新在前', asc: '最早在前' } },
+      { key: 'group_by', label: '分组方式', type: 'choice', options: ['date', 'week'], optionLabels: { date: '按日期', week: '按周' } },
+      { key: 'sort', label: '排序', type: 'choice', options: ['desc', 'asc'], optionLabels: { desc: '最新在前', asc: '最早在前' } },
       { key: 'number', label: '最近条数', type: 'number', placeholder: '只显示最新 N 条' },
       { key: 'limit', label: '最多渲染', type: 'number', placeholder: '最多渲染 N 条（默认 50）' },
-      { key: 'show_add', label: '显示添加按钮', type: 'select', options: ['true', 'false'], optionLabels: { true: '显示', false: '隐藏' } },
+      { key: 'show_add', label: '显示添加按钮', type: 'choice', options: ['true', 'false'], optionLabels: { true: '显示', false: '隐藏' } },
     ],
   },
   {
@@ -81,7 +83,7 @@ export const CODE_BLOCK_DEFS: CodeBlockDef[] = [
     title: '恢复曲线',
     desc: '肌肉状态折线：练完掉下去、几天回到基线、之后超量恢复；也可切表格看「还要几天恢复」',
     params: [
-      { key: 'muscle', label: '肌肉 / 肌群', type: 'text', placeholder: '如 股四头肌、胸大肌、胸部（留空 + view: table 可列全部）' },
+      { key: 'muscle', label: '肌肉 / 肌群', type: 'muscle', placeholder: '点击选择，或输入筛选（支持解剖名，如 股四头肌）；留空 + view: table 可列全部' },
       { key: 'days', label: '回溯天数', type: 'number', placeholder: '默认 28（7–365）' },
       {
         key: 'forecast',
@@ -92,7 +94,7 @@ export const CODE_BLOCK_DEFS: CodeBlockDef[] = [
       {
         key: 'view',
         label: '显示形态',
-        type: 'select',
+        type: 'choice', // 封闭三选一：不允许手打（'折线图' 是标签，不是值）
         options: ['chart', 'table', 'both'],
         optionLabels: { chart: '折线图', table: '表格', both: '两者都要' },
       },
