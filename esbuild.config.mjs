@@ -74,46 +74,6 @@ if (process.argv.includes('--cli')) {
   process.exit(0);
 }
 
-/*
- * 第三构建入口：网页版（同仓库 Web 目标）。
- * 与插件/CLI 共享 src/data 纯模块（types/csvFormat/statExpr/muscleStats/svgMuscleCatalog/i18n），
- * 差异仅在「持久化介质」：插件用 vault、CLI 用 fs、网页用 localStorage（见 src/web/store.ts）。
- * 产物：web/bundle.js + web/bundle.css（ESM，配 web/index.html 静态壳，可直接静态托管）。
- */
-const WEB_DIR = 'web';
-const webContext = await esbuild.context({
-  banner: { js: banner },
-  entryPoints: ['src/web/main.ts'],
-  bundle: true,
-  // IIFE 经典脚本（非 ESM）：保证 file:// 双击打开也能运行
-  // （ESM 模块脚本会被 file:// 的 CORS 策略拦截；静态托管下两者皆可，IIFE 更稳）
-  format: 'iife',
-  target: 'es2020',
-  logLevel: 'info',
-  sourcemap: prod ? false : 'inline',
-  treeShaking: true,
-  outdir: WEB_DIR,
-  entryNames: 'bundle',
-  loader: {
-    '.svg': 'text', // 肌肉热力图 SVG 内联为字符串（与插件同策略）
-  },
-});
-
-/*
- * ⚠️ 网页版已冻结（2026-11-13 起暂停维护，见 web/PAUSED.md）。
- * --web 仍可构建（产物留档 / 崩溃修复用），但不再接收功能改动，插件侧新功能无需同步过来。
- * 这里只打印告警、不阻断构建：冻结不是禁用，遇到必要修复仍然要能出包。
- */
-const WEB_FROZEN_NOTICE =
-  '[FROZEN] 网页版自 2026-11-13 起暂停维护（见 web/PAUSED.md）——插件新功能无需同步到网页版。';
-
-// --web：只构建网页版（投稿演示/静态托管用）
-if (process.argv.includes('--web')) {
-  console.warn(WEB_FROZEN_NOTICE);
-  await webContext.rebuild();
-  process.exit(0);
-}
-
 if (prod) {
   // 生产模式：一次性重新构建后退出（插件 + CLI 两个产物）
   await context.rebuild();

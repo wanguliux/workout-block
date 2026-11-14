@@ -7,9 +7,7 @@
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs --production",
     "build:cli": "node esbuild.config.mjs --cli",
-    "build:web": "node esbuild.config.mjs --web --production",
     "test": "vitest",
-    "test:web": "node scripts/web-smoke.mjs",
     "test:coverage": "vitest --coverage"
   },
   "keywords": [
