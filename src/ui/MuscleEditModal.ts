@@ -53,7 +53,6 @@ export class MuscleEditModal extends Modal {
 
   private idInput!: HTMLInputElement;
   private nameInput!: HTMLInputElement;
-  private coverageToggle!: HTMLInputElement;
   private restThresholdInput!: HTMLInputElement;
 
   private selectedIds = new Set<string>();
@@ -136,21 +135,9 @@ export class MuscleEditModal extends Modal {
       this.nameInput.value = getMuscleName(muscle);
     }
 
-    // 两列网格：计入覆盖（开关）+ 未练天数阈值
-    const coverRestCol = contentEl.createDiv();
-    coverRestCol.addClass('workout-two-col');
-
-    // 覆盖（布尔开关）
-    const coverageToggleWrap = coverRestCol.createDiv();
-    coverageToggleWrap.addClass('workout-toggle');
-    this.coverageToggle = coverageToggleWrap.createEl('input', { type: 'checkbox', cls: 'workout-switch' });
-    coverageToggleWrap.createSpan({ text: t('modal.muscleManager.coverage') });
-    if (muscle?.contributesToCoverage) {
-      this.coverageToggle.checked = true;
-    }
-
-    // 未练天数阈值
-    const restRow = coverRestCol.createDiv();
+    // 未练天数阈值（决策中心据此提醒「这块肌肉已 N 天没练」）。
+    // 原「计入覆盖」开关已删：该字段从不被任何计算消费，只是 UI 标签（见 muscleStats 头注释）。
+    const restRow = contentEl.createDiv();
     restRow.addClass('workout-field');
     restRow.createEl('label', { text: t('modal.muscleManager.restThreshold') });
     this.restThresholdInput = restRow.createEl('input', { type: 'number' });
@@ -663,7 +650,8 @@ export class MuscleEditModal extends Modal {
       id,
       nameKey: this.options.muscle?.nameKey,
       name,
-      contributesToCoverage: this.coverageToggle.checked,
+      // 字段仍保留在数据里（向后兼容），只是不再让用户配：编辑时沿用原值，新建默认 true
+      contributesToCoverage: this.options.muscle?.contributesToCoverage ?? true,
       restThresholdDays: parseInt(this.restThresholdInput.value) || 7,
       svgRegionIds: Array.from(this.selectedIds),
       heatmapMetric: this.metricId || undefined,

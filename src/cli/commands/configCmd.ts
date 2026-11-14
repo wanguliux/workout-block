@@ -106,12 +106,9 @@ export async function cmdConfig(env: CliEnv, args: ParsedArgs): Promise<void> {
     }
     case 'muscles': {
       if (json) return printJson(config.muscles);
-      const rows = config.muscles.map((m) => [
-        m.id,
-        getMuscleName(m),
-        m.contributesToCoverage ? '计入覆盖' : '不计入',
-      ]);
-      console.log(renderTable(['id', '名称', '覆盖统计'], rows));
+      // 「计入覆盖」已不作为配置项暴露（该字段不被任何计算消费），列表只留能用的信息
+      const rows = config.muscles.map((m) => [m.id, getMuscleName(m)]);
+      console.log(renderTable(['id', '名称'], rows));
       return;
     }
   }

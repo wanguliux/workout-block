@@ -1735,8 +1735,6 @@ var zh = {
       name: "\u540D\u79F0",
       side: "\u90E8\u4F4D",
       sideLabel: "\u90E8\u4F4D",
-      coverage: "\u8BA1\u5165\u8986\u76D6",
-      coverageLabel: "\u8986\u76D6",
       idLabel: "ID",
       add: "+ \u65B0\u589E\u808C\u8089",
       search: "\u641C\u7D22\u808C\u8089\u540D\u79F0 / ID",
@@ -1804,8 +1802,6 @@ var zh = {
       title: "\u8BAD\u7EC3\u7C7B\u578B\u7BA1\u7406",
       name: "\u7C7B\u578B\u540D\u79F0",
       fields: "\u5B57\u6BB5",
-      coverage: "\u8BA1\u5165\u8986\u76D6",
-      coverageLabel: "\u8986\u76D6",
       add: "+ \u65B0\u589E\u8BAD\u7EC3\u7C7B\u578B",
       search: "\u641C\u7D22\u8BAD\u7EC3\u7C7B\u578B\u540D\u79F0 / ID",
       edit: "\u7F16\u8F91",
@@ -2299,8 +2295,6 @@ var en = {
       name: "Name",
       side: "Part",
       sideLabel: "Part",
-      coverage: "Count toward coverage",
-      coverageLabel: "Coverage",
       idLabel: "ID",
       add: "+ Add Muscle",
       search: "Search muscle name / ID",
@@ -2368,8 +2362,6 @@ var en = {
       title: "Training Type Manager",
       name: "Type Name",
       fields: "Fields",
-      coverage: "Contributes to Coverage",
-      coverageLabel: "Coverage",
       add: "+ Add Training Type",
       search: "Search training type name / ID",
       edit: "Edit",
@@ -4792,8 +4784,7 @@ async function deleteExerciseCmd(env, args) {
 async function addTypeCmd(env, args) {
   const name = requireOption(args, "name", `config add-type --name <\u540D\u79F0> --fields-json '[{"key":"weight","inputType":"number","mass":true,"required":true}]'`);
   const fields = parseFieldDefsJson(requireOption(args, "fields-json", "config add-type \u9700\u8981 --fields-json \u63CF\u8FF0\u5B57\u6BB5"));
-  const contributesToCoverage = args.options["coverage"] !== void 0 ? parseBool(args.options["coverage"], "coverage") : void 0;
-  const type = addType(env.config, { id: args.options["id"], name, fields, contributesToCoverage });
+  const type = addType(env.config, { id: args.options["id"], name, fields });
   await saveConfig(env);
   if (args.flags.has("json"))
     return printJson(type);
@@ -4827,11 +4818,10 @@ async function deleteTypeCmd(env, args) {
   console.log(`\u5DF2\u5220\u9664\u8BAD\u7EC3\u7C7B\u578B ${id}\u3002${orphanExerciseIds.length > 0 ? `\u6CE8\u610F\uFF1A${orphanExerciseIds.join(", ")} \u4ECD\u5F15\u7528\u8BE5\u7C7B\u578B\uFF0C\u5EFA\u8BAE\u4E00\u5E76\u5904\u7406\u3002` : ""}`);
 }
 async function addMuscleCmd(env, args) {
-  const name = requireOption(args, "name", "config add-muscle --name <\u540D\u79F0> [--id ...] [--coverage true|false] [--rest-days N] [--svg-ids a,b]");
+  const name = requireOption(args, "name", "config add-muscle --name <\u540D\u79F0> [--id ...] [--rest-days N] [--svg-ids a,b]");
   const muscle = addMuscle(env.config, {
     id: args.options["id"],
     name,
-    contributesToCoverage: args.options["coverage"] !== void 0 ? parseBool(args.options["coverage"], "coverage") : void 0,
     restThresholdDays: args.options["rest-days"] !== void 0 ? parseInt(args.options["rest-days"], 10) : void 0,
     svgRegionIds: args.options["svg-ids"] !== void 0 ? parseCommaList(args.options["svg-ids"]) : void 0
   });
@@ -4848,11 +4838,10 @@ function muscleTarget(args, usage) {
   return vals[0];
 }
 async function updateMuscleCmd(env, args) {
-  const id = muscleTarget(args, "config update-muscle --muscle <id> [--name ...] [--coverage ...] [--rest-days ...] [--svg-ids ...]");
+  const id = muscleTarget(args, "config update-muscle --muscle <id> [--name ...] [--rest-days ...] [--svg-ids ...]");
   const muscle = applyMuscleUpdate(env.config, {
     id,
     name: args.options["name"],
-    contributesToCoverage: args.options["coverage"] !== void 0 ? parseBool(args.options["coverage"], "coverage") : void 0,
     restThresholdDays: args.options["rest-days"] !== void 0 ? parseInt(args.options["rest-days"], 10) : void 0,
     svgRegionIds: args.options["svg-ids"] !== void 0 ? parseCommaList(args.options["svg-ids"]) : void 0
   });
@@ -5064,12 +5053,8 @@ async function cmdConfig(env, args) {
     case "muscles": {
       if (json)
         return printJson(config.muscles);
-      const rows = config.muscles.map((m) => [
-        m.id,
-        getMuscleName(m),
-        m.contributesToCoverage ? "\u8BA1\u5165\u8986\u76D6" : "\u4E0D\u8BA1\u5165"
-      ]);
-      console.log(renderTable(["id", "\u540D\u79F0", "\u8986\u76D6\u7EDF\u8BA1"], rows));
+      const rows = config.muscles.map((m) => [m.id, getMuscleName(m)]);
+      console.log(renderTable(["id", "\u540D\u79F0"], rows));
       return;
     }
   }

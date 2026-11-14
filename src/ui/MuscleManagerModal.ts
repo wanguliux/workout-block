@@ -144,7 +144,6 @@ export class MuscleManagerModal extends Modal {
       // 注：side（部位）由 svgRegionIds 经目录派生，不再单列（§13）
       const detailLines = [
         `${t('common.name')}: ${muscle.id}`,
-        `${t('modal.muscleManager.coverage')}: ${muscle.contributesToCoverage ? t('settings.on') : t('settings.off')}`,
         `${t('modal.muscleManager.restThreshold')}: ${muscle.restThresholdDays ?? 7} ${t('settings.days')}`,
         `${t('modal.muscleManager.mappedPaths')}: ${mappedCount}`,
       ];

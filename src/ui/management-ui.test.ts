@@ -207,8 +207,8 @@ describe('management UI regressions', async () => {
     expect(actionButtons).toEqual(['Edit', 'Delete']);
   });
 
-  // 用例：肌肉管理列表应渲染出带标签的明细（名称/部位/是否计入覆盖/建议间隔/已映射路径）以及按钮
-  it('renders labeled side, coverage, and frequency details in the muscle manager list', async () => {
+  // 用例：肌肉管理列表应渲染出带标签的明细（名称/建议间隔/已映射路径）以及按钮——「计入覆盖」已删
+  it('renders labeled frequency details in the muscle manager list (coverage removed)', async () => {
     setLocale('en');
     const dataManager = createDataManager();
     // 列表渲染分支依赖 muscleMappingInitialized：真实首次打开时它由引导流程置 true。
@@ -225,7 +225,6 @@ describe('management UI regressions', async () => {
     const mappedCount = chest.svgRegionIds?.length ?? 0;
 
     expect(text).toContain('Name: chest');
-    expect(text).toContain('Count toward coverage: On');
     expect(text).toContain('Rest threshold (days): 7 days');
     const firstRow = modal.contentEl.querySelector('.workout-card') as HTMLElement;
     const detailLines = Array.from(firstRow.querySelectorAll('.workout-card-meta')).map((el) =>
@@ -236,7 +235,6 @@ describe('management UI regressions', async () => {
     );
     expect(detailLines).toEqual([
       'Name: chest',
-      'Count toward coverage: On',
       'Rest threshold (days): 7 days',
       `Mapped paths: ${mappedCount}`,
     ]);
@@ -276,7 +274,8 @@ describe('management UI regressions', async () => {
       button.textContent?.trim()
     );
 
-    expect(detailLines).toEqual(['Fields: Weight, Reps', 'Contributes to Coverage: On']);
+    // 训练类型明细只剩字段列表（「是否计入覆盖」已删）
+    expect(detailLines).toEqual(['Fields: Weight, Reps']);
     expect(actionButtons).toEqual(['Edit', 'Delete']);
   });
 

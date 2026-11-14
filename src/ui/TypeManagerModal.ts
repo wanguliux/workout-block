@@ -103,11 +103,8 @@ export class TypeManagerModal extends Modal {
       infoCol.addClass('workout-card-info');
       infoCol.createDiv({ text: typeName, cls: 'workout-card-title' });
 
-      // 每条类型的明细行：字段列表 + 是否计入覆盖（开/关）。
-      const detailLines = [
-        `${t('modal.typeManager.fields')}: ${fieldNames}`,
-        `${t('modal.typeManager.coverage')}: ${type.contributesToCoverage ? t('settings.on') : t('settings.off')}`,
-      ];
+      // 明细行只有字段列表：原「是否计入覆盖」已删（该字段不被任何计算消费）
+      const detailLines = [`${t('modal.typeManager.fields')}: ${fieldNames}`];
 
       for (const detail of detailLines) {
         infoCol.createDiv({ text: detail, cls: 'workout-card-meta' });

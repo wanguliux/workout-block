@@ -522,7 +522,8 @@ export class TypeModal extends Modal {
         }
         new Notice(t('modal.newType.saved'));
       } else {
-        // 新建模式：写入自定义 ID（用户输入或按类型名称推导），参与覆盖统计
+        // 新建模式：写入自定义 ID（用户输入或按类型名称推导）。
+        // contributesToCoverage 仍写 true 只为数据兼容——它不被任何计算消费，也不再暴露给用户。
         await this.dataManager.addTrainingType({
           id: finalId,
           nameKey: undefined,

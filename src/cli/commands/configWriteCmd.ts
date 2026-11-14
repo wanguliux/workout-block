@@ -114,10 +114,8 @@ async function deleteExerciseCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
 async function addTypeCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
   const name = requireOption(args, 'name', 'config add-type --name <名称> --fields-json \'[{"key":"weight","inputType":"number","mass":true,"required":true}]\'');
   const fields = parseFieldDefsJson(requireOption(args, 'fields-json', 'config add-type 需要 --fields-json 描述字段'));
-  const contributesToCoverage = args.options['coverage'] !== undefined
-    ? parseBool(args.options['coverage'], 'coverage')
-    : undefined;
-  const type = addType(env.config, { id: args.options['id'], name, fields, contributesToCoverage });
+  // 不再暴露 --coverage：contributesToCoverage 不被任何计算消费，已从所有配置入口移除
+  const type = addType(env.config, { id: args.options['id'], name, fields });
   await saveConfig(env);
   if (args.flags.has('json')) return printJson(type);
   console.log(`已添加训练类型：${type.id}（${type.name}，字段 ${type.fields.map((f) => f.key).join(', ')}）`);
@@ -149,11 +147,10 @@ async function deleteTypeCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
 // ===== 肌肉 =====
 
 async function addMuscleCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
-  const name = requireOption(args, 'name', 'config add-muscle --name <名称> [--id ...] [--coverage true|false] [--rest-days N] [--svg-ids a,b]');
+  const name = requireOption(args, 'name', 'config add-muscle --name <名称> [--id ...] [--rest-days N] [--svg-ids a,b]');
   const muscle = addMuscle(env.config, {
     id: args.options['id'],
     name,
-    contributesToCoverage: args.options['coverage'] !== undefined ? parseBool(args.options['coverage'], 'coverage') : undefined,
     restThresholdDays: args.options['rest-days'] !== undefined ? parseInt(args.options['rest-days'], 10) : undefined,
     svgRegionIds: args.options['svg-ids'] !== undefined ? parseCommaList(args.options['svg-ids']) : undefined,
   });
@@ -173,11 +170,10 @@ function muscleTarget(args: ParsedArgs, usage: string): string {
 }
 
 async function updateMuscleCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
-  const id = muscleTarget(args, 'config update-muscle --muscle <id> [--name ...] [--coverage ...] [--rest-days ...] [--svg-ids ...]');
+  const id = muscleTarget(args, 'config update-muscle --muscle <id> [--name ...] [--rest-days ...] [--svg-ids ...]');
   const muscle = applyMuscleUpdate(env.config, {
     id,
     name: args.options['name'],
-    contributesToCoverage: args.options['coverage'] !== undefined ? parseBool(args.options['coverage'], 'coverage') : undefined,
     restThresholdDays: args.options['rest-days'] !== undefined ? parseInt(args.options['rest-days'], 10) : undefined,
     svgRegionIds: args.options['svg-ids'] !== undefined ? parseCommaList(args.options['svg-ids']) : undefined,
   });
