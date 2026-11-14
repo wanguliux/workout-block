@@ -381,16 +381,25 @@ export class MuscleEditModal extends Modal {
 
     // 只列七个数值参数（levels 不在这个折叠区，避免把色阶编辑器做两遍）。
     // 前四个＝急性（掉多深 / 多久缓 / 超量恢复多高 / 窗口多长）；后三个＝长期（消退多深 / 记忆多长 / 维持量）。
-    const fields: Array<{ key: NumericTuningKey; label: string; def: number; allowZero?: boolean }> = [
+    // 「消退深度」在界面上换成它真正对应的东西——图上那条黄色虚线（运动前水平 = 100 − 深度）。
+    // 存盘字段不变（仍是 detrainDepth），只是显示与输入做一次反转，用户不需要自己换算。
+    const fields: Array<{
+      key: NumericTuningKey;
+      label: string;
+      def: number;
+      allowZero?: boolean;
+      invert?: number;
+    }> = [
       { key: 'fatiguePerSet', label: t('modal.muscleManager.recoveryFatiguePerSet'), def: DEFAULT_RECOVERY_PARAMS.fatiguePerSet },
       { key: 'fatigueTau', label: t('modal.muscleManager.recoveryFatigueTau'), def: DEFAULT_RECOVERY_PARAMS.fatigueTau },
       { key: 'fitnessPerSet', label: t('modal.muscleManager.recoveryFitnessPerSet'), def: DEFAULT_RECOVERY_PARAMS.fitnessPerSet },
       { key: 'fitnessTau', label: t('modal.muscleManager.recoveryFitnessTau'), def: DEFAULT_RECOVERY_PARAMS.fitnessTau },
-      // 消退深度允许 0＝关掉消退（只想看急性疲劳/超量恢复的人用）
-      { key: 'detrainDepth', label: t('modal.muscleManager.recoveryDetrainDepth'), def: DEFAULT_RECOVERY_PARAMS.detrainDepth, allowZero: true },
+      { key: 'detrainDepth', label: t('modal.muscleManager.recoveryFloorLevel'), def: DEFAULT_RECOVERY_PARAMS.detrainDepth, invert: DEFAULT_RECOVERY_PARAMS.baseline },
       { key: 'detrainTau', label: t('modal.muscleManager.recoveryDetrainTau'), def: DEFAULT_RECOVERY_PARAMS.detrainTau },
       { key: 'detrainRef', label: t('modal.muscleManager.recoveryDetrainRef'), def: DEFAULT_RECOVERY_PARAMS.detrainRef },
     ];
+
+    details.createEl('p', { text: t('modal.muscleManager.recoveryFloorHint'), cls: 'workout-hint' });
 
     for (const f of fields) {
       const row = grid.createDiv();
@@ -400,16 +409,18 @@ export class MuscleEditModal extends Modal {
       input.addClass('workout-input');
       input.setAttribute('step', 'any');
       input.setAttribute('inputmode', 'decimal'); // 移动端弹小数键盘
+      const toDisplay = (stored: number): number => (f.invert ? f.invert - stored : stored);
       const current = this.recoveryTuning[f.key];
-      input.value = typeof current === 'number' ? String(current) : '';
-      input.placeholder = String(f.def);
+      input.value = typeof current === 'number' ? String(toDisplay(current)) : '';
+      input.placeholder = String(toDisplay(f.def));
       input.addEventListener('input', () => {
         const v = parseNumberInput(input.value);
-        const valid = v !== undefined && (f.allowZero ? v >= 0 : v > 0);
+        // 反转字段（运动前水平）：允许 100（= 深度 0，关掉消退），但不允许超过 100
+        const valid = v !== undefined && (f.invert ? v < f.invert : f.allowZero ? v >= 0 : v > 0);
         if (!valid) {
           delete this.recoveryTuning[f.key];
         } else {
-          this.recoveryTuning[f.key] = v;
+          this.recoveryTuning[f.key] = f.invert ? f.invert - v : v;
         }
         badge.setText(this.hasRecoveryTuning() ? t('modal.muscleManager.recoveryOverridden') : t('modal.muscleManager.recoveryFollowDefault'));
       });

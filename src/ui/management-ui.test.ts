@@ -361,7 +361,8 @@ describe('management UI regressions', async () => {
     const inputs = Array.from(details!.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
     // 七个数值参数：急性四个（疲劳/适应各两项）＋ 长期三个（消退深度/记忆/维持量）
     expect(inputs.length).toBe(7);
-    expect(inputs.map((i) => i.placeholder)).toEqual(['2.8', '2.5', '1', '10', '8', '60', '8']);
+    // 第 5 项在界面上是「运动前水平」= 100 − 消退深度，所以占位显示 92 而不是 8
+    expect(inputs.map((i) => i.placeholder)).toEqual(['2.8', '2.5', '1', '10', '92', '60', '8']);
     expect(inputs.every((i) => i.value === '')).toBe(true); // 未设置 → 全部留空
 
     // 只填一个：保存时只落这一个字段，其余仍不写（跟随默认）

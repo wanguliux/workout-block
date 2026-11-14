@@ -145,7 +145,7 @@ export async function renderWorkoutRecovery(
 
 const VIEW_W = 690;
 const VIEW_H = 250;
-const PAD_L = 18; // 纵轴不再标数字，左侧只需留一点呼吸空间
+const PAD_L = 44; // 左侧留给纵轴刻度数字
 const PAD_R = 14;
 const PAD_T = 16;
 const PAD_B = 34;
@@ -199,10 +199,22 @@ function renderChart(
     : '';
 
   const parts: string[] = [];
-  // 纵坐标不标数值、不画网格：这个轴只承载「相对高低」，绝对数字没有决策意义。
-  // 整张图唯一的参考线是底部那条黄色虚线（运动前水平），其余只看形状。
-  // 横轴：每 7 天一个刻度
-  for (let d = Math.ceil(from); d <= to; d += 7) {
+  // 纵轴保留网格与刻度数字（用户要的是「曲线上不标数值」，不是「不要坐标轴」）。
+  // 刻度按整齐步长分布，不再用数据极值，避免出现 85/107 这种读不出规律的数。
+  for (let v = lo; v <= hi + 1e-9; v += step) {
+    parts.push(
+      `<line x1="${PAD_L}" y1="${y(v).toFixed(1)}" x2="${VIEW_W - PAD_R}" y2="${y(v).toFixed(1)}" stroke="currentColor" stroke-opacity="0.12"/>` +
+        `<text x="${PAD_L - 8}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end" class="workout-recovery-axis">${v}</text>`
+    );
+  }
+  // 横轴：刻度间隔随窗口自适应（窗口越长间隔越大），否则拉长到 200 天时日期会糊成一团。
+  // 以「每个标签至少 70 个 viewBox 单位」为下限挑步长，候选值取整周/整月，读起来才顺。
+  const plotW = VIEW_W - PAD_L - PAD_R;
+  const maxTicks = Math.max(2, Math.floor(plotW / 70));
+  const rawStep = (to - from) / maxTicks;
+  const dayStep = [7, 14, 30, 60, 90, 120, 180].find((v) => v >= rawStep) ?? Math.ceil(rawStep / 60) * 60;
+  for (let d = Math.ceil(from / dayStep) * dayStep; d <= to; d += dayStep) {
+    if (d < from) continue;
     parts.push(
       `<text x="${x(d).toFixed(1)}" y="${VIEW_H - PAD_B + 18}" text-anchor="middle" class="workout-recovery-axis">${fromDayNum(d).slice(5)}</text>`
     );
@@ -412,10 +424,13 @@ function renderTable(container: HTMLElement, rows: TableRow[]): void {
           : t('codeblock.recovery.gapDays', { n: String(Math.round(row.summary.gapDays)) }),
       cls: 'is-num',
     });
-    tr.createEl('td', {
-      text: row.summary.etaDays === null ? '—' : t('codeblock.recovery.etaDays', { n: row.summary.etaDays.toFixed(1) }),
-      cls: 'is-num',
-    });
+    // 横线（—）原来不解释就没人懂：已恢复 / 正在消退 / 没有记录，三种情况分别写清楚
+    let etaText: string;
+    if (!row.summary.hasData) etaText = '—';
+    else if (row.summary.etaDays !== null) etaText = t('codeblock.recovery.etaDays', { n: row.summary.etaDays.toFixed(1) });
+    else if (row.summary.status === 'declining') etaText = t('codeblock.recovery.etaDeclining');
+    else etaText = t('codeblock.recovery.etaDone');
+    tr.createEl('td', { text: etaText, cls: 'is-num' });
   }
 }
 
