@@ -389,7 +389,7 @@ export default class WorkoutPlugin extends Plugin {
         .getFiles()
         .filter((f) => f.path.startsWith(`${FILE_BUS_QUERIES_DIR}/`) && f.extension === 'json' && f.stat?.mtime && now - f.stat.mtime > 3600e3);
       for (const f of stale) {
-        await this.app.vault.delete(f, true);
+        await this.app.fileManager.trashFile(f);
       }
     } catch {
       /* 清理失败不影响插件启动 */

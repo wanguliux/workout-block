@@ -1,4 +1,4 @@
-import { Muscle, WorkoutConfig } from './types';
+import { WorkoutConfig } from './types';
 import { SVG_MUSCLE_CATALOG } from './svgMuscleCatalog';
 
 // 默认 13 块肌肉各自归属的健身群 key（用于「默认」档自动映射）

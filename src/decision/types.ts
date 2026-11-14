@@ -163,8 +163,8 @@ export interface FieldRule {
 
 /** 一个写入操作（op id → 定义）的契约描述 */
 export interface WorkOp {
-  /** 目标文件：固定路径，或 'dynamic'（由 WriteAction.target 提供） */
-  target: string | 'dynamic';
+  /** 目标文件：固定路径；约定值 'dynamic' 表示由 WriteAction.target 提供 */
+  target: string;
   /** 必填字段（缺失即拦截） */
   requiredFields: string[];
   /** 字段 schema：类型 / 必填 / 枚举 / 默认 */
@@ -238,7 +238,7 @@ export interface DecisionContributor {
   writableDomains?: string[];
   getDecisionItems(): Promise<DecisionItem[]>;
   resolveItem(itemId: string, action: DecisionAction, modifiedData?: unknown): ResolveResult;
-  openEditor?(itemId: string, payload: unknown): Promise<unknown | null>;
+  openEditor?(itemId: string, payload: unknown): Promise<unknown>;
   /**
    * 可选：提取该决策项的完整 WriteAction 列表。宿主在 approve/modify 后调用，
    * 获取所有需要执行的写入操作（含跨域分发）。未实现时宿主回退到 resolveItem。

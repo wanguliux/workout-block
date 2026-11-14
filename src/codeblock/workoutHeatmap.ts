@@ -13,7 +13,7 @@ import { registerRenderedBlock, unregisterRenderedBlock } from './registry';
 import { getLocale, t } from '../i18n';
 import frontSvg from '../assets/muscle_layer_front.svg';
 import backSvg from '../assets/muscle_layer_back.svg';
-import { DEFAULT_HEATMAP_SCALE, colorToCss, dateWithinRange } from '../data/heatmapDefaults';
+import { DEFAULT_HEATMAP_SCALE, colorToCss } from '../data/heatmapDefaults';
 
 /* workoutHeatmap.ts —— 把 ```workout-heatmap 代码块渲染成全身肌肉热力图。
  * 精细度自动跟随肌肉管理里的 svgRegionIds 配置；支持正/背切换、指标与时间窗参数。 */

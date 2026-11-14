@@ -11,11 +11,6 @@ import { cycleLength } from './planSchedule';
  * 负责把"程序存起来的数据"变成"用户看得懂的文字"。
  */
 
-// 是否计算（派生）字段：计算字段不落库，渲染前由调用方 materializeLog 注入值后调用本模块格式化。
-function isComputedField(field: FieldDef): boolean {
-  return field.inputType === 'computed';
-}
-
 // 默认肌肉 -> 国际化 key 的映射表（当配置里没写 nameKey 时作为兜底）
 export const DEFAULT_MUSCLE_NAME_KEYS: Record<string, string> = {
   chest: 'muscle.chest',

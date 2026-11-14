@@ -57,11 +57,6 @@ function monthStart(dateStr: string): string {
   return dateStr.slice(0, 8) + '01';
 }
 
-function lastDayOfMonth(dateStr: string): string {
-  const [y, m] = dateStr.split('-').map(Number);
-  return `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
-}
-
 /** ISO 周几（周一=1 … 周日=7）。 */
 function isoWeekday(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number);

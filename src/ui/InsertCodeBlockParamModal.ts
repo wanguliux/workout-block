@@ -383,8 +383,9 @@ export class InsertCodeBlockParamModal extends Modal {
         dropdown.setCssStyles({ display: 'none' });
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const first = dropdown.querySelector('.workout-combo-item') as HTMLElement | null;
-        if (first) first.click();
+        const first = dropdown.querySelector('.workout-combo-item');
+        // Element 无 .click()（属 HTMLElement），直接派发 click 事件等价且跨窗口安全
+        if (first) first.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       }
     });
     const mousedownHandler2 = (e: MouseEvent) => {

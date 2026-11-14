@@ -100,7 +100,7 @@ async function deleteExerciseCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
   const id = locateExerciseId(env, requireOption(args, 'exercise', 'config delete-exercise --exercise <名称或id> --yes'));
   const related = env.logs.filter((r) => r.exerciseId === id).length;
   requireYes(args, `将移除训练项 ${id}，并级联软删除其 ${related} 条训练记录`);
-  const { logs, tombstoneIds } = applyExerciseDelete(env.config, env.logs, id);
+  const { tombstoneIds } = applyExerciseDelete(env.config, env.logs, id);
   if (tombstoneIds.length > 0) {
     await env.vault.appendCsvLines(env.vault.csvPath(env.settings), tombstoneLines(tombstoneIds));
   }

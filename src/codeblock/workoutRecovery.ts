@@ -312,7 +312,15 @@ function renderChart(
   svg.setAttribute('class', 'workout-recovery-chart');
   svg.setAttribute('role', 'img');
   svg.setAttribute('aria-label', label);
-  svg.innerHTML = parts.join('');
+  // 审核规范禁 innerHTML 赋值：改走 DOMParser 解析后 importNode 挂载（与 workoutHeatmap 同一策略）。
+  // 拼接内容只有数值坐标、日期与 i18n 文案（无用户可控富文本），XML 解析安全。
+  const doc = new DOMParser().parseFromString(
+    `<svg xmlns="http://www.w3.org/2000/svg">${parts.join('')}</svg>`,
+    'image/svg+xml'
+  );
+  for (const node of Array.from(doc.documentElement.childNodes)) {
+    svg.appendChild(document.importNode(node, true));
+  }
   container.appendChild(svg);
 
   bindCrosshair(svg, pts, { from, to, today, x, y });

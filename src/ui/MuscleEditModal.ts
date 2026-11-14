@@ -9,16 +9,6 @@ import { DEFAULT_GROWTH_WINDOW, GROWTH_SCALE } from '../data/muscleGrowth';
 import { renderRecoveryPreview } from './recoveryPreview';
 import { hasRecoveryTuning as hasRecoveryTuningIn, renderRecoveryTuningForm } from './recoveryTuningForm';
 import { parseNumberInput } from '../util/number';
-
-/** 折叠区里可编辑的四个数值参数（RecoveryTuning 中的非 levels 字段）。 */
-type NumericTuningKey =
-  | 'fatiguePerSet'
-  | 'fatigueTau'
-  | 'fitnessPerSet'
-  | 'fitnessTau'
-  | 'detrainDepth'
-  | 'detrainTau'
-  | 'detrainRef';
 import { getLocale, t } from '../i18n';
 
 /* MuscleEditModal —— 编辑单个肌肉的弹窗（新增或编辑共用）。
