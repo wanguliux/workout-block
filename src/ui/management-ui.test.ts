@@ -353,10 +353,20 @@ describe('management UI regressions', async () => {
 
     await modal.onOpen();
 
-    const details = modal.contentEl.querySelector('.workout-advanced') as HTMLDetailsElement | null;
-    expect(details).toBeTruthy();
-    expect(details!.open).toBe(false); // 默认收起
-    expect(details!.querySelector('summary')!.textContent).toContain('恢复设置');
+    // 三个折叠区按次序：SVG 肌肉映射 / 热力图设置 / 恢复曲线设置
+    const sections = Array.from(
+      modal.contentEl.querySelectorAll<HTMLDetailsElement>('details.workout-advanced')
+    );
+    expect(sections.map((d) => d.querySelector('summary')!.children[0].textContent!.trim())).toEqual([
+      'SVG 肌肉映射',
+      '热力图设置',
+      '恢复曲线设置',
+    ]);
+    // SVG 映射默认收起，热力图默认展开，恢复曲线默认收起
+    expect(sections[0].open).toBe(false);
+    expect(sections[1].open).toBe(true);
+    expect(sections[2].open).toBe(false);
+    const details = sections[2] as HTMLDetailsElement;
 
     const inputs = Array.from(details!.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
     // 七个数值参数：急性四个（疲劳/适应各两项）＋ 长期三个（消退深度/记忆/维持量）
@@ -384,7 +394,9 @@ describe('management UI regressions', async () => {
 
     await modal.onOpen();
 
-    const details = modal.contentEl.querySelector('.workout-advanced') as HTMLDetailsElement;
+    const details = Array.from(modal.contentEl.querySelectorAll('details.workout-advanced')).find(
+      (d) => d.querySelector('summary')!.textContent!.includes('恢复曲线设置')
+    ) as HTMLDetailsElement;
     expect(details.querySelector('summary')!.textContent).toContain('已自定义');
     const inputs = Array.from(details.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
     expect(inputs[0].value).toBe('3.5');
@@ -436,26 +448,35 @@ describe('management UI regressions', async () => {
     const dataManager = createDataManager();
     const config = await dataManager.getConfig();
 
+    // 不动它：保存不应写 growthLevels
     const untouched = new MuscleEditModal(dataManager as any, { muscle: config.muscles[0] } as any);
     await untouched.onOpen();
-    const sections = Array.from(untouched.contentEl.querySelectorAll('details.workout-advanced'));
-    const growth = sections.find((d) => d.querySelector('summary')!.textContent!.includes('发展视图设置'))!;
-    expect(growth).toBeTruthy();
-    expect(growth.querySelector('summary')!.textContent).toContain('跟随默认');
+    const hm = Array.from(untouched.contentEl.querySelectorAll('details.workout-advanced')).find((d) =>
+      d.querySelector('summary')!.textContent!.includes('热力图设置')
+    )!;
+    // 默认是恢复视图：有指标下拉与「指标」字样，没有比值说明
+    expect(hm.querySelector('select')).toBeTruthy();
+    expect(hm.textContent).toContain('指标');
+    expect(hm.textContent).not.toContain('比值');
+
+    // 切到发展视图：设置区换成比值色标
+    const growthBtn = Array.from(hm.querySelectorAll('button')).find((b) => b.textContent.includes('发展视图'))!;
+    growthBtn.click();
+    expect(hm.textContent).toContain('比值');
     await (untouched as any).save();
     expect((dataManager.updateMuscle as any).mock.calls[0][1].growthLevels).toBeUndefined();
 
     // 改一个阈值 → 视为自定义并整组落库
     const edited = new MuscleEditModal(dataManager as any, { muscle: config.muscles[0] } as any);
     await edited.onOpen();
-    const growth2 = Array.from(edited.contentEl.querySelectorAll('details.workout-advanced')).find((d) =>
-      d.querySelector('summary')!.textContent!.includes('发展视图设置')
+    const hm2 = Array.from(edited.contentEl.querySelectorAll('details.workout-advanced')).find((d) =>
+      d.querySelector('summary')!.textContent!.includes('热力图设置')
     )!;
-    const maxInput = growth2.querySelector('input.workout-scale-max') as HTMLInputElement;
+    Array.from(hm2.querySelectorAll('button')).find((b) => b.textContent.includes('发展视图'))!.click();
+    const maxInput = hm2.querySelector('input.workout-scale-max') as HTMLInputElement;
     expect(maxInput).toBeTruthy();
     maxInput.value = '0.6';
     maxInput.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(growth2.querySelector('summary')!.textContent).toContain('已自定义');
     await (edited as any).save();
 
     const saved = (dataManager.updateMuscle as any).mock.calls[1][1].growthLevels as Array<{ max?: number }>;
@@ -463,3 +484,4 @@ describe('management UI regressions', async () => {
     expect(saved[0].max).toBe(0.6);
   });
 });
+

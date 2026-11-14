@@ -70,6 +70,8 @@ export class MuscleEditModal extends Modal {
   private mappingContainer!: HTMLDivElement;
   private countEl!: HTMLElement;
   private heatmapSection!: HTMLDivElement;
+  // 热力图设置区块内当前显示哪个视图（恢复 / 发展），只影响这一块的设置项
+  private heatmapView: 'recovery' | 'growth' = 'recovery';
 
   constructor(dataManager: DataManager, options: MuscleEditModalOptions = {}) {
     super(dataManager.app);
@@ -149,24 +151,52 @@ export class MuscleEditModal extends Modal {
     this.restThresholdInput.min = '1';
     this.restThresholdInput.value = String(muscle?.restThresholdDays ?? 7);
 
-    // SVG 肌肉映射
-    contentEl.createEl('h3', { text: t('modal.muscleManager.svgMapping'), cls: 'workout-section-title' });
-    this.renderMappingHeader(contentEl);
-    this.mappingContainer = contentEl.createDiv();
+    // —— 三个可折叠区块，次序固定：SVG 映射 / 热力图设置 / 恢复曲线设置 ——
+    // 这页本来平铺了七八段（ID、阈值、几十个 SVG 路径、色阶、七个曲线参数），滚起来像一堵墙。
+    // 折叠后只留基础字段常显，其余按需展开。
+
+    // ① SVG 肌肉映射：长列表，默认收起（搜索框也在里面，展开就能搜）
+    const svgDetails = this.makeDetails(contentEl, t('modal.muscleManager.svgMapping'), false);
+    this.renderMappingHeader(svgDetails);
+    this.mappingContainer = svgDetails.createDiv();
     this.mappingContainer.addClass('workout-fields-list');
     this.mappingContainer.setCssStyles({ maxHeight: '320px', overflow: 'auto' });
     this.renderMappingList();
 
-    // 热力图设置
-    contentEl.createEl('h3', { text: t('modal.muscleManager.heatmapSettings'), cls: 'workout-section-title' });
-    this.heatmapSection = contentEl.createDiv();
+    // ② 热力图设置：展开后先选视图（恢复 / 发展），下面是该视图对应的设置
+    const hmDetails = this.makeDetails(contentEl, t('modal.muscleManager.heatmapSettings'), true);
+    const hmSwitch = hmDetails.createDiv();
+    hmSwitch.addClass('workout-heatmap-switch');
+    const recoveryBtn = hmSwitch.createEl('button', { text: t('codeblock.heatmap.viewRecovery') });
+    const growthBtn = hmSwitch.createEl('button', { text: t('codeblock.heatmap.viewGrowth') });
+    const syncHmSwitch = (): void => {
+      // 用 classList 而不是 toggleClass：后者是 Obsidian 的扩展方法，jsdom 里没有
+      recoveryBtn.classList.toggle('mod-cta', this.heatmapView === 'recovery');
+      growthBtn.classList.toggle('mod-cta', this.heatmapView === 'growth');
+      recoveryBtn.classList.toggle('mod-muted', this.heatmapView === 'growth');
+      growthBtn.classList.toggle('mod-muted', this.heatmapView === 'recovery');
+    };
+    recoveryBtn.addEventListener('click', () => {
+      this.heatmapView = 'recovery';
+      syncHmSwitch();
+      this.renderHeatmapSettings();
+    });
+    growthBtn.addEventListener('click', () => {
+      this.heatmapView = 'growth';
+      syncHmSwitch();
+      this.renderHeatmapSettings();
+    });
+    this.heatmapSection = hmDetails.createDiv();
+    // 发展视图的色标改动即视为自定义（草稿 → 落库），监听挂一次即可（empty() 只清子节点）
+    this.heatmapSection.addEventListener('input', () => {
+      if (this.heatmapView !== 'growth') return;
+      this.growthLevels = JSON.parse(JSON.stringify(this.growthDraft)) as HeatmapLevel[];
+    });
+    syncHmSwitch();
     this.renderHeatmapSettings();
 
-    // 恢复设置（进阶）：与热力图设置同层，默认收起——四个数字参数平时没人改，展开会把这页拉得很长
+    // ③ 恢复曲线设置：默认收起（七个数字参数平时没人动）
     this.renderRecoverySection(contentEl);
-
-    // 发展视图设置（进阶）：同样收起。不填 = 用内置那套比值分档
-    this.renderGrowthSection(contentEl);
 
     // 底部按钮
     const btnRow = contentEl.createDiv();
@@ -179,6 +209,17 @@ export class MuscleEditModal extends Modal {
     const saveBtn = btnRow.createEl('button', { text: t('common.save') });
     saveBtn.addClass('mod-cta');
     saveBtn.addEventListener('click', () => { void this.save(); });
+  }
+
+  /** 建一个「可展开区块」：标题行 + 内容区，默认开合由 open 决定。 */
+  private makeDetails(parent: HTMLElement, title: string, open: boolean): HTMLElement {
+    const details = parent.createEl('details');
+    details.addClass('workout-advanced');
+    details.open = open;
+    const summary = details.createEl('summary');
+    summary.addClass('workout-advanced-summary');
+    summary.createSpan({ text: title });
+    return details;
   }
 
   private renderMappingHeader(parent: HTMLElement): void {
@@ -279,66 +320,41 @@ export class MuscleEditModal extends Modal {
     }
   }
 
-  // —— 发展视图设置（进阶折叠区）——
+  // —— 发展视图设置（画在「热力图设置」展开区里，切换到发展视图时出现）——
   // 发展视图按「近 4 周练度 ÷ 12 周中位数」的**比值**上色，阈值是百分比（0.5 = 50%），
   // 与热力图的绝对量分档不是一回事，必须单独一套；不动它＝跟随内置那套（不写配置）。
-  private renderGrowthSection(parent: HTMLElement): void {
-    const details = parent.createEl('details');
-    details.addClass('workout-advanced');
-
-    const summary = details.createEl('summary');
-    summary.addClass('workout-advanced-summary');
-    summary.createSpan({ text: t('modal.muscleManager.growthSettings') });
-    const badge = summary.createSpan({
-      text: this.growthLevels
-        ? t('modal.muscleManager.recoveryOverridden')
-        : t('modal.muscleManager.recoveryFollowDefault'),
-    });
-    badge.addClass('workout-hint');
+  private renderGrowthSettings(container: HTMLElement): void {
+    container.createEl('p', { text: t('modal.muscleManager.growthHint'), cls: 'workout-hint' });
 
     // 草稿与落库分开：只是展开看一眼不该把默认值写成「自定义」
-    this.growthDraft = this.growthLevels
-      ? (JSON.parse(JSON.stringify(this.growthLevels)) as HeatmapLevel[])
-      : this.normalizeLevels(GROWTH_SCALE);
+    if (this.growthDraft.length === 0) {
+      this.growthDraft = this.growthLevels
+        ? (JSON.parse(JSON.stringify(this.growthLevels)) as HeatmapLevel[])
+        : this.normalizeLevels(GROWTH_SCALE);
+    }
 
-    const body = details.createDiv();
-    const draw = (): void => {
-      body.empty();
-      body.createEl('p', { text: t('modal.muscleManager.growthHint'), cls: 'workout-hint' });
-
-      const countRow = body.createDiv();
-      countRow.addClass('workout-field');
-      countRow.createEl('label', { text: t('modal.muscleManager.colorLevels') });
-      const countInput = countRow.createEl('input', { type: 'number' });
-      countInput.addClass('workout-input');
-      countInput.setAttribute('step', 'any');
-      countInput.setAttribute('inputmode', 'numeric');
-      countInput.min = '2';
-      countInput.max = '9';
-      countInput.value = String(this.growthDraft.length);
-      countInput.setCssStyles({ width: '70px' });
-      countInput.addEventListener('input', () => {
-        let n = parseInt(countInput.value, 10);
-        if (isNaN(n)) n = this.growthDraft.length;
-        n = Math.max(2, Math.min(9, n));
-        this.setGrowthLevelCount(n);
-        this.growthLevels = JSON.parse(JSON.stringify(this.growthDraft)) as HeatmapLevel[];
-        badge.setText(t('modal.muscleManager.recoveryOverridden'));
-        draw();
-      });
-
-      const scaleContainer = body.createDiv();
-      this.renderScaleRows(scaleContainer, this.growthDraft);
-    };
-
-    // 任一色块/阈值输入即视为自定义（input 冒泡上来统一处理，不必逐控件挂回调）
-    details.addEventListener('input', (ev) => {
-      if ((ev.target as HTMLElement)?.tagName === 'SUMMARY') return;
+    const countRow = container.createDiv();
+    countRow.addClass('workout-field');
+    countRow.createEl('label', { text: t('modal.muscleManager.colorLevels') });
+    const countInput = countRow.createEl('input', { type: 'number' });
+    countInput.addClass('workout-input');
+    countInput.setAttribute('step', 'any');
+    countInput.setAttribute('inputmode', 'numeric');
+    countInput.min = '2';
+    countInput.max = '9';
+    countInput.value = String(this.growthDraft.length);
+    countInput.setCssStyles({ width: '70px' });
+    countInput.addEventListener('input', () => {
+      let n = parseInt(countInput.value, 10);
+      if (isNaN(n)) n = this.growthDraft.length;
+      n = Math.max(2, Math.min(9, n));
+      this.setGrowthLevelCount(n);
       this.growthLevels = JSON.parse(JSON.stringify(this.growthDraft)) as HeatmapLevel[];
-      badge.setText(t('modal.muscleManager.recoveryOverridden'));
+      this.renderHeatmapSettings();
     });
 
-    draw();
+    const scaleContainer = container.createDiv();
+    this.renderScaleRows(scaleContainer, this.growthDraft);
   }
 
   /** 按分级数增减发展视图色标（新增档沿用内置色板，末档永远开口）。 */
@@ -442,6 +458,11 @@ export class MuscleEditModal extends Modal {
 
   private renderHeatmapSettings(): void {
     this.heatmapSection.empty();
+    // 发展视图的色标与恢复视图的指标/分级不是一套东西，直接切分支渲染
+    if (this.heatmapView === 'growth') {
+      this.renderGrowthSettings(this.heatmapSection);
+      return;
+    }
 
     // —— 两列网格：时间窗 + 指标
     const rangeMetricCol = this.heatmapSection.createDiv();
