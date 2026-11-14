@@ -24,6 +24,17 @@ const VIEW_W = 320;
 const VIEW_H = 92;
 const PAD = 10;
 
+/**
+ * 固定的绘图窗口：横轴恒为「训练后 0–60 天」，纵轴恒为 55–112 点。
+ *
+ * **坐标轴必须固定**：这图的用处是「改一个参数，看形状怎么变」。
+ * 若坐标随数据自适应，把疲劳动力度调大只会把整条线重新缩放一遍、看着几乎一样，
+ * 反而看不出「掉得更深」；固定之后，掉得深就是真的往下走、峰更高就是真的顶出画面。
+ */
+const PREVIEW_DAYS = 60;
+const Y_MIN = 55;
+const Y_MAX = 112;
+
 export interface RecoveryPreviewOptions {
   /** 参考剂量（练度）：模拟「一次训练打多少」。默认 8 练度。 */
   dose?: number;
@@ -54,18 +65,14 @@ export function renderRecoveryPreview(
   container.replaceChildren();
 
   const dose = options.dose ?? 8;
-  // 一次训练记在第 0 天；横轴从训练当天往后推，够长到能看见「落到运动前水平」
+  // 一次训练记在第 0 天；横轴时长固定，不随 fitnessTau 变
   const doses = [{ day: fromDayNum(0), dose }];
-  const horizon = Math.min(180, Math.max(30, Math.round(params.fitnessTau * 5)));
-  const summary = recoverySummary(params, doses, 0, horizon);
-  const points = sampleCurve(params, doses, 0, horizon, 0.5);
+  const summary = recoverySummary(params, doses, 0, PREVIEW_DAYS);
+  const points = sampleCurve(params, doses, 0, PREVIEW_DAYS, 0.5);
   const floor = params.baseline - params.detrainDepth;
 
-  const states = points.map((p) => p.state);
-  const lo = Math.min(floor, ...states) - 2;
-  const hi = Math.max(params.baseline, ...states) + 2;
-  const x = (day: number): number => PAD + (day / horizon) * (VIEW_W - PAD * 2);
-  const y = (state: number): number => PAD + ((hi - state) / (hi - lo)) * (VIEW_H - PAD * 2);
+  const x = (day: number): number => PAD + (day / PREVIEW_DAYS) * (VIEW_W - PAD * 2);
+  const y = (state: number): number => PAD + ((Y_MAX - state) / (Y_MAX - Y_MIN)) * (VIEW_H - PAD * 2);
 
   const svg = svgNode('svg', {
     viewBox: `0 0 ${VIEW_W} ${VIEW_H}`,
@@ -73,6 +80,34 @@ export function renderRecoveryPreview(
     role: 'img',
     'aria-label': t('modal.muscleManager.recoveryPreviewAria'),
   });
+
+  // 固定网格：横 15/30/45 天，纵 60/80/100 点。位置永不变化，用来当「尺子」比对形状。
+  for (const day of [15, 30, 45]) {
+    svg.appendChild(
+      svgNode('line', {
+        x1: x(day).toFixed(1),
+        y1: PAD,
+        x2: x(day).toFixed(1),
+        y2: VIEW_H - PAD,
+        stroke: 'currentColor',
+        'stroke-opacity': 0.1,
+        'stroke-width': 1,
+      })
+    );
+  }
+  for (const level of [60, 80, 100]) {
+    svg.appendChild(
+      svgNode('line', {
+        x1: PAD,
+        y1: y(level).toFixed(1),
+        x2: VIEW_W - PAD,
+        y2: y(level).toFixed(1),
+        stroke: 'currentColor',
+        'stroke-opacity': 0.1,
+        'stroke-width': 1,
+      })
+    );
+  }
 
   // 运动前水平：与主图一致的黄色虚线（全图唯一参考线）
   if (params.detrainDepth > 0) {
@@ -97,7 +132,7 @@ export function renderRecoveryPreview(
   if (line) {
     svg.appendChild(
       svgNode('path', {
-        d: `${line}L${x(horizon).toFixed(1)},${VIEW_H - PAD}L${x(0).toFixed(1)},${VIEW_H - PAD}Z`,
+        d: `${line}L${x(PREVIEW_DAYS).toFixed(1)},${VIEW_H - PAD}L${x(0).toFixed(1)},${VIEW_H - PAD}Z`,
         fill: 'var(--interactive-accent)',
         'fill-opacity': 0.1,
       })

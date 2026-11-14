@@ -362,10 +362,8 @@ describe('management UI regressions', async () => {
       '热力图设置',
       '恢复曲线设置',
     ]);
-    // SVG 映射默认收起，热力图默认展开，恢复曲线默认收起
-    expect(sections[0].open).toBe(false);
-    expect(sections[1].open).toBe(true);
-    expect(sections[2].open).toBe(false);
+    // 三个折叠区**全部默认收起**（用户口径：设置项不常看，别占视线）
+    expect(sections.map((d) => d.open)).toEqual([false, false, false]);
     const details = sections[2] as HTMLDetailsElement;
 
     const inputs = Array.from(details!.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
@@ -546,5 +544,48 @@ describe('management UI regressions', async () => {
     expect(Array.isArray(saved)).toBe(true);
     expect(saved[0].max).toBe(0.6);
   });
-});
 
+  // 用例：代码块设置按钮打开的「恢复曲线设置」弹窗——七个参数 + 预览；保存只写填过的项
+  it('recovery settings modal: form + preview, saves only the fields that were filled', async () => {
+    setLocale('zh');
+    const { RecoverySettingsModal } = await import('./RecoverySettingsModal');
+    const dataManager = createDataManager();
+    const config = await dataManager.getConfig();
+    const muscle = config.muscles[0];
+
+    const modal = new RecoverySettingsModal(dataManager as any, { muscle } as any);
+    await modal.onOpen();
+
+    const inputs = Array.from(modal.contentEl.querySelectorAll('input[type="number"]')) as HTMLInputElement[];
+    expect(inputs.length).toBe(7);
+    expect(inputs.map((i) => i.placeholder)).toEqual(['2.8', '2.5', '1', '10', '92', '60', '8']);
+    expect(modal.contentEl.querySelector('.workout-recovery-preview svg')).toBeTruthy();
+
+    inputs[1].value = '4'; // 疲劳消退（天）
+    inputs[1].dispatchEvent(new Event('input'));
+    await (modal as any).save();
+
+    const [savedId, payload] = (dataManager.updateMuscle as any).mock.calls[0];
+    expect(savedId).toBe(muscle.id);
+    expect(payload.recovery).toEqual({ fatigueTau: 4 });
+  });
+
+  it('recovery settings modal: leaving everything blank clears the override', async () => {
+    setLocale('zh');
+    const { RecoverySettingsModal } = await import('./RecoverySettingsModal');
+    const dataManager = createDataManager();
+    const config = await dataManager.getConfig();
+    const muscle = { ...config.muscles[0], recovery: { fatigueTau: 6 } };
+
+    const modal = new RecoverySettingsModal(dataManager as any, { muscle } as any);
+    await modal.onOpen();
+    const input = Array.from(modal.contentEl.querySelectorAll('input[type="number"]'))[1] as HTMLInputElement;
+    expect(input.value).toBe('6'); // 已覆盖的值要回填
+    input.value = '';
+    input.dispatchEvent(new Event('input'));
+    await (modal as any).save();
+
+    const payload = (dataManager.updateMuscle as any).mock.calls[0][1];
+    expect(payload.recovery).toBeUndefined(); // 不存「一堆默认值」，回到跟随默认
+  });
+});

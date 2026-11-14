@@ -1225,9 +1225,33 @@ input[type="checkbox"].workout-switch:checked::after {
 }
 .workout-recovery-header {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 10px;
   margin-bottom: 4px;
+}
+/* 右上角设置按钮：透明图标按钮，鼠标移上才显形，不抢曲线视线 */
+.workout-recovery-settings {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.workout-recovery-settings:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border);
+}
+.workout-recovery-settings .svg-icon {
+  width: 15px;
+  height: 15px;
 }
 .workout-recovery-title {
   font-weight: 600;
@@ -1383,6 +1407,12 @@ input[type="checkbox"].workout-switch:checked::after {
 }
 .is-mobile .workout-check-grid {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* 设置按钮在移动端补到 32px 触控靶 */
+.is-mobile .workout-recovery-settings {
+  width: 32px;
+  height: 32px;
 }
 
 /* 恢复曲线块：手机上左右留白收紧，给曲线更多横向空间 */

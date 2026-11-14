@@ -171,6 +171,7 @@ export const en = {
       statusMaintain: 'Maintaining',
       statusDeclining: 'Detraining',
       statusNoData: 'No data',
+      openSettings: 'Recovery curve settings',
     },
     day: {
       viewing: 'Viewing date: {date}',
@@ -206,6 +207,9 @@ export const en = {
   },
 
   modal: {
+    recoverySettings: {
+      title: 'Recovery curve settings · {name}',
+    },
     recordSet: {
       title: 'Record Set',
       exercise: 'Exercise',

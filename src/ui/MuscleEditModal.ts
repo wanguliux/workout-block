@@ -7,6 +7,7 @@ import { HeatmapLevel, Muscle, RecoveryTuning, StatDef, WorkoutConfig } from '..
 import { DEFAULT_RECOVERY_PARAMS, mergeRecoveryParams } from '../data/recovery';
 import { DEFAULT_GROWTH_WINDOW, GROWTH_SCALE } from '../data/muscleGrowth';
 import { renderRecoveryPreview } from './recoveryPreview';
+import { hasRecoveryTuning as hasRecoveryTuningIn, renderRecoveryTuningForm } from './recoveryTuningForm';
 import { parseNumberInput } from '../util/number';
 
 /** 折叠区里可编辑的四个数值参数（RecoveryTuning 中的非 levels 字段）。 */
@@ -172,7 +173,7 @@ export class MuscleEditModal extends Modal {
     this.renderMappingList();
 
     // ② 热力图设置：展开后先选视图（恢复 / 发展），下面是该视图对应的设置
-    const hmDetails = this.makeDetails(contentEl, t('modal.muscleManager.heatmapSettings'), true);
+    const hmDetails = this.makeDetails(contentEl, t('modal.muscleManager.heatmapSettings'), false);
     const hmSwitch = hmDetails.createDiv();
     hmSwitch.addClass('workout-heatmap-switch');
     const recoveryBtn = hmSwitch.createEl('button', { text: t('codeblock.heatmap.viewRecovery') });
@@ -415,71 +416,19 @@ export class MuscleEditModal extends Modal {
     this.growthDraft = levels;
   }
 
-  // —— 恢复设置（进阶折叠区）——
-  // 四个形状参数逐肌可覆盖，留空＝跟随默认（与热力图 heatmapMetric/heatmapLevels 同形态）。
-  // 默认收起：这页已有 ID/名称/覆盖/阈值/SVG 映射/热力图设置，四个数字常驻只会把页面拉长。
+  // —— 恢复曲线设置（折叠区）——
+  // 七个形状参数逐肌可覆盖，留空＝跟随默认（与热力图 heatmapMetric/heatmapLevels 同形态）。
+  // 表单本身抽在 recoveryTuningForm.ts（代码块的设置弹窗用同一份，避免字段顺序/校验两处漂移）。
   private renderRecoverySection(parent: HTMLElement): void {
-    const details = parent.createEl('details');
-    details.addClass('workout-advanced');
-
-    const summary = details.createEl('summary');
-    summary.addClass('workout-advanced-summary');
-    summary.createSpan({ text: t('modal.muscleManager.recoverySettings') });
+    const details = this.makeDetails(parent, t('modal.muscleManager.recoverySettings'), false);
 
     details.createEl('p', { text: t('modal.muscleManager.recoveryHint'), cls: 'workout-hint' });
-
-    const grid = details.createDiv();
-    grid.addClass('workout-two-col');
-
-    // 只列七个数值参数（levels 不在这个折叠区，避免把色阶编辑器做两遍）。
-    // 前四个＝急性（掉多深 / 多久缓 / 超量恢复多高 / 窗口多长）；后三个＝长期（消退多深 / 记忆多长 / 维持量）。
-    // 「消退深度」在界面上换成它真正对应的东西——图上那条黄色虚线（运动前水平 = 100 − 深度）。
-    // 存盘字段不变（仍是 detrainDepth），只是显示与输入做一次反转，用户不需要自己换算。
-    const fields: Array<{
-      key: NumericTuningKey;
-      label: string;
-      def: number;
-      allowZero?: boolean;
-      invert?: number;
-    }> = [
-      { key: 'fatiguePerSet', label: t('modal.muscleManager.recoveryFatiguePerSet'), def: DEFAULT_RECOVERY_PARAMS.fatiguePerSet },
-      { key: 'fatigueTau', label: t('modal.muscleManager.recoveryFatigueTau'), def: DEFAULT_RECOVERY_PARAMS.fatigueTau },
-      { key: 'fitnessPerSet', label: t('modal.muscleManager.recoveryFitnessPerSet'), def: DEFAULT_RECOVERY_PARAMS.fitnessPerSet },
-      { key: 'fitnessTau', label: t('modal.muscleManager.recoveryFitnessTau'), def: DEFAULT_RECOVERY_PARAMS.fitnessTau },
-      { key: 'detrainDepth', label: t('modal.muscleManager.recoveryFloorLevel'), def: DEFAULT_RECOVERY_PARAMS.detrainDepth, invert: DEFAULT_RECOVERY_PARAMS.baseline },
-      { key: 'detrainTau', label: t('modal.muscleManager.recoveryDetrainTau'), def: DEFAULT_RECOVERY_PARAMS.detrainTau },
-      { key: 'detrainRef', label: t('modal.muscleManager.recoveryDetrainRef'), def: DEFAULT_RECOVERY_PARAMS.detrainRef },
-    ];
-
     details.createEl('p', { text: t('modal.muscleManager.recoveryFloorHint'), cls: 'workout-hint' });
 
-    for (const f of fields) {
-      const row = grid.createDiv();
-      row.addClass('workout-field');
-      row.createEl('label', { text: f.label });
-      const input = row.createEl('input', { type: 'number' });
-      input.addClass('workout-input');
-      input.setAttribute('step', 'any');
-      input.setAttribute('inputmode', 'decimal'); // 移动端弹小数键盘
-      const toDisplay = (stored: number): number => (f.invert ? f.invert - stored : stored);
-      const current = this.recoveryTuning[f.key];
-      input.value = typeof current === 'number' ? String(toDisplay(current)) : '';
-      input.placeholder = String(toDisplay(f.def));
-      input.addEventListener('input', () => {
-        const v = parseNumberInput(input.value);
-        // 反转字段（运动前水平）：允许 100（= 深度 0，关掉消退），但不允许超过 100
-        const valid = v !== undefined && (f.invert ? v < f.invert : f.allowZero ? v >= 0 : v > 0);
-        if (!valid) {
-          delete this.recoveryTuning[f.key];
-        } else {
-          this.recoveryTuning[f.key] = f.invert ? f.invert - v : v;
-        }
-        // 参数一变就重画预览：这是这组数字唯一的「说人话」方式
-        this.renderRecoveryPreviewNow();
-      });
-    }
+    // 参数一变就重画预览：这是这组数字唯一的「说人话」方式
+    renderRecoveryTuningForm(details, this.recoveryTuning, () => this.renderRecoveryPreviewNow());
 
-    // 底部预览：一次标准训练（8 练度）之后曲线的样子。改哪个参数都能立刻看出形状怎么动。
+    // 底部预览：一次标准训练（8 练度）之后曲线的样子，坐标轴固定，改参数即可比形状。
     this.recoveryPreviewEl = details.createDiv();
     this.recoveryPreviewEl.addClass('workout-recovery-preview');
     this.renderRecoveryPreviewNow();
@@ -492,16 +441,7 @@ export class MuscleEditModal extends Modal {
   }
 
   private hasRecoveryTuning(): boolean {
-    const tune = this.recoveryTuning;
-    return (
-      typeof tune.fatiguePerSet === 'number' ||
-      typeof tune.fatigueTau === 'number' ||
-      typeof tune.fitnessPerSet === 'number' ||
-      typeof tune.fitnessTau === 'number' ||
-      typeof tune.detrainDepth === 'number' ||
-      typeof tune.detrainTau === 'number' ||
-      typeof tune.detrainRef === 'number'
-    );
+    return hasRecoveryTuningIn(this.recoveryTuning);
   }
 
   private renderHeatmapSettings(): void {

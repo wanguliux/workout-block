@@ -1563,7 +1563,8 @@ var zh = {
       statusSurplus: "\u8D85\u91CF\u6062\u590D",
       statusMaintain: "\u7EF4\u6301",
       statusDeclining: "\u6D88\u9000",
-      statusNoData: "\u6570\u636E\u4E0D\u8DB3"
+      statusNoData: "\u6570\u636E\u4E0D\u8DB3",
+      openSettings: "\u6062\u590D\u66F2\u7EBF\u8BBE\u7F6E"
     },
     day: {
       viewing: "\u67E5\u770B\u65E5\u671F\uFF1A{date}",
@@ -1598,6 +1599,9 @@ var zh = {
     }
   },
   modal: {
+    recoverySettings: {
+      title: "\u6062\u590D\u66F2\u7EBF\u8BBE\u7F6E \xB7 {name}"
+    },
     recordSet: {
       title: "\u8BB0\u5F55\u8BAD\u7EC3",
       exercise: "\u8BAD\u7EC3\u9879",
@@ -2125,7 +2129,8 @@ var en = {
       statusSurplus: "Supercompensated",
       statusMaintain: "Maintaining",
       statusDeclining: "Detraining",
-      statusNoData: "No data"
+      statusNoData: "No data",
+      openSettings: "Recovery curve settings"
     },
     day: {
       viewing: "Viewing date: {date}",
@@ -2160,6 +2165,9 @@ var en = {
     }
   },
   modal: {
+    recoverySettings: {
+      title: "Recovery curve settings \xB7 {name}"
+    },
     recordSet: {
       title: "Record Set",
       exercise: "Exercise",

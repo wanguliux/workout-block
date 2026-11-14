@@ -172,6 +172,7 @@ export const zh = {
       statusMaintain: '维持',
       statusDeclining: '消退',
       statusNoData: '数据不足',
+      openSettings: '恢复曲线设置',
     },
     day: {
       viewing: '查看日期：{date}',
@@ -207,6 +208,9 @@ export const zh = {
   },
 
   modal: {
+    recoverySettings: {
+      title: '恢复曲线设置 · {name}',
+    },
     recordSet: {
       title: '记录训练',
       exercise: '训练项',

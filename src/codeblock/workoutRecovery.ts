@@ -1,8 +1,10 @@
-import { MarkdownPostProcessorContext, MarkdownRenderChild } from 'obsidian';
+import { MarkdownPostProcessorContext, MarkdownRenderChild, setIcon } from 'obsidian';
 import { DataManager } from '../data/DataManager';
 import { Muscle, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
 import { getMuscleName } from '../data/display';
+import { registerRenderedBlock, rerenderBlocksByType, unregisterRenderedBlock } from './registry';
+import { RecoverySettingsModal } from '../ui/RecoverySettingsModal';
 import {
   CurvePoint,
   DEFAULT_RECOVERY_PARAMS,
@@ -94,10 +96,15 @@ export async function renderWorkoutRecovery(
 ): Promise<void> {
   if (!registeredComponents.has(el)) {
     const child = new MarkdownRenderChild(el);
-    child.onunload = () => registeredComponents.delete(el);
+    child.onunload = () => {
+      registeredComponents.delete(el);
+      unregisterRenderedBlock(el);
+    };
     ctx.addChild(child);
     registeredComponents.set(el, true);
   }
+  // 登记进重渲染表：设置弹窗保存后调 rerenderBlocksByType('workout-recovery') 就能就地重画
+  registerRenderedBlock(el, 'workout-recovery', source, ctx);
 
   const params = parseParams(source);
   const config = await dataManager.getConfig();
@@ -126,8 +133,22 @@ export async function renderWorkoutRecovery(
   const p = { ...paramsForSubject(config, subject.muscleIds, DEFAULT_RECOVERY_PARAMS), ...params.overrides };
   const summary = recoverySummary(p, doses, today);
 
+  // 群组（多块肌肉）没有「一块肌肉的设置」这回事，只有单块才给设置入口
+  const singleMuscle =
+    subject.muscleIds.length === 1 ? config.muscles.find((m) => m.id === subject.muscleIds[0]) : undefined;
+
   if (params.view !== 'table') {
-    renderHeader(container, subject.label, summary);
+    renderHeader(container, subject.label, summary, {
+      onSettings: singleMuscle
+        ? () => {
+            new RecoverySettingsModal(dataManager, {
+              muscle: singleMuscle,
+              // 保存后就地重画：不用切笔记、不用重开块
+              onSaved: () => rerenderBlocksByType('workout-recovery'),
+            }).open();
+          }
+        : undefined,
+    });
     if (!summary.hasData) {
       container.createDiv({ text: t('codeblock.recovery.noData'), cls: 'workout-hint' });
     } else {
@@ -152,7 +173,12 @@ const PAD_B = 34;
 /** 未来趋势默认天数：把已经发生的账往后算（含「不练则底子继续消退」），不是预测你会怎么做 */
 const DEFAULT_FORECAST_DAYS = 15;
 
-function renderHeader(container: HTMLElement, label: string, summary: RecoverySummary): void {
+function renderHeader(
+  container: HTMLElement,
+  label: string,
+  summary: RecoverySummary,
+  options: { onSettings?: () => void } = {}
+): void {
   const header = container.createDiv();
   header.addClass('workout-recovery-header');
   header.createSpan({ text: label, cls: 'workout-recovery-title' });
@@ -161,6 +187,15 @@ function renderHeader(container: HTMLElement, label: string, summary: RecoverySu
     text: statusLabel(summary.status),
     cls: `workout-recovery-status ${statusClass(summary.status)}`,
   });
+  if (options.onSettings) {
+    // 就地调参数：不必绕去「设置 → 肌肉管理 → 编辑肌肉」
+    const btn = header.createEl('button');
+    btn.addClass('workout-recovery-settings');
+    btn.title = t('codeblock.recovery.openSettings');
+    btn.setAttribute('aria-label', t('codeblock.recovery.openSettings'));
+    setIcon(btn, 'settings');
+    btn.addEventListener('click', options.onSettings);
+  }
 }
 
 function renderChart(

@@ -274,6 +274,12 @@ export class MarkdownRenderChild {
   }
 }
 
+// setIcon：真实 Obsidian 用内置图标库往元素里塞 svg；测试只记一个标记即可，
+// 断言关心的是「按钮存在且可点」，不是图标长什么样。
+export function setIcon(el: HTMLElement, icon: string): void {
+  el.setAttribute('data-icon', icon);
+}
+
 export class TFile {}
 
 // 文件夹对象：带一个 path 字段，对应 VaultFolderSuggestModal 使用的内容
