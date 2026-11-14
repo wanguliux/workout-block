@@ -46,9 +46,6 @@ export class RecoverySettingsModal extends Modal {
       text: t('modal.recoverySettings.title', { name: getMuscleName(this.options.muscle) }),
     });
 
-    contentEl.createEl('p', { text: t('modal.muscleManager.recoveryHint'), cls: 'workout-hint' });
-    contentEl.createEl('p', { text: t('modal.muscleManager.recoveryFloorHint'), cls: 'workout-hint' });
-
     renderRecoveryTuningForm(contentEl, this.tuning, () => this.renderPreview());
 
     this.previewEl = contentEl.createDiv();

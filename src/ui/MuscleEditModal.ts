@@ -422,9 +422,6 @@ export class MuscleEditModal extends Modal {
   private renderRecoverySection(parent: HTMLElement): void {
     const details = this.makeDetails(parent, t('modal.muscleManager.recoverySettings'), false);
 
-    details.createEl('p', { text: t('modal.muscleManager.recoveryHint'), cls: 'workout-hint' });
-    details.createEl('p', { text: t('modal.muscleManager.recoveryFloorHint'), cls: 'workout-hint' });
-
     // 参数一变就重画预览：这是这组数字唯一的「说人话」方式
     renderRecoveryTuningForm(details, this.recoveryTuning, () => this.renderRecoveryPreviewNow());
 

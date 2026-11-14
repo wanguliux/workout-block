@@ -32,8 +32,10 @@ const PAD = 10;
  * 反而看不出「掉得更深」；固定之后，掉得深就是真的往下走、峰更高就是真的顶出画面。
  */
 const PREVIEW_DAYS = 60;
-const Y_MIN = 55;
-const Y_MAX = 112;
+// 上限要留够「超量恢复幅度」调大后的空间（8 练度 × 4 点 ≈ 峰值 116），
+// 否则用户把峰值往上调、曲线却直接顶出画布，看不出效果。
+const Y_MIN = 52;
+const Y_MAX = 120;
 
 export interface RecoveryPreviewOptions {
   /** 参考剂量（练度）：模拟「一次训练打多少」。默认 8 练度。 */
@@ -162,6 +164,7 @@ export function renderRecoveryPreview(
     title.textContent = t('modal.muscleManager.recoveryPreviewPeak', {
       day: String(Math.round(peakDay)),
       v: fmt(summary.peak.state),
+      d: fmt(summary.peak.state - params.baseline),
     });
     dot.appendChild(title);
     svg.appendChild(dot);
@@ -188,6 +191,8 @@ export function renderRecoveryPreview(
       t('modal.muscleManager.recoveryPreviewPeak', {
         day: String(Math.round(toDayNum(summary.peak.day))),
         v: fmt(summary.peak.state),
+        // 高出「练到位水平」多少才是用户真正在调的那个量
+        d: fmt(summary.peak.state - params.baseline),
       })
     );
   }
