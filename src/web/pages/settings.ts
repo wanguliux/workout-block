@@ -8,7 +8,7 @@ import { UiContext } from '../context';
 import { L, esc, formatInt } from '../format';
 import type { WebRange } from '../store';
 
-const APP_VERSION = '1.0.6';
+const APP_VERSION = '1.0.7';
 
 function bytesText(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
