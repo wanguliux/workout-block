@@ -84,6 +84,12 @@ export const CODE_BLOCK_DEFS: CodeBlockDef[] = [
       { key: 'muscle', label: '肌肉 / 肌群', type: 'text', placeholder: '如 股四头肌、胸大肌、胸部（留空 + view: table 可列全部）' },
       { key: 'days', label: '回溯天数', type: 'number', placeholder: '默认 28（7–365）' },
       {
+        key: 'forecast',
+        label: '未来趋势',
+        type: 'number',
+        placeholder: '默认 15 天（0–180）：从今天起假设不再练，曲线会怎么走',
+      },
+      {
         key: 'view',
         label: '显示形态',
         type: 'select',

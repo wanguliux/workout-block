@@ -152,6 +152,8 @@ export const en = {
       legendBaseline: 'Trained level 100',
       legendFloor: 'Pre-training level {v}',
       legendToday: 'Today',
+      legendForecast: 'If you stop for {n} d',
+      todayLine: 'Today · the dashed part projects {n} days without training',
       col: {
         muscle: 'Muscle',
         state: 'State',

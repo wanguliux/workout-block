@@ -1545,6 +1545,8 @@ var zh = {
       legendBaseline: "\u7EC3\u5230\u4F4D\u6C34\u5E73 100",
       legendFloor: "\u8FD0\u52A8\u524D\u6C34\u5E73 {v}",
       legendToday: "\u4ECA\u5929",
+      legendForecast: "\u5982\u679C\u4E0D\u7EC3\uFF08{n} \u5929\uFF09",
+      todayLine: "\u4ECA\u5929 \xB7 \u53F3\u4FA7\u865A\u7EBF\uFF1D\u5047\u8BBE\u4ECE\u73B0\u5728\u8D77\u4E0D\u518D\u7EC3\u7684\u63A8\u7B97\uFF08{n} \u5929\uFF09",
       col: {
         muscle: "\u808C\u8089",
         state: "\u5F53\u524D\u72B6\u6001",
@@ -2080,6 +2082,8 @@ var en = {
       legendBaseline: "Trained level 100",
       legendFloor: "Pre-training level {v}",
       legendToday: "Today",
+      legendForecast: "If you stop for {n} d",
+      todayLine: "Today \xB7 the dashed part projects {n} days without training",
       col: {
         muscle: "Muscle",
         state: "State",
@@ -5895,6 +5899,12 @@ var CODE_BLOCK_DEFS = [
     params: [
       { key: "muscle", label: "\u808C\u8089 / \u808C\u7FA4", type: "text", placeholder: "\u5982 \u80A1\u56DB\u5934\u808C\u3001\u80F8\u5927\u808C\u3001\u80F8\u90E8\uFF08\u7559\u7A7A + view: table \u53EF\u5217\u5168\u90E8\uFF09" },
       { key: "days", label: "\u56DE\u6EAF\u5929\u6570", type: "number", placeholder: "\u9ED8\u8BA4 28\uFF087\u2013365\uFF09" },
+      {
+        key: "forecast",
+        label: "\u672A\u6765\u8D8B\u52BF",
+        type: "number",
+        placeholder: "\u9ED8\u8BA4 15 \u5929\uFF080\u2013180\uFF09\uFF1A\u4ECE\u4ECA\u5929\u8D77\u5047\u8BBE\u4E0D\u518D\u7EC3\uFF0C\u66F2\u7EBF\u4F1A\u600E\u4E48\u8D70"
+      },
       {
         key: "view",
         label: "\u663E\u793A\u5F62\u6001",

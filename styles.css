@@ -1205,6 +1205,12 @@ input[type="checkbox"].workout-switch:checked::after {
   border-top: 0;
   border-left: 2px dashed currentColor;
 }
+/* 未来趋势段：虚线（与「已经发生」的实线区分），颜色沿用主题强调色 */
+.workout-recovery-legend-item.is-forecast::before {
+  border-top-style: dashed;
+  border-top-color: var(--interactive-accent);
+  opacity: 0.75;
+}
 /* 运动前水平：点线（与基线的虚线区分开，避免两根线看混） */
 .workout-recovery-legend-item.is-dotted::before {
   border-top-style: dotted;

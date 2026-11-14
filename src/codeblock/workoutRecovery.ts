@@ -39,13 +39,15 @@ import {
 interface ParsedParams {
   muscle?: string;
   days?: number;
+  /** 未来趋势天数：从今天起假设不再练，曲线往后推多少天（默认 15，0 = 不画） */
+  forecast: number;
   view: 'chart' | 'table' | 'both';
   /** 曲线参数临时覆盖（试算用，不写回配置）：kf/tf/ka/ta */
   overrides: Partial<RecoveryParams>;
 }
 
 function parseParams(source: string): ParsedParams {
-  const out: ParsedParams = { view: 'chart', overrides: {} };
+  const out: ParsedParams = { view: 'chart', overrides: {}, forecast: DEFAULT_FORECAST_DAYS };
   // 参数覆盖的取值范围：超界直接忽略（宁可当没写，也不让一个手滑把曲线算成直线）
   const limits: Record<string, [number, number, keyof RecoveryParams]> = {
     kf: [0.1, 20, 'fatiguePerSet'],
@@ -63,6 +65,10 @@ function parseParams(source: string): ParsedParams {
     else if (key === 'days') {
       const n = parseInt(value, 10);
       if (Number.isFinite(n) && n >= 7 && n <= 365) out.days = n;
+    } else if (key === 'forecast') {
+      const n = parseInt(value, 10);
+      // 0 允许（= 不画未来段）；上限 180 免得把横轴拉成一条线
+      if (Number.isFinite(n) && n >= 0 && n <= 180) out.forecast = n;
     } else if (key === 'view') {
       out.view = value === 'table' ? 'table' : value === 'both' ? 'both' : 'chart';
     } else if (key in limits) {
@@ -124,7 +130,7 @@ export async function renderWorkoutRecovery(
     if (!summary.hasData) {
       container.createDiv({ text: t('codeblock.recovery.noData'), cls: 'workout-hint' });
     } else {
-      renderChart(container, subject.label, p, doses, params.days ?? 28, today, summary);
+      renderChart(container, subject.label, p, doses, params.days ?? 28, params.forecast, today, summary);
     }
   }
   if (params.view === 'table' || params.view === 'both') {
@@ -142,7 +148,8 @@ const PAD_L = 44;
 const PAD_R = 14;
 const PAD_T = 16;
 const PAD_B = 34;
-const FORECAST_DAYS = 7; // 未来段只是把已发生的账往后算，不是预测
+/** 未来趋势默认天数：把已经发生的账往后算（含「不练则底子继续消退」），不是预测你会怎么做 */
+const DEFAULT_FORECAST_DAYS = 15;
 
 function renderHeader(container: HTMLElement, label: string, summary: RecoverySummary): void {
   const header = container.createDiv();
@@ -161,11 +168,12 @@ function renderChart(
   p: RecoveryParams,
   doses: DoseEntry[],
   days: number,
+  forecast: number,
   today: number,
   summary: RecoverySummary
 ): void {
   const from = today - days;
-  const to = today + FORECAST_DAYS;
+  const to = today + forecast;
   const pts = sampleCurve(p, doses, from, to, 0.25);
 
   // 纵轴：数据极值 + 练到位水平 + 运动前水平，各留 2 点余量，避免曲线贴边
@@ -175,10 +183,17 @@ function renderChart(
   const x = (day: number) => PAD_L + ((day - from) / Math.max(1, to - from)) * (VIEW_W - PAD_L - PAD_R);
   const y = (s: number) => VIEW_H - PAD_B - ((s - lo) / Math.max(1, hi - lo)) * (VIEW_H - PAD_T - PAD_B);
 
-  const line = pts
-    .map((q, i) => `${i ? 'L' : 'M'}${x(toDayNum(q.day)).toFixed(1)},${y(q.state).toFixed(1)}`)
-    .join('');
-  const area = `${line}L${x(to).toFixed(1)},${y(lo).toFixed(1)}L${x(from).toFixed(1)},${y(lo).toFixed(1)}Z`;
+  // 历史段（实线 + 面积）与未来段（虚线）分开画：未来那段是「假设从今天起不练」的推算，
+  // 不能和已经发生的事实长得一样，否则看图的人分不清哪截是记录、哪截是推演。
+  const toPath = (list: typeof pts): string =>
+    list.map((q, i) => `${i ? 'L' : 'M'}${x(toDayNum(q.day)).toFixed(1)},${y(q.state).toFixed(1)}`).join('');
+  const past = pts.filter((q) => toDayNum(q.day) <= today);
+  const future = forecast > 0 ? pts.filter((q) => toDayNum(q.day) >= today) : [];
+  const linePast = toPath(past);
+  const lineFuture = toPath(future);
+  const area = past.length
+    ? `${linePast}L${x(today).toFixed(1)},${y(lo).toFixed(1)}L${x(from).toFixed(1)},${y(lo).toFixed(1)}Z`
+    : '';
 
   const parts: string[] = [];
   // 纵轴网格 + 刻度
@@ -194,8 +209,8 @@ function renderChart(
       `<text x="${x(d).toFixed(1)}" y="${VIEW_H - PAD_B + 18}" text-anchor="middle" class="workout-recovery-axis">${fromDayNum(d).slice(5)}</text>`
     );
   }
-  // 面积 + 练到位水平（虚线）+ 运动前水平（点线，停训掉到这里就不再掉）+ 曲线
-  parts.push(`<path d="${area}" fill="var(--interactive-accent)" fill-opacity="0.08"/>`);
+  // 面积（只覆盖历史段）+ 练到位水平（虚线）+ 运动前水平（点线，停训掉到这里就不再掉）+ 曲线
+  if (area) parts.push(`<path d="${area}" fill="var(--interactive-accent)" fill-opacity="0.08"/>`);
   parts.push(
     `<line x1="${PAD_L}" y1="${y(p.baseline).toFixed(1)}" x2="${VIEW_W - PAD_R}" y2="${y(p.baseline).toFixed(1)}" stroke="currentColor" stroke-opacity="0.35" stroke-dasharray="6 4"/>`
   );
@@ -205,9 +220,16 @@ function renderChart(
         `<text x="${VIEW_W - PAD_R}" y="${(y(summary.floor) - 4).toFixed(1)}" text-anchor="end" class="workout-recovery-axis">${t('codeblock.recovery.legendFloor', { v: String(Math.round(summary.floor)) })}</text>`
     );
   }
-  parts.push(
-    `<path d="${line}" fill="none" stroke="var(--interactive-accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`
-  );
+  if (linePast) {
+    parts.push(
+      `<path d="${linePast}" fill="none" stroke="var(--interactive-accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>`
+    );
+  }
+  if (lineFuture) {
+    parts.push(
+      `<path d="${lineFuture}" fill="none" stroke="var(--interactive-accent)" stroke-width="2" stroke-opacity="0.75" stroke-dasharray="5 4" stroke-linejoin="round" stroke-linecap="round"/>`
+    );
+  }
 
   // 训练日：曲线上的点 + 原生 <title> 提示（桌面悬停、移动端长按都能看）
   for (const d of doses) {
@@ -222,7 +244,8 @@ function renderChart(
 
   // 今天：竖线 + 实心点 + 数值——用户要的就是「我现在在哪个点位」
   parts.push(
-    `<line x1="${x(today).toFixed(1)}" y1="${PAD_T}" x2="${x(today).toFixed(1)}" y2="${VIEW_H - PAD_B}" stroke="currentColor" stroke-opacity="0.4" stroke-dasharray="4 3"/>`
+    `<line x1="${x(today).toFixed(1)}" y1="${PAD_T}" x2="${x(today).toFixed(1)}" y2="${VIEW_H - PAD_B}" stroke="currentColor" stroke-opacity="0.4" stroke-dasharray="4 3">` +
+      `<title>${t('codeblock.recovery.todayLine', { n: String(forecast) })}</title></line>`
   );
   parts.push(
     `<circle cx="${x(today).toFixed(1)}" cy="${y(summary.state).toFixed(1)}" r="4.6" fill="var(--interactive-accent)">` +
@@ -248,6 +271,12 @@ function renderChart(
     legend.createSpan({ text: t('codeblock.recovery.legendFloor', { v: String(Math.round(summary.floor)) }), cls: 'workout-recovery-legend-item is-dotted' });
   }
   legend.createSpan({ text: t('codeblock.recovery.legendToday'), cls: 'workout-recovery-legend-item is-today' });
+  if (forecast > 0) {
+    legend.createSpan({
+      text: t('codeblock.recovery.legendForecast', { n: String(forecast) }),
+      cls: 'workout-recovery-legend-item is-forecast',
+    });
+  }
 }
 
 // ─────────────────────────── 表格 ───────────────────────────
