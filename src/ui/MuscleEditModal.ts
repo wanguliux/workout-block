@@ -5,6 +5,7 @@ import { FITNESS_GROUPS, formatSvgMuscleLabel, SVG_MUSCLE_CATALOG, SvgMuscleEntr
 import { DEFAULT_HEATMAP_SCALE, colorToCss } from '../data/heatmapDefaults';
 import { HeatmapLevel, Muscle, RecoveryTuning, StatDef, WorkoutConfig } from '../data/types';
 import { DEFAULT_RECOVERY_PARAMS } from '../data/recovery';
+import { GROWTH_SCALE } from '../data/muscleGrowth';
 import { parseNumberInput } from '../util/number';
 
 /** 折叠区里可编辑的四个数值参数（RecoveryTuning 中的非 levels 字段）。 */
@@ -61,6 +62,10 @@ export class MuscleEditModal extends Modal {
   private muscleLevels: HeatmapLevel[] | null = null; // 该肌的 4 色分档（逐肌可配）
   // 逐肌恢复曲线微调（留空＝跟随默认；与热力图设置同层，同在「恢复设置」折叠区）
   private recoveryTuning: RecoveryTuning = {};
+  // 发展视图色标（比值为分档）；null = 跟随内置那套（<50/50-80/80-120/120-160/>160%）
+  private growthLevels: HeatmapLevel[] | null = null;
+  // 编辑中的草稿：只在真正改动时才写回 growthLevels，避免「展开看一眼」就变成自定义
+  private growthDraft: HeatmapLevel[] = [];
 
   private mappingContainer!: HTMLDivElement;
   private countEl!: HTMLElement;
@@ -85,6 +90,7 @@ export class MuscleEditModal extends Modal {
       this.rangeValue = muscle.heatmapRange ?? '';
       this.muscleLevels = muscle.heatmapLevels ? this.normalizeLevels(muscle.heatmapLevels) : null;
       this.recoveryTuning = muscle.recovery ? { ...muscle.recovery } : {};
+      this.growthLevels = muscle.growthLevels ? this.normalizeLevels(muscle.growthLevels) : null;
       if (!RANGE_OPTIONS.includes(this.rangeValue) && this.rangeValue) {
         this.customRange = this.rangeValue;
         this.rangeValue = 'custom';
@@ -158,6 +164,9 @@ export class MuscleEditModal extends Modal {
 
     // 恢复设置（进阶）：与热力图设置同层，默认收起——四个数字参数平时没人改，展开会把这页拉得很长
     this.renderRecoverySection(contentEl);
+
+    // 发展视图设置（进阶）：同样收起。不填 = 用内置那套比值分档
+    this.renderGrowthSection(contentEl);
 
     // 底部按钮
     const btnRow = contentEl.createDiv();
@@ -268,6 +277,87 @@ export class MuscleEditModal extends Modal {
         }
       }
     }
+  }
+
+  // —— 发展视图设置（进阶折叠区）——
+  // 发展视图按「近 4 周练度 ÷ 12 周中位数」的**比值**上色，阈值是百分比（0.5 = 50%），
+  // 与热力图的绝对量分档不是一回事，必须单独一套；不动它＝跟随内置那套（不写配置）。
+  private renderGrowthSection(parent: HTMLElement): void {
+    const details = parent.createEl('details');
+    details.addClass('workout-advanced');
+
+    const summary = details.createEl('summary');
+    summary.addClass('workout-advanced-summary');
+    summary.createSpan({ text: t('modal.muscleManager.growthSettings') });
+    const badge = summary.createSpan({
+      text: this.growthLevels
+        ? t('modal.muscleManager.recoveryOverridden')
+        : t('modal.muscleManager.recoveryFollowDefault'),
+    });
+    badge.addClass('workout-hint');
+
+    // 草稿与落库分开：只是展开看一眼不该把默认值写成「自定义」
+    this.growthDraft = this.growthLevels
+      ? (JSON.parse(JSON.stringify(this.growthLevels)) as HeatmapLevel[])
+      : this.normalizeLevels(GROWTH_SCALE);
+
+    const body = details.createDiv();
+    const draw = (): void => {
+      body.empty();
+      body.createEl('p', { text: t('modal.muscleManager.growthHint'), cls: 'workout-hint' });
+
+      const countRow = body.createDiv();
+      countRow.addClass('workout-field');
+      countRow.createEl('label', { text: t('modal.muscleManager.colorLevels') });
+      const countInput = countRow.createEl('input', { type: 'number' });
+      countInput.addClass('workout-input');
+      countInput.setAttribute('step', 'any');
+      countInput.setAttribute('inputmode', 'numeric');
+      countInput.min = '2';
+      countInput.max = '9';
+      countInput.value = String(this.growthDraft.length);
+      countInput.setCssStyles({ width: '70px' });
+      countInput.addEventListener('input', () => {
+        let n = parseInt(countInput.value, 10);
+        if (isNaN(n)) n = this.growthDraft.length;
+        n = Math.max(2, Math.min(9, n));
+        this.setGrowthLevelCount(n);
+        this.growthLevels = JSON.parse(JSON.stringify(this.growthDraft)) as HeatmapLevel[];
+        badge.setText(t('modal.muscleManager.recoveryOverridden'));
+        draw();
+      });
+
+      const scaleContainer = body.createDiv();
+      this.renderScaleRows(scaleContainer, this.growthDraft);
+    };
+
+    // 任一色块/阈值输入即视为自定义（input 冒泡上来统一处理，不必逐控件挂回调）
+    details.addEventListener('input', (ev) => {
+      if ((ev.target as HTMLElement)?.tagName === 'SUMMARY') return;
+      this.growthLevels = JSON.parse(JSON.stringify(this.growthDraft)) as HeatmapLevel[];
+      badge.setText(t('modal.muscleManager.recoveryOverridden'));
+    });
+
+    draw();
+  }
+
+  /** 按分级数增减发展视图色标（新增档沿用内置色板，末档永远开口）。 */
+  private setGrowthLevelCount(n: number): void {
+    const levels = this.growthDraft.slice();
+    if (n <= levels.length) {
+      this.growthDraft = levels.slice(0, n).map((l, i) => ({ ...l, max: i === n - 1 ? Infinity : l.max }));
+      return;
+    }
+    for (let i = levels.length; i < n; i++) {
+      const src = GROWTH_SCALE[Math.min(i, GROWTH_SCALE.length - 1)];
+      const prev = i > 0 ? levels[i - 1].max ?? 0.8 : 0;
+      levels.push({
+        color: src.color,
+        max: Number.isFinite(prev) ? Math.round((prev + 0.4) * 100) / 100 : Infinity,
+      });
+    }
+    levels[levels.length - 1] = { ...levels[levels.length - 1], max: Infinity };
+    this.growthDraft = levels;
   }
 
   // —— 恢复设置（进阶折叠区）——
@@ -426,9 +516,18 @@ export class MuscleEditModal extends Modal {
 
     // —— 颜色设置栏：左侧色块(可拾取/预览)+十六进制代码，中间 ≤，右侧阈值 ——
     const scaleContainer = this.heatmapSection.createDiv();
-    for (let i = 0; i < this.muscleLevels.length; i++) {
-      const level = this.muscleLevels[i];
-      const isLast = i === this.muscleLevels.length - 1;
+    this.renderScaleRows(scaleContainer, this.muscleLevels);
+  }
+
+  /**
+   * 渲染一组色阶行（色块 / hex / ≤ / 阈值）。
+   * 热力图色标与发展视图色标是同一套结构（HeatmapLevel[]），共用这一份渲染，
+   * 否则两处各写一遍，改个交互要改两个地方、迟早不一致。
+   */
+  private renderScaleRows(scaleContainer: HTMLElement, levels: HeatmapLevel[]): void {
+    for (let i = 0; i < levels.length; i++) {
+      const level = levels[i];
+      const isLast = i === levels.length - 1;
       const row = scaleContainer.createDiv();
       row.addClass('workout-scale-row');
 
@@ -437,14 +536,12 @@ export class MuscleEditModal extends Modal {
       swatch.value = this.normalizeHex(level.color);
       swatch.addClass('workout-scale-swatch');
 
-      // 十六进制颜色代码输入框
       const hexInput = row.createEl('input', { type: 'text' });
       hexInput.addClass('workout-input', 'workout-scale-hex');
       hexInput.value = level.color;
       hexInput.placeholder = '#3b82f6';
       hexInput.title = t('modal.muscleManager.colorHex');
 
-      // 色块 <-> hex 双向同步
       swatch.addEventListener('input', () => {
         level.color = swatch.value;
         hexInput.value = swatch.value;
@@ -457,7 +554,6 @@ export class MuscleEditModal extends Modal {
         }
       });
 
-      // ≤ 分隔符（末档为无穷大，不显示阈值输入框）
       const le = row.createSpan({ text: '≤' });
       le.addClass('workout-scale-sep');
 
@@ -556,6 +652,7 @@ export class MuscleEditModal extends Modal {
       heatmapMetric: this.metricId || undefined,
       heatmapRange: range || undefined,
       heatmapLevels: this.muscleLevels ? (JSON.parse(JSON.stringify(this.muscleLevels)) as HeatmapLevel[]) : undefined,
+      growthLevels: this.growthLevels ? (JSON.parse(JSON.stringify(this.growthLevels)) as HeatmapLevel[]) : undefined,
       recovery: this.hasRecoveryTuning() ? { ...this.recoveryTuning } : undefined,
     };
 

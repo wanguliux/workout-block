@@ -55,6 +55,7 @@ export interface Muscle {
   heatmapMetric?: string;        // 引用 StatDef.id；空=跟随默认
   heatmapRange?: string;         // 7d / 30d / 90d / all / 日期区间；空=跟随默认
   heatmapLevels?: HeatmapLevel[]; // 该肌 4 色分档（蓝/绿/橙/红）阈值；空=跟随所选指标的默认分档（逐肌可配）
+  growthLevels?: HeatmapLevel[];  // 发展视图色标（比值为分档）；空=用内置那套（<50/50-80/80-120/120-160/>160%）
   recovery?: RecoveryTuning;     // 该肌的恢复曲线微调；空=跟随全局默认
 }
 

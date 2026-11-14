@@ -66,6 +66,9 @@ function getMuscleSvg(side: 'front' | 'back'): SVGElement {
 let heatmapTooltipEl: HTMLElement | null = null;
 function ensureHeatmapTooltip(): HTMLElement {
   if (heatmapTooltipEl && document.body.contains(heatmapTooltipEl)) return heatmapTooltipEl;
+  // 插件重载后模块级变量会重置，但旧的提示节点还挂在 body 上——不清掉就会累积多个同 id 气泡，
+  // 而 document.getElementById 取第一个（已废弃的那个），表现为「鼠标悬停完全没反应」。
+  document.querySelectorAll('.workout-heatmap-tooltip').forEach((n) => n.remove());
   const tip = document.body.createDiv();
   tip.id = 'workout-heatmap-tooltip';
   tip.addClass('workout-heatmap-tooltip');
@@ -229,10 +232,9 @@ export async function renderWorkoutHeatmap(
       const metricName = metric?.name ?? t('modal.muscleManager.followDefaultMetric');
       info.createSpan({ text: `${t('modal.muscleManager.heatmapMetric')}: ${metricName}` });
       info.createSpan({ text: `${t('modal.muscleManager.heatmapRange')}: ${codeRange ?? '7d'}` });
-    } else {
-      // 发展视图不谈「指标」——说指标会被当成绝对练度来读
-      info.createSpan({ text: t('codeblock.heatmap.viewGrowthInfo') });
     }
+    // 发展视图不显示说明行：图例已经用百分数标清了色义，再挂一行解释纯属噪音
+    info.setCssStyles({ display: mode === 'recovery' ? '' : 'none' });
   }
 
   function renderLegend(): void {
@@ -363,7 +365,9 @@ export async function renderWorkoutHeatmap(
               base: (g.baselineWeekly ?? 0).toFixed(1),
               pct: String(Math.round(g.ratio * 100)),
             });
-      out.push({ muscle, value: g.ratio === null ? NaN : g.ratio, scale: GROWTH_SCALE, tip });
+      // 逐肌可覆盖色标（编辑肌肉 → 发展视图设置），留空＝用内置那套
+      const scale = muscle.growthLevels && muscle.growthLevels.length ? muscle.growthLevels : GROWTH_SCALE;
+      out.push({ muscle, value: g.ratio === null ? NaN : g.ratio, scale, tip });
     }
     return out;
   }
@@ -413,10 +417,13 @@ export async function renderWorkoutHeatmap(
     extraTip.clear();
     const entries = mode === 'recovery' ? recoveryEntries : growthEntries;
     if (!entries) return;
-    for (const item of entries) {
-      for (const id of item.muscle.svgRegionIds ?? []) {
-        const entry = SVG_MUSCLE_CATALOG.find((e) => e.id === id);
-        if (entry) extraTip.set(`${entry.side}:${id}`, item.tip);
+    // 发展视图不加第二行：配比说明太长，气泡里挂两行反而看不清肌肉名
+    if (mode === 'recovery') {
+      for (const item of entries) {
+        for (const id of item.muscle.svgRegionIds ?? []) {
+          const entry = SVG_MUSCLE_CATALOG.find((e) => e.id === id);
+          if (entry) extraTip.set(`${entry.side}:${id}`, item.tip);
+        }
       }
     }
     applyColorToView(frontWrap, 'front', entries);

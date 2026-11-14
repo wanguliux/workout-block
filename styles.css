@@ -323,28 +323,49 @@
   margin-bottom: 8px;
 }
 
+/* 分段控件：正/背 与 恢复/发展 两组按钮各自成一块胶囊，
+   组内无间隙、只有选中项有底色——两组「并排的独立按钮」看着像四个平级选项，分不清哪两个是一组 */
 .workout-heatmap-switch {
-  display: flex;
-  gap: 6px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-secondary);
 }
 
 .workout-heatmap-switch button {
   padding: 4px 12px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s, 4px);
-  background: var(--background-secondary);
-  color: var(--text-normal);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
   cursor: pointer;
   font-size: var(--font-ui-small, 13px);
+  line-height: 1.4;
 }
 .workout-heatmap-switch button:hover {
   background: var(--background-modifier-hover);
+  color: var(--text-normal);
 }
-
-.workout-heatmap-switch button.mod-cta {
+.workout-heatmap-switch button.mod-cta,
+.workout-heatmap-switch button.mod-cta:hover {
   background: var(--interactive-accent);
   color: var(--text-on-accent, #fff);
-  border-color: var(--interactive-accent);
+  border-color: transparent;
+}
+/* 未选中项保持透明（obsidian 的 mod-muted 默认会加边框，这里压掉） */
+.workout-heatmap-switch button.mod-muted {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+/* 两组按钮之间留一点呼吸，避免看成一组四个 */
+.workout-heatmap-switch + .workout-heatmap-switch {
+  margin-left: 2px;
 }
 
 .workout-heatmap-info {
@@ -1308,6 +1329,23 @@ input[type="checkbox"].workout-switch:checked::after {
 .is-mobile .workout-two-col {
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+/* 热力图头部：手机上两组按钮各占一行，触控靶补高 */
+.is-mobile .workout-heatmap-header {
+  gap: 8px;
+}
+.is-mobile .workout-heatmap-switch {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+.is-mobile .workout-heatmap-switch button {
+  flex: 1;
+  min-height: 32px;
+  padding: 6px 8px;
+}
+.is-mobile .workout-heatmap-legend {
+  margin-left: 0;
 }
 
 /* 练度输入框：移动端补触控靶（数字键盘直接弹出），网格改单列避免挤压 */

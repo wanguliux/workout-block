@@ -379,6 +379,8 @@ export const en = {
       colorLevels: 'Color levels',
       colorHex: 'Hex color, e.g. #3b82f6',
       scaleHint: 'Color light→heavy, each level has a threshold: left is the color (click the swatch to pick, or type a hex), right is the threshold (≤). Level count sets how many color tiers.',
+      growthSettings: 'Development view (advanced)',
+      growthHint: 'The development view colors by ratio (last 4 weeks ÷ 12-week median), so thresholds here are ratios (0.5 = 50%). Leave untouched to follow the built-in scale.',
       recoverySettings: 'Recovery tuning (advanced)',
       recoveryFollowDefault: 'Following defaults',
       recoveryOverridden: 'Customized',

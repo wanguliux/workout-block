@@ -427,4 +427,38 @@ describe('management UI regressions', async () => {
     expect(saved.find((m) => m.muscleId === firstCb.value)!.weight).toBe(2.5);
     expect(saved.find((m) => m.muscleId === secondCb.value)!.weight).toBeUndefined();
   });
+
+  // 用例：发展视图色标——默认跟随内置（不写配置）；改了阈值才落库
+  it('growth view scale: follows defaults until edited, then persists', async () => {
+    setLocale('zh');
+    const { MuscleEditModal } = await import('./MuscleEditModal');
+    const dataManager = createDataManager();
+    const config = await dataManager.getConfig();
+
+    const untouched = new MuscleEditModal(dataManager as any, { muscle: config.muscles[0] } as any);
+    await untouched.onOpen();
+    const sections = Array.from(untouched.contentEl.querySelectorAll('details.workout-advanced'));
+    const growth = sections.find((d) => d.querySelector('summary')!.textContent!.includes('发展视图设置'))!;
+    expect(growth).toBeTruthy();
+    expect(growth.querySelector('summary')!.textContent).toContain('跟随默认');
+    await (untouched as any).save();
+    expect((dataManager.updateMuscle as any).mock.calls[0][1].growthLevels).toBeUndefined();
+
+    // 改一个阈值 → 视为自定义并整组落库
+    const edited = new MuscleEditModal(dataManager as any, { muscle: config.muscles[0] } as any);
+    await edited.onOpen();
+    const growth2 = Array.from(edited.contentEl.querySelectorAll('details.workout-advanced')).find((d) =>
+      d.querySelector('summary')!.textContent!.includes('发展视图设置')
+    )!;
+    const maxInput = growth2.querySelector('input.workout-scale-max') as HTMLInputElement;
+    expect(maxInput).toBeTruthy();
+    maxInput.value = '0.6';
+    maxInput.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(growth2.querySelector('summary')!.textContent).toContain('已自定义');
+    await (edited as any).save();
+
+    const saved = (dataManager.updateMuscle as any).mock.calls[1][1].growthLevels as Array<{ max?: number }>;
+    expect(Array.isArray(saved)).toBe(true);
+    expect(saved[0].max).toBe(0.6);
+  });
 });
