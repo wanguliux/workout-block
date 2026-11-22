@@ -140,6 +140,8 @@ export const en = {
       editTitle: 'Edit · {exercise} · Set {n}',
       emptyFields: '(no presets set)',
       completePartial: 'Marked complete, but the log was not saved (CSV write failed). Click complete again to retry.',
+      undo: 'Undo complete',
+      undoFailed: 'Failed to undo. Please try again.',
     },
     recovery: {
       needMuscle: 'Specify a muscle: write muscle: Quads in the block (group names like Chest / Back work too)',

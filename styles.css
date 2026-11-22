@@ -1969,6 +1969,16 @@ input[type="checkbox"].workout-switch:checked::after {
   margin-left: auto;
 }
 .workout-plan-done svg { width: 15px; height: 15px; }
+/* 撤销完成：默认隐藏，行 hover / 键盘聚焦才显——已完成行不该比未完成行更吵。
+   触屏没有 hover，改为常显，否则手机上永远撤销不了。 */
+.workout-plan-undo-wrap {
+  margin-left: 0;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.workout-row:hover .workout-plan-undo-wrap,
+.workout-plan-undo-wrap:focus-within { opacity: 1; }
+.is-mobile .workout-plan-undo-wrap { opacity: 1; }
 
 /* ─── 契约通用：参数控件（block-param-*，供参数渲染委托的渲染器使用） ───
  * 本段是 block 系列「参数渲染委托（契约 v2）」的公共 CSS 片段：

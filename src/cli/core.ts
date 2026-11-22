@@ -1,4 +1,5 @@
 import { FieldDef, LogRow, StatDef, WorkoutConfig } from '../data/types';
+import { todayLocal } from '../data/planSchedule';
 import { parseMass } from '../util/units';
 import { parseDurationInput } from './durationInput';
 import { CliError } from './errors';
@@ -19,9 +20,10 @@ export function formatTimestamp(d: Date = new Date()): string {
 }
 
 // 与 DataManager.todayStr 一致的日期格式：YYYY-MM-DD（本地时区）。
+// 实现委托 planSchedule.todayLocal——「今天」只留一份实现，插件面板与 CLI 的
+// 完成态窗口判定才不会在跨日边界上各算各的。
 export function todayStr(d: Date = new Date()): string {
-  const pad = (x: number) => String(x).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return todayLocal(d);
 }
 
 const TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;

@@ -141,6 +141,8 @@ export const zh = {
       editTitle: '编辑 · {exercise} · 第 {n} 组',
       emptyFields: '（未设置预设值）',
       completePartial: '完成状态已保存，但训练记录未写入（CSV 写入失败），请再点一次重试',
+      undo: '撤销完成',
+      undoFailed: '撤销完成失败，请稍后重试',
     },
     recovery: {
       needMuscle: '请指定肌肉：在代码块里写 muscle: 股四头肌（也支持肌群名，如 胸部 / 背部 / 腿）',

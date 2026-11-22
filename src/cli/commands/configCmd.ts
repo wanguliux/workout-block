@@ -1,7 +1,9 @@
 import { getExerciseName, getMuscleName, getTrainingTypeName, resolveExerciseByName } from '../../data/display';
 import { builderToExpr } from '../../data/statExpr';
+import { countPeriodSets } from '../../data/planSchedule';
 import { ParsedArgs, UsageError } from '../args';
 import { CliEnv } from '../context';
+import { todayStr } from '../core';
 import { CONFIG_WRITE_VERBS, ConfigWriteVerb, dispatchConfigWrite } from './configWriteCmd';
 import { renderTable, printJson } from '../output';
 import { CliError } from '../vault';
@@ -97,8 +99,13 @@ export async function cmdConfig(env: CliEnv, args: ParsedArgs): Promise<void> {
         return;
       }
       const rows = plans.map((p) => {
-        const total = p.items.filter((i) => i.enabled).reduce((n, i) => n + i.sets.length, 0);
-        const done = Object.keys(p.completedSets ?? {}).length;
+        // 与插件面板 / plan list 同一口径：按「本次排期窗口」算，不数历史累计 key。
+        const { done, total } = countPeriodSets(
+          p.timeRule,
+          todayStr(),
+          p.items.filter((i) => i.enabled),
+          p.completedSets
+        );
         return [p.id, p.name, `${done}/${total}`];
       });
       console.log(renderTable(['id', '名称', '完成组/总组'], rows));

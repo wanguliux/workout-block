@@ -6,6 +6,7 @@ import { ConfigStore } from './ConfigStore';
 import { getDefaultConfig } from './seed';
 import { joinVaultPath } from './paths';
 import { rewritePlanRefInContent } from './planRefs';
+import { todayLocal } from './planSchedule';
 
 /*
  * DataManager.ts —— 插件的「数据中枢」。
@@ -24,11 +25,14 @@ import { rewritePlanRefInContent } from './planRefs';
  * 数据迁移：若 CSV 为空但旧版插件私有 data 里有 logs / config，则一次性导入 vault 文件，
  *          不丢用户在上一版测试期间产生的数据。
  */
-// 取今天日期（YYYY-MM-DD），用于完成状态打标。
+// 外部文件变更轮询间隔：记录/配置的变更频率低，5s 足以让「另一台机器同步进来的改动」
+// 在体感上几乎立刻可见；一次轮询只是两次 adapter.stat（不读文件内容），开销可忽略。
+const EXTERNAL_WATCH_INTERVAL_MS = 5000;
+
+// 取今天日期（YYYY-MM-DD），用于完成状态打标。实现统一在 planSchedule.todayLocal，
+// 避免「插件一份、CLI 一份」两个 today 在跨日边界上漂移。
 function todayStr(): string {
-  const n = new Date();
-  const pad = (x: number) => String(x).padStart(2, '0');
-  return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}`;
+  return todayLocal();
 }
 
 export class DataManager {
@@ -43,6 +47,10 @@ export class DataManager {
   private selfWriting = false;        // 自身写盘标志：写盘期间为 true
   private lastSelfWriteAt = 0;        // 最近一次自身写盘时间戳(ms)：用于 vault.on('modify') 漏判兜底
   private logsFlushTimer: number | null = null; // 记录写盘防抖定时器（合并多次删除/编辑为一次整文件写）
+  private watchTimer: number | null = null;     // 外部文件变更轮询定时器（见 startExternalWatch）
+  private watchBusy = false;                    // 轮询重入守卫（stat 是异步的，避免并发叠加）
+  private lastCsvStamp = '';                    // 上次看到的 CSV 文件指纹（mtime:size）
+  private lastConfigStamp = '';                 // 上次看到的配置文件指纹（mtime:size）
 
   constructor(plugin: Plugin) {
     this.plugin = plugin;
@@ -162,6 +170,78 @@ export class DataManager {
     await this.configStore.load();
   }
 
+  // —— 外部文件变更探测（轮询） ——
+  //
+  // 为什么要轮询而不是靠 vault.on('modify')（2026-11-22 实测根因）：
+  //   记录/配置放在 `.block/` 点开头目录，而 Obsidian 的 Vault 索引完全不含隐藏目录——
+  //   实测 `getAbstractFileByPath('.block/workout/workout_logs.csv')` 恒返回 null、
+  //   `vault.getFiles()` 里 `.block/**` 文件数为 0。既然文件根本不在索引里，
+  //   `vault.on('modify')` 对它永远不会派发，main.ts 里那段「外部改文件就重载」是死代码。
+  //   后果：另一台机器（或外部同步工具）把新记录写进 CSV 后，本机内存仍是旧快照，
+  //   UI 看不到、文件里明明有，只能重载插件/重启 Obsidian 才恢复。
+  //   解法：改走 adapter.stat 轮询文件指纹（adapter 层直读磁盘，不依赖 Vault 索引）。
+  //
+  // 两个必须守住的行为：
+  //   ① 自身写盘也会改 mtime —— 指纹变化但命中 selfWriting/刚刚写过时，只更新基线不重载
+  //     （data-changed 已做精准重渲染，重载反而浪费）；
+  //   ② 指纹用 mtime:size 而不是单独 mtime —— 部分同步工具保留源文件 mtime，
+  //     只有 size 能反映「追加了新行」。
+  private async fileStamp(path: string): Promise<string> {
+    try {
+      const st = await this.app.vault.adapter.stat(path);
+      if (!st) return '';
+      return `${st.mtime}:${st.size}`;
+    } catch {
+      return '';
+    }
+  }
+
+  // 启动外部变更轮询。onChange 在确认「非自身写入」后回调，由 main.ts 负责重渲染。
+  async startExternalWatch(onChange: (kind: 'logs' | 'config') => void): Promise<void> {
+    this.stopExternalWatch();
+    this.lastCsvStamp = await this.fileStamp(this.getCsvPath());
+    this.lastConfigStamp = await this.fileStamp(this.getConfigPath());
+    this.watchTimer = window.setInterval(() => {
+      if (this.watchBusy) return;
+      this.watchBusy = true;
+      void (async () => {
+        try {
+          const csvStamp = await this.fileStamp(this.getCsvPath());
+          const cfgStamp = await this.fileStamp(this.getConfigPath());
+          if (csvStamp === this.lastCsvStamp && cfgStamp === this.lastConfigStamp) return;
+          const csvChanged = csvStamp !== '' && csvStamp !== this.lastCsvStamp;
+          const cfgChanged = cfgStamp !== '' && cfgStamp !== this.lastConfigStamp;
+          // 无论是否自身写入，先把基线推进：避免同一处变更被下一轮重复判定。
+          this.lastCsvStamp = csvStamp;
+          this.lastConfigStamp = cfgStamp;
+          const selfWritten = this.isSelfWriting() || this.wasSelfWrittenRecently();
+          if (selfWritten) return;
+          if (csvChanged) {
+            await this.reloadLogs();
+            onChange('logs');
+          }
+          if (cfgChanged) {
+            await this.reloadConfig();
+            onChange('config');
+          }
+        } catch (e) {
+          console.error('[workout] 外部文件探测失败:', e);
+        } finally {
+          this.watchBusy = false;
+        }
+      })();
+    }, EXTERNAL_WATCH_INTERVAL_MS);
+  }
+
+  // 停止外部变更轮询（插件卸载/重载时调用，防定时器泄漏）。
+  stopExternalWatch(): void {
+    if (this.watchTimer !== null) {
+      window.clearInterval(this.watchTimer);
+      this.watchTimer = null;
+    }
+    this.watchBusy = false;
+  }
+
   // 返回记录副本，避免外部改动影响内部缓存。
   // 防御性过滤软删除 id：即便缓存意外混入已删行，渲染/统计也看不到。
   getLogs(): LogRow[] {
@@ -271,6 +351,7 @@ export class DataManager {
 
   // 插件卸载时调用：清除悬挂的防抖定时器，防止卸载后仍触发写盘。
   dispose(): void {
+    this.stopExternalWatch();
     if (this.logsFlushTimer !== null) {
       window.clearTimeout(this.logsFlushTimer);
       this.logsFlushTimer = null;
@@ -373,12 +454,27 @@ export class DataManager {
 
   // 标记某计划某训练项的某组为「已完成」（持久化到计划配置，独立于训练记录）。
   // 即使之后删除了该组产生的训练记录，完成状态仍保留——满足「完成即完成」的预期。
+  // 注意：value 写的是**实际完成日期**，渲染侧按「本次排期窗口」判定它是否算数
+  // （见 planSchedule.isCompletedInWindow）——所以这里绝不能改写成「周期起始日」。
   async markPlanSetCompleted(plan: TrainingPlanInstance, exerciseId: string, setId: string): Promise<void> {
     const config = await this.getConfig();
     const target = config.plans?.find((p) => p.id === plan.id);
     if (!target) return;
     if (!target.completedSets) target.completedSets = {};
     target.completedSets[`${exerciseId}#${setId}`] = todayStr();
+    await this.saveConfig(config);
+  }
+
+  // 撤销某组「已完成」：完成态必须可逆，否则勾错了只能手改 workout-config.json。
+  // 删除 key 而非写空串——渲染侧用 `completedSets[key]` 取值，undefined 与空串都判未完成，
+  // 但删 key 才能让「已完成组数」统计（delete/compact 类操作）干净下降。
+  async unmarkPlanSetCompleted(plan: TrainingPlanInstance, exerciseId: string, setId: string): Promise<void> {
+    const config = await this.getConfig();
+    const target = config.plans?.find((p) => p.id === plan.id);
+    if (!target?.completedSets) return;
+    const key = `${exerciseId}#${setId}`;
+    if (!(key in target.completedSets)) return;
+    delete target.completedSets[key];
     await this.saveConfig(config);
   }
 

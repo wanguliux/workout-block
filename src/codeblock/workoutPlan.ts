@@ -4,6 +4,7 @@ import { FieldDef, TrainingPlanInstance, WorkoutConfig } from '../data/types';
 import { t } from '../i18n';
 import { getExerciseNameById, getFieldUnit, getTrainingTypeName, renderFieldValue, formatTimeRule } from '../data/display';
 import { registerRenderedBlock, unregisterRenderedBlock, rerenderBlocksByType } from './registry';
+import { isCompletedInWindow, todayLocal } from '../data/planSchedule';
 import { PlanSetEditModal } from '../ui/PlanSetEditModal';
 
 /*
@@ -149,15 +150,20 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
 
   // 计算进度：完成状态来自计划配置里持久化的 completedSets（独立于训练记录），
   // 这样即使删除了该组产生的训练记录，完成状态依然保留。
-  const enabledItems = plan.items.filter((i) => i.enabled);
+  // 关键：completedSets 每组只存「一条最新完成日期」，key 里不含周期——
+  // 只判 key 是否存在会让一次勾选永久生效（排期到新的一天仍是全勾）。
+  // 因此必须按「本次排期窗口」判定：完成日期落在 (上一次排期日, 本次排期日] 内才算完成。
+  const today = todayLocal();
   const completedSets = plan.completedSets ?? {};
-  const completedKeys = new Set(Object.keys(completedSets));
+  const isDone = (exerciseId: string, setId: string): boolean =>
+    isCompletedInWindow(plan.timeRule, today, completedSets[`${exerciseId}#${setId}`]);
+  const enabledItems = plan.items.filter((i) => i.enabled);
   let totalSets = 0;
   let doneSets = 0;
   for (const item of enabledItems) {
     for (const set of item.sets) {
       totalSets++;
-      if (completedKeys.has(`${item.exerciseId}#${set.id}`)) doneSets++;
+      if (isDone(item.exerciseId, set.id)) doneSets++;
     }
   }
 
@@ -204,7 +210,7 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
     setsEl.addClass('workout-plan-sets');
 
     item.sets.forEach((set, sidx) => {
-      const isCompleted = completedKeys.has(`${item.exerciseId}#${set.id}`);
+      const isCompleted = isDone(item.exerciseId, set.id);
       const row = setsEl.createDiv();
       row.addClass('workout-row', 'workout-plan-set');
       if (isCompleted) row.addClass('is-completed');
@@ -218,6 +224,23 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
         const done = row.createEl('span', { cls: 'workout-plan-done', attr: { 'aria-label': t('codeblock.plan.completed') } });
         setIcon(done, 'check');
         done.createSpan({ text: t('codeblock.plan.completed') });
+        // 撤销按钮：勾错了要能改回来。旧实现这里只渲染标签，一旦勾上就再也取消不了，
+        // 只能手改 workout-config.json 里的 completedSets——完成态必须可逆。
+        // 默认隐藏、行 hover 才显，避免已完成行比未完成行更吵。
+        const undoWrap = row.createEl('span', { cls: 'workout-plan-set-actions workout-plan-undo-wrap' });
+        const undoBtn = undoWrap.createEl('button', { cls: 'workout-icon-btn', attr: { 'aria-label': t('codeblock.plan.undo') } });
+        setIcon(undoBtn, 'undo-2');
+        undoBtn.addEventListener('click', () => {
+          void (async () => {
+            try {
+              await dataManager.unmarkPlanSetCompleted(plan, item.exerciseId, set.id);
+              rerenderBlocksByType('workout-plan');
+            } catch (e) {
+              console.error('[workout] 撤销计划组完成失败:', e);
+              new Notice(t('codeblock.plan.undoFailed'));
+            }
+          })();
+        });
       } else {
         // 操作区：图标化编辑 / 完成按钮
         const actions = row.createEl('span', { cls: 'workout-plan-set-actions' });

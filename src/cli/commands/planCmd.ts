@@ -5,6 +5,7 @@ import { TrainingPlanInstance } from '../../data/types';
 import { generateId } from '../../util/id';
 import { logRowToCsvLine } from '../../data/csvFormat';
 import { countWorkoutLogBlocks, extractSchemeExercisesFromContent } from '../../data/schemeRules';
+import { countPeriodSets } from '../../data/planSchedule';
 import { ParsedArgs, requireOption, UsageError } from '../args';
 import { CliEnv, takenIds } from '../context';
 import { assertDate, formatTimestamp, todayStr, uniqueId } from '../core';
@@ -56,9 +57,17 @@ async function planList(env: CliEnv, args: ParsedArgs): Promise<void> {
     console.log('（暂无训练计划）');
     return;
   }
+  const today = todayStr();
   const rows = plans.map((p) => {
-    const total = p.items.filter((i) => i.enabled).reduce((n, i) => n + i.sets.length, 0);
-    const done = Object.keys(p.completedSets ?? {}).length;
+    // 完成组按「本次排期窗口」算，与插件面板同一口径。
+    // 旧实现直接数 completedSets 的 key 个数＝历史累计值，会冒出 done > total、
+    // 或新周期根本没练却显示已完成的问题。
+    const { done, total } = countPeriodSets(
+      p.timeRule,
+      today,
+      p.items.filter((i) => i.enabled),
+      p.completedSets
+    );
     return [p.name, p.id, formatTimeRule(p.timeRule), `${done}/${total}`];
   });
   console.log(renderTable(['名称', 'id', '时间', '完成组/总组'], rows));

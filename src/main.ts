@@ -280,6 +280,10 @@ export default class WorkoutPlugin extends Plugin {
       rerenderBlocksByType('workout-log');
     });
 
+    // 说明（2026-11-22 实测）：数据文件在 `.block/` 隐藏目录，Obsidian 的 Vault 索引
+    // 完全不含隐藏目录（getAbstractFileByPath 恒 null、getFiles 里 `.block/**` 为 0），
+    // 所以下面这个 modify 监听对 CSV/配置永远不会触发——它是死代码，保留只为将来
+    // 数据目录若迁出隐藏目录时能自动恢复能力。真正生效的是紧随其后的 adapter 轮询。
     this.registerEvent(
       this.app.vault.on('modify', async (file) => {
         try {
@@ -301,6 +305,16 @@ export default class WorkoutPlugin extends Plugin {
         }
       })
     );
+
+    // 外部文件变更轮询（跨机同步 / 外部编辑器改盘的唯一可靠入口）。
+    // 数据在隐藏目录 → vault 事件不可用，只能靠 adapter.stat 比对文件指纹。
+    void this.dataManager.startExternalWatch((kind) => {
+      rerenderAllBlocks();
+      rerenderBlocksByType('workout-day');
+      rerenderBlocksByType('workout-heatmap');
+      if (kind === 'config') rerenderBlocksByType('workout-plan');
+      this.notifyDecisionChanged();
+    });
   }
 
   /**
