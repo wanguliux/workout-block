@@ -565,8 +565,16 @@ export class NewPlanModal extends Modal {
       invalidateSchemeCache();
       new Notice(this.editPlan ? t('modal.newPlan.updated') : t('modal.newPlan.saved'));
       this.close();
-    } catch {
-      new Notice(t('modal.newPlan.saveFailed'));
+    } catch (e) {
+      // 重名在 save() 入口已拦（isPlanNameTaken），这里兜的是并发/其他路径漏网：
+      // upsertPlan 会用 PLAN_NAME_EXISTS 兜底拒绝，提示复用同一文案。
+      // 其他失败保持笼统文案，避免把内部异常细节抛给用户。
+      const msg = e instanceof Error ? e.message : '';
+      new Notice(
+        msg.startsWith('PLAN_NAME_EXISTS:')
+          ? t('modal.newPlan.nameDuplicate')
+          : t('modal.newPlan.saveFailed')
+      );
     }
   }
 

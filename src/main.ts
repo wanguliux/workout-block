@@ -10,6 +10,7 @@ import { renderWorkoutPlan } from './codeblock/workoutPlan';
 import { renderWorkoutRecovery } from './codeblock/workoutRecovery';
 import { LogRow, FieldDef, WorkoutConfig } from './data/types';
 import { applyMappingTier } from './data/muscleMapping';
+import { todayLocal } from './data/planSchedule';
 import { RecordModal } from './ui/RecordModal';
 import { confirmWithModal } from './ui/Confirm';
 import { NewPlanModal } from './ui/NewPlanModal';
@@ -72,6 +73,7 @@ export default class WorkoutPlugin extends Plugin {
     this.registerCodeBlocks();     // ```workout-log 代码块的接管渲染
     this.registerSettingsTab();    // 设置页
     this.registerEventListeners(); // 数据变化 / 文件修改时的自动刷新
+    this.registerDayRollover();    // 跨午夜后按新「今天」重算排期窗口
 
     // 决策中心接入：注册 contributor + queries/ 文件总线 + 过期文件清理
     this.initDecisionCenterIntegration();
@@ -249,6 +251,26 @@ export default class WorkoutPlugin extends Plugin {
   private registerSettingsTab(): void {
     this.settingsTab = new SettingsTab(this.app, this, this.dataManager);
     this.addSettingTab(this.settingsTab);
+  }
+
+  /**
+   * 跨天自动刷新：完成态按「今天的排期窗口」判定，但渲染结果是静态快照。
+   * 开着 Obsidian 跨过午夜后，面板仍按昨天的窗口显示——今天该练的组还挂着昨天的已勾状态。
+   * 每分钟比对一次本地日期（一天只有一次真正触发），变了就重渲染依赖「今天」的三类块。
+   * 用 registerInterval 而非裸 timer：插件卸载时 Obsidian 自动清理，不会泄漏。
+   */
+  private registerDayRollover(): void {
+    let watchingDay = todayLocal();
+    this.registerInterval(
+      window.setInterval(() => {
+        const now = todayLocal();
+        if (now === watchingDay) return;
+        watchingDay = now;
+        rerenderBlocksByType('workout-plan');
+        rerenderBlocksByType('workout-day');
+        rerenderBlocksByType('workout-heatmap');
+      }, 60_000)
+    );
   }
 
   private registerEventListeners(): void {

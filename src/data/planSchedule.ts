@@ -41,14 +41,6 @@ export function cycleLength(rule: TimeRule): number {
   return Number.isFinite(n) && n >= 1 ? n : 1;
 }
 
-/** day 落在第几个循环（0 起）；早于起始日期或无起始日期返回 -1。 */
-export function cycleIndexOn(rule: TimeRule, day: string): number {
-  if (!rule.cycleStart) return -1;
-  const diff = dayDiff(rule.cycleStart, day);
-  if (diff < 0) return -1;
-  return Math.floor(diff / cycleLength(rule));
-}
-
 /** 某计划时间规则在指定日期是否排期。 */
 export function planMatchesDay(rule: TimeRule, day: string): boolean {
   switch (rule.type) {
@@ -63,26 +55,6 @@ export function planMatchesDay(rule: TimeRule, day: string): boolean {
     }
     default:
       return false;
-  }
-}
-
-/**
- * 完成态归属的周期键（同键即同一周期，用于「本周期内是否已完成」判定）：
- *  - date  ：当天；
- *  - weekday：所在 ISO 周的周一；
- *  - cycle ：所在循环的起始日。
- */
-export function planPeriodKey(rule: TimeRule, day: string): string {
-  switch (rule.type) {
-    case 'weekday':
-      return shiftDay(day, -(isoWeekdayOf(day) - 1));
-    case 'cycle': {
-      const idx = cycleIndexOn(rule, day);
-      if (idx < 0) return day;
-      return shiftDay(rule.cycleStart as string, idx * cycleLength(rule));
-    }
-    default:
-      return day;
   }
 }
 
@@ -109,11 +81,15 @@ export function todayLocal(now: Date = new Date()): string {
  * 当前排期窗口：最近一个「≤ day」的排期日（current）与它之前的那一个（previous，可能不存在）。
  *
  * 用途＝判定「本次排期做完了没」。完成态 `completedSets` 每组只存**一条**完成日期（最新一次），
- * 因此不能拿「key 存在」当已完成（那会让一次勾选永久生效），必须问：
- * 这条完成日期是否落在 (previous, current] 这个半开区间里——在，才算「本次排期已完成」。
+ * 因此不能拿「key 存在」当已完成（那会让一次勾选永久生效）。
+ *
+ * 为什么窗口下界用 previous（上一次排期日）而不是「本周一 / 本周期起始日」：
+ *   weekday 规则允许一周排两次（如周三+周六）。若拿「所在周的周一」当周期键，
+ *   周三勾过之后，周六会看到「本周一那个周期已完成」→ 再次显示全勾，等于没修。
+ *   取「上一次排期日」才能让周六从干净状态开始。
  *
  * 例：weekday=[3,6]（周三/周六练），今天周六 → current=周六、previous=周三；
- *     完成日期=周三 → 不在窗口内 → 未完成（正确：周六还没练）。
+ *     完成日期=周三 → 落在 (周三, 周六] 的左边外侧 → 未完成（正确：周六还没练）。
  *     今天周五（非排期日）→ current=周三、previous=上周六；完成日期=周三 → 在窗口内 → 已完成。
  */
 export function scheduledWindow(rule: TimeRule, day: string): { current?: string; previous?: string } {
@@ -129,8 +105,9 @@ export function scheduledWindow(rule: TimeRule, day: string): { current?: string
   }
   if (rule.type === 'date') {
     const d = rule.date ?? '';
-    // 指定日期未到 → 还没进入窗口（提前几天不该显示已完成）。
-    if (!d || d > day) return {};
+    // 一次性计划：不判「日期是否已到」——用户可能提前几天把这次练了，
+    // 那种完成必须能显示出来（判 d > day 会让提前完成的勾选直接消失）。
+    if (!d) return {};
     return { current: d };
   }
   // weekday：一周至少一个排期日，往前扫 15 天必然收齐两个。
@@ -145,13 +122,19 @@ export function scheduledWindow(rule: TimeRule, day: string): { current?: string
 
 /**
  * 某组是否「在本次排期窗口内已完成」。
- * completedDate 为空 / 当前无排期 / 完成日期早于窗口下界 / 晚于窗口上界 → 均判未完成。
+ *
+ * 窗口 = (previous, day]，**上界取「今天」而不是「本次排期日」**。这不是随手写的：
+ * 排期日之外点「完成」（提前练、或补昨天的账）写入的日期会晚于本次排期日 current，
+ * 若拿 current 当上界，用户点完立刻显示未完成——勾不上，比不修还糟。
+ *
+ * completedDate 为空 / 当前无排期 / 完成日期早于等于窗口下界 / 晚于今天 → 均判未完成。
  */
 export function isCompletedInWindow(rule: TimeRule, day: string, completedDate?: string): boolean {
   if (!completedDate) return false;
   const { current, previous } = scheduledWindow(rule, day);
+  // 无排期的规则（weekdays 为空 / cycle 缺起始日 / date 缺日期）→ 不判已完成。
   if (!current) return false;
-  if (completedDate > current) return false;
+  if (completedDate > day) return false;
   if (previous && completedDate <= previous) return false;
   return true;
 }

@@ -231,6 +231,8 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
         const undoBtn = undoWrap.createEl('button', { cls: 'workout-icon-btn', attr: { 'aria-label': t('codeblock.plan.undo') } });
         setIcon(undoBtn, 'undo-2');
         undoBtn.addEventListener('click', () => {
+          if (undoBtn.disabled) return;
+          undoBtn.disabled = true;
           void (async () => {
             try {
               await dataManager.unmarkPlanSetCompleted(plan, item.exerciseId, set.id);
@@ -238,6 +240,9 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
             } catch (e) {
               console.error('[workout] 撤销计划组完成失败:', e);
               new Notice(t('codeblock.plan.undoFailed'));
+            } finally {
+              // 成功路径会被整块重渲染（节点已脱离文档），只在节点还在时才复位
+              if (undoBtn.isConnected) undoBtn.disabled = false;
             }
           })();
         });
@@ -264,6 +269,10 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
         const completeBtn = actions.createEl('button', { cls: 'workout-icon-btn workout-icon-btn-success', attr: { 'aria-label': t('codeblock.plan.complete') } });
         setIcon(completeBtn, 'check');
         completeBtn.addEventListener('click', () => {
+          // 连点守卫：一次点击要写两处（完成态 + 一条训练记录），两步都是异步落盘。
+          // 不禁用按钮的话手快会连着写两条训练记录（完成态因 key 相同而幂等，记录不会）。
+          if (completeBtn.disabled) return;
+          completeBtn.disabled = true;
           void (async () => {
             try {
               // 1) 持久化「已完成」状态到计划配置（独立于训练记录，删除记录不影响）
@@ -283,6 +292,9 @@ function renderPanel(el: HTMLElement, dataManager: DataManager, plan: TrainingPl
               console.error('[workout] 计划组标记完成失败:', e);
               new Notice(t('codeblock.plan.completePartial'));
               rerenderBlocksByType('workout-plan');
+            } finally {
+              // 成功路径会被整块重渲染（节点已脱离文档），只在节点还在时才复位
+              if (completeBtn.isConnected) completeBtn.disabled = false;
             }
           })();
         });

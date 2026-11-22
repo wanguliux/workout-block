@@ -653,6 +653,15 @@ export class DataManager {
     // 2) 移除训练项本身并落盘（saveConfig 会广播 config-changed，触发项目列表与代码块刷新）
     const config = await this.getConfig();
     config.exercises = config.exercises.filter((e) => e.id !== id);
+    // 3) 清理各计划里属于该训练项的完成态：key = `${exerciseId}#${setId}`。
+    //    不清会留下永不匹配的僵尸 key——虽然不影响渲染（按 set 遍历），但会随配置无限累积，
+    //    且「已完成组数」这类按 key 计数的统计会被虚高。
+    for (const p of config.plans ?? []) {
+      if (!p.completedSets) continue;
+      for (const key of Object.keys(p.completedSets)) {
+        if (key.startsWith(`${id}#`)) delete p.completedSets[key];
+      }
+    }
     await this.saveConfig(config);
   }
 
@@ -696,10 +705,15 @@ export class DataManager {
     return (config.plans ?? []).some((p) => p.name === name && p.id !== exceptId);
   }
 
-  // 新增或更新计划：以 name 为主键（全局唯一）。已存在则覆盖，否则追加。
+  // 新增或更新计划：以稳定的 id 为主键（不是 name）。
+  // 名称必须全局唯一——workout-plan 代码块用 `plan: 名称` 定位计划，
+  // 同名时 find() 只会命中第一条，第二条永远选不到（成了看不见的孤儿）。
+  // 冲突时抛 PLAN_NAME_EXISTS:<name>，由 UI 层翻译成提示（CLI 侧有自己的 assertPlanNameFree）。
   async upsertPlan(plan: TrainingPlanInstance): Promise<void> {
     const config = await this.getConfig();
     if (!config.plans) config.plans = [];
+    const clash = config.plans.find((p) => p.id !== plan.id && p.name === plan.name.trim());
+    if (clash) throw new Error(`PLAN_NAME_EXISTS:${plan.name.trim()}`);
     // 以稳定的 id 为主键（而非 name）。编辑计划时若改名，按 name 匹配会找不到旧条目、
     // 导致新增一条同 id 的重复计划、旧条目残留（配置损坏）；按 id 匹配则原地更新。
     const idx = config.plans.findIndex((p) => p.id === plan.id);
