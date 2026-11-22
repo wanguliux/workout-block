@@ -9,7 +9,10 @@ import {
   applyMuscleDelete, applyMuscleUpdate,
   applyStatDelete, applyStatUpdate,
   applyTypeDelete, applyTypeUpdate,
-  parseBuilderSpec, parseFieldDefsJson, parseMuscleSpecs,
+  clampGrowthWindowDays,
+  parseBuilderSpec, parseFieldDefsJson, parseLevelsJson, parseMuscleSpecs, parseRecoveryJson,
+  resolveStatIndex,
+  type MusclePatch,
 } from '../configOps';
 import { printJson } from '../output';
 import { CliError } from '../vault';
@@ -71,7 +74,7 @@ function locateTypeId(env: CliEnv, idOrName: string): string {
 // ===== 训练项 =====
 
 async function addExerciseCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
-  const name = requireOption(args, 'name', 'config add-exercise --name <名称> --category <类型id> [--id <id>] [--muscle <肌肉id>:primary|secondary ...]');
+  const name = requireOption(args, 'name', 'config add-exercise --name <名称> --category <类型id> [--id <id>] [--muscle <肌肉id>:primary|secondary[:练度] ...]');
   const category = locateTypeId(env, requireOption(args, 'category', 'config add-exercise --name <名称> --category <类型id>'));
   const muscles = parseMuscleSpecs(args.repeated['muscle'] ?? [], env.config);
   const exercise = addExercise(env.config, { id: args.options['id'], name, category, muscles });
@@ -81,7 +84,7 @@ async function addExerciseCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
 }
 
 async function updateExerciseCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
-  const id = locateExerciseId(env, requireOption(args, 'exercise', 'config update-exercise --exercise <名称或id> [--new-id ...] [--name ...] [--category ...] [--muscle ...] [--clear-muscles]'));
+  const id = locateExerciseId(env, requireOption(args, 'exercise', 'config update-exercise --exercise <名称或id> [--new-id ...] [--name ...] [--category ...] [--muscle <肌肉id>:primary|secondary[:练度] ...] [--clear-muscles]'));
   const patch: Parameters<typeof applyExerciseUpdate>[2] = { id };
   if (args.options['new-id']) patch.newId = args.options['new-id'];
   if (args.options['name']) patch.name = args.options['name'];
@@ -146,13 +149,84 @@ async function deleteTypeCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
 
 // ===== 肌肉 =====
 
+// 「值或 none」通用解析：undefined=未提供；none=清除（回到跟随默认）。
+function valueOrNone(raw: string | undefined, opt: string): string | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === 'none') return null;
+  return raw;
+}
+
+// 「整数或 none」：发展视图时间窗用（写存储值前按消费端规则夹紧 7–730，保证存的就是生效值）。
+function intOrNone(raw: string | undefined, opt: string): number | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === 'none') return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) throw new UsageError(`--${opt} 需要整数或 none，收到 "${raw}"`);
+  return clampGrowthWindowDays(n);
+}
+
+// 热力图时间窗：镜像 dateWithinRange 的合法写法（\d+d? / all / 起止..止），其余直接报错
+// （消费端对未知写法按「不过滤」处理，写错等于没写——CLI 选择 fail fast）。
+function parseHeatmapRange(raw: string | undefined): string | null | undefined {
+  if (raw === undefined) return undefined;
+  if (raw === 'none') return null;
+  const s = raw.trim();
+  if (/^\d+d?$/i.test(s)) return s;
+  if (s === 'all') return s;
+  if (s.includes('..')) {
+    const [a, b] = s.split('..').map((x) => x.trim());
+    const start = assertDateOpt(a, '--heatmap-range 起始日期');
+    const end = assertDateOpt(b, '--heatmap-range 结束日期');
+    return `${start}..${end}`;
+  }
+  throw new UsageError(`--heatmap-range 支持 天数（如 7d/30）、all 或 "YYYY-MM-DD..YYYY-MM-DD"，收到 "${raw}"`);
+}
+
+function assertDateOpt(raw: string, what: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw new UsageError(`${what} 应为 YYYY-MM-DD，收到 "${raw}"`);
+  }
+  return raw;
+}
+
+/** 肌肉扩展配置的 CLI 选项 → MusclePatch 扩展字段（add/update 共用）。 */
+function parseMuscleExt(env: CliEnv, args: ParsedArgs): Partial<MusclePatch> {
+  const patch: Partial<MusclePatch> = {};
+  const metric = valueOrNone(args.options['heatmap-metric'], 'heatmap-metric');
+  if (metric !== undefined) {
+    if (metric === null) patch.heatmapMetric = null;
+    else {
+      const idx = resolveStatIndex(env.config, metric);
+      if (idx === -1) {
+        const names = env.config.statistics.map((s) => `${s.name}(${s.id})`).join('、');
+        throw new CliError(`找不到统计项 "${metric}"。现有统计：${names || '（无）'}`);
+      }
+      patch.heatmapMetric = env.config.statistics[idx].id;
+    }
+  }
+  const range = parseHeatmapRange(args.options['heatmap-range']);
+  if (range !== undefined) patch.heatmapRange = range;
+  const heatLevels = valueOrNone(args.options['heatmap-levels-json'], 'heatmap-levels-json');
+  if (heatLevels !== undefined) patch.heatmapLevels = heatLevels === null ? null : parseLevelsJson(heatLevels, 'heatmap-levels-json');
+  const growthLevels = valueOrNone(args.options['growth-levels-json'], 'growth-levels-json');
+  if (growthLevels !== undefined) patch.growthLevels = growthLevels === null ? null : parseLevelsJson(growthLevels, 'growth-levels-json');
+  const recent = intOrNone(args.options['growth-recent-days'], 'growth-recent-days');
+  if (recent !== undefined) patch.growthRecentDays = recent;
+  const baseline = intOrNone(args.options['growth-baseline-days'], 'growth-baseline-days');
+  if (baseline !== undefined) patch.growthBaselineDays = baseline;
+  const recovery = valueOrNone(args.options['recovery-json'], 'recovery-json');
+  if (recovery !== undefined) patch.recovery = recovery === null ? null : parseRecoveryJson(recovery);
+  return patch;
+}
+
 async function addMuscleCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
-  const name = requireOption(args, 'name', 'config add-muscle --name <名称> [--id ...] [--rest-days N] [--svg-ids a,b]');
+  const name = requireOption(args, 'name', 'config add-muscle --name <名称> [--id ...] [--rest-days N] [--svg-ids a,b] [--heatmap-metric <统计|none>] [--heatmap-range <7d|30|all|起..止|none>] [--heatmap-levels-json JSON] [--growth-levels-json JSON] [--growth-recent-days N] [--growth-baseline-days N] [--recovery-json JSON]');
   const muscle = addMuscle(env.config, {
     id: args.options['id'],
     name,
     restThresholdDays: args.options['rest-days'] !== undefined ? parseInt(args.options['rest-days'], 10) : undefined,
     svgRegionIds: args.options['svg-ids'] !== undefined ? parseCommaList(args.options['svg-ids']) : undefined,
+    ...parseMuscleExt(env, args),
   });
   await saveConfig(env);
   if (args.flags.has('json')) return printJson(muscle);
@@ -170,12 +244,13 @@ function muscleTarget(args: ParsedArgs, usage: string): string {
 }
 
 async function updateMuscleCmd(env: CliEnv, args: ParsedArgs): Promise<void> {
-  const id = muscleTarget(args, 'config update-muscle --muscle <id> [--name ...] [--rest-days ...] [--svg-ids ...]');
+  const id = muscleTarget(args, 'config update-muscle --muscle <id> [--name ...] [--rest-days ...] [--svg-ids ...] [--heatmap-metric ...] [--heatmap-range ...] [--heatmap-levels-json ...] [--growth-levels-json ...] [--growth-recent-days ...] [--growth-baseline-days ...] [--recovery-json ...]');
   const muscle = applyMuscleUpdate(env.config, {
     id,
     name: args.options['name'],
     restThresholdDays: args.options['rest-days'] !== undefined ? parseInt(args.options['rest-days'], 10) : undefined,
     svgRegionIds: args.options['svg-ids'] !== undefined ? parseCommaList(args.options['svg-ids']) : undefined,
+    ...parseMuscleExt(env, args),
   });
   await saveConfig(env);
   if (args.flags.has('json')) return printJson(muscle);

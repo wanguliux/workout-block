@@ -10,6 +10,7 @@ import {
   formatTimestamp,
   inDateRange,
   normalizeTimestamp,
+  parseFieldValue,
   sortLogsDesc,
   uniqueId,
 } from '../core';
@@ -17,13 +18,14 @@ import { logSummary, printJson } from '../output';
 import { CliError } from '../vault';
 
 /*
- * recordCmd.ts —— 训练记录的增查删：add / list / delete / compact。
+ * recordCmd.ts —— 训练记录的增改查删：add / update / list / delete / compact。
  *
  * 写语义与插件逐条对齐：
- *  - add   ≈ DataManager.addLog：生成唯一 id（避开已删 id）、默认当前时间戳、
- *            O(1) 追加 CSV 行（不整文件重写）；
- *  - delete≈ DataManager.deleteLog：软删除——只追加墓碑行，不改既有数据行；
- *  - compact≈ DataManager.compactLogs：以存活记录整体重写，清掉墓碑与残留行。
+ *  - add    ≈ DataManager.addLog：生成唯一 id（避开已删 id）、默认当前时间戳、
+ *             O(1) 追加 CSV 行（不整文件重写）；
+ *  - update ≈ DataManager.updateLog（RecordModal 编辑模式）：改中间行 → 整文件原子重写；
+ *  - delete ≈ DataManager.deleteLog：软删除——只追加墓碑行，不改既有数据行；
+ *  - compact ≈ DataManager.compactLogs：以存活记录整体重写，清掉墓碑与残留行。
  */
 
 /** 从 --field k=v（可重复）与位置参数 k=v 收集字段输入。 */
@@ -163,6 +165,109 @@ export async function cmdAdd(env: CliEnv, args: ParsedArgs): Promise<void> {
   for (const row of newRows) {
     console.log(`已记录 [${row.id}] ${logSummary(row, env.config, env.settings.unit)}`);
   }
+}
+
+/** update：编辑一条已有记录（镜像插件 RecordModal 编辑模式 + DataManager.updateLog 的整行改写）。
+ *  合并语义：只改提供的项，未提供的字段/备注/时间保持原值；
+ *  换训练项时 category 级联跟随，字段校验基准切到新类型且必填必须齐备。 */
+export async function cmdUpdate(env: CliEnv, args: ParsedArgs): Promise<void> {
+  const id = requireOption(
+    args,
+    'id',
+    'workout-cli update --id <记录id> [--exercise <名或id>] [--time "YYYY-MM-DD HH:mm"] [--note 文字 | --clear-note] [--plan 计划名 | --clear-plan] [key=value ...] [--field key=value ...]'
+  );
+  const index = env.logs.findIndex((l) => l.id === id);
+  if (index === -1) {
+    throw new CliError(`找不到 id 为 "${id}" 的存活记录（可能已删除；用 list 查看现有记录）`);
+  }
+  const row = env.logs[index];
+  const updates: Partial<LogRow> = {};
+
+  // 训练项：可换；换后 category 级联跟随、字段校验基准切到新类型
+  let typeFields: FieldDef[];
+  if (args.options['exercise']) {
+    const exercise = resolveExerciseByName(env.config, args.options['exercise']);
+    if (!exercise) {
+      throw new CliError(`找不到训练项 "${args.options['exercise']}"，请先用 resolve 命令确认可用名称`);
+    }
+    const type = env.config.trainingTypes.find((t) => t.id === exercise.category);
+    if (!type) {
+      throw new CliError(`训练项 ${exercise.id} 引用的训练类型 ${exercise.category} 不存在于配置中`);
+    }
+    updates.exerciseId = exercise.id;
+    updates.category = exercise.category;
+    typeFields = type.fields;
+  } else {
+    const type = env.config.trainingTypes.find((t) => t.id === row.category);
+    if (!type) {
+      throw new CliError(`记录 ${id} 所属训练类型 ${row.category} 不存在于配置中`);
+    }
+    typeFields = type.fields;
+  }
+
+  // 时间：与 add 同一套 normalizeTimestamp
+  if (args.options['time']) updates.timestamp = normalizeTimestamp(args.options['time']);
+
+  // 备注：--note（空串视为清空）或 --clear-note
+  if (args.flags.has('clear-note')) updates.note = undefined;
+  else if (args.options['note'] !== undefined) updates.note = args.options['note'] || undefined;
+
+  // 计划：与 add 一致存计划显示名；--clear-plan 清空
+  if (args.flags.has('clear-plan')) updates.plan = undefined;
+  else if (args.options['plan']) {
+    const wanted = args.options['plan'];
+    const plan = (env.config.plans ?? []).find((p) => p.name === wanted || p.id === wanted);
+    if (!plan) {
+      throw new CliError(`找不到训练计划 "${wanted}"，可用 plan list 查看`);
+    }
+    updates.plan = plan.name;
+  }
+
+  // 字段：合并语义——提供的 key 覆盖、空串移除该 key（必填不可移除）、未提供的保持原值
+  const fieldInput = collectFieldInput(args, 0);
+  const known = new Map(typeFields.map((f) => [f.key, f]));
+  for (const key of Object.keys(fieldInput)) {
+    if (!known.has(key)) {
+      throw new CliError(
+        `未知字段 "${key}"。该训练类型支持的字段：${typeFields.map((f) => f.key).join(', ') || '（无）'}`
+      );
+    }
+  }
+  if (Object.keys(fieldInput).length > 0 || updates.exerciseId !== undefined) {
+    const merged: Record<string, unknown> = { ...row.fields };
+    for (const [key, raw] of Object.entries(fieldInput)) {
+      const f = known.get(key)!;
+      if (raw.trim() === '') {
+        if (f.required) throw new CliError(`字段 "${key}" 是必填项，不能清空`);
+        delete merged[key];
+      } else {
+        merged[key] = parseFieldValue(f, raw, env.settings.unit);
+      }
+    }
+    // 编辑后必填必须齐备（与插件编辑弹窗保存校验同义）
+    for (const f of typeFields) {
+      if (!f.required) continue;
+      const v = merged[f.key];
+      if (v === undefined || v === null || v === '') {
+        throw new CliError(`缺少必填字段 "${f.key}"（编辑后必须齐备：补 ${f.key}=... 或不要换训练项）`);
+      }
+    }
+    // 计算字段由公式动态求值，不落库（历史行如有残留一并剔除）
+    for (const f of typeFields) {
+      if (f.inputType === 'computed') delete merged[f.key];
+    }
+    updates.fields = merged;
+  }
+
+  const updated: LogRow = { ...row, ...updates };
+  env.logs[index] = updated;
+  // 镜像 updateLog：改中间行 → 整文件原子重写
+  await env.vault.writeAtomic(env.vault.csvPath(env.settings), logsToCsv(env.logs) + '\n');
+
+  if (args.flags.has('json')) {
+    return printJson({ updated });
+  }
+  console.log(`已更新 [${updated.id}] ${logSummary(updated, env.config, env.settings.unit)}`);
 }
 
 /** list：按训练项/日期区间查询记录（默认最新在前，最多 50 条）。 */

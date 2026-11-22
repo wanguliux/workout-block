@@ -2,8 +2,10 @@ import {
   Exercise,
   ExerciseMuscle,
   FieldDef,
+  HeatmapLevel,
   LogRow,
   Muscle,
+  RecoveryTuning,
   StatAggregation,
   StatDef,
   StatGranularity,
@@ -74,12 +76,37 @@ export interface ExerciseInput {
   muscles?: ExerciseMuscle[];
 }
 
-/** 校验 --muscle 参数（muscleId:role），肌肉必须存在。 */
+/** 校验 --muscle 参数（muscleId:role[:weight]），肌肉必须存在。
+ *  练度系数 weight 可选（三段式，如 squat:secondary:0.3）——与插件「编辑训练项」里
+ *  肌肉名称右侧的数字框同义：一条记录算几组，留空按 role 取全局默认（主 1 / 辅 0.5）。 */
 export function parseMuscleSpecs(specs: string[], config: WorkoutConfig): ExerciseMuscle[] {
   return specs.map((spec) => {
-    const sep = spec.lastIndexOf(':');
-    const muscleId = (sep >= 0 ? spec.slice(0, sep) : spec).trim();
-    const role = sep >= 0 ? spec.slice(sep + 1).trim() : 'primary';
+    let rest = spec.trim();
+    let weight: number | undefined;
+    // 三段式识别：从右往左，若末段是数字、且倒数第二段是合法角色，则末段为练度
+    const wSep = rest.lastIndexOf(':');
+    if (wSep >= 0) {
+      const tail = rest.slice(wSep + 1).trim();
+      const head = rest.slice(0, wSep);
+      const rSep = head.lastIndexOf(':');
+      const maybeRole = rSep >= 0 ? head.slice(rSep + 1).trim() : '';
+      if (
+        rSep >= 0 &&
+        (maybeRole === 'primary' || maybeRole === 'secondary') &&
+        tail !== '' &&
+        Number.isFinite(Number(tail))
+      ) {
+        const w = Number(tail);
+        if (!(w > 0)) {
+          throw new CliError(`练度系数必须为正数，收到 "${tail}"（写法：--muscle <肌肉id>:primary|secondary:<正数>）`);
+        }
+        weight = w;
+        rest = head.slice(0, rSep);
+      }
+    }
+    const sep = rest.lastIndexOf(':');
+    const muscleId = (sep >= 0 ? rest.slice(0, sep) : rest).trim();
+    const role = sep >= 0 ? rest.slice(sep + 1).trim() : 'primary';
     if (!config.muscles.some((m) => m.id === muscleId)) {
       const names = config.muscles.map((m) => m.id).join(', ');
       throw new CliError(`肌肉 "${muscleId}" 不存在（现有：${names || '无'}）`);
@@ -87,7 +114,7 @@ export function parseMuscleSpecs(specs: string[], config: WorkoutConfig): Exerci
     if (role !== 'primary' && role !== 'secondary') {
       throw new CliError(`肌肉角色只能是 primary / secondary，收到 "${role}"（写法：--muscle ${muscleId}:primary）`);
     }
-    return { muscleId, role };
+    return weight !== undefined ? { muscleId, role, weight } : { muscleId, role };
   });
 }
 
@@ -370,12 +397,114 @@ export function applyTypeDelete(config: WorkoutConfig, id: string): { orphanExer
 
 // ===== 肌肉（Muscle） =====
 
+// —— 肌肉扩展配置的纯解析层（热力图指标/时间窗/色标、发展视图窗口与色标、恢复曲线微调）——
+// 与插件「编辑肌肉」弹窗（MuscleEditModal）的字段面一一对应；全部支持 null = 清除、回到「跟随默认」。
+
 export interface MuscleInput {
   id?: string;
   name: string;
   contributesToCoverage?: boolean;
   restThresholdDays?: number;
   svgRegionIds?: string[];
+  heatmapMetric?: string | null;
+  heatmapRange?: string | null;
+  heatmapLevels?: HeatmapLevel[] | null;
+  growthLevels?: HeatmapLevel[] | null;
+  growthRecentDays?: number | null;
+  growthBaselineDays?: number | null;
+  recovery?: RecoveryTuning | null;
+}
+
+/** 校验色标数组 JSON（HeatmapLevel[]）：[{color,max?}]，至少一档，color 非空，max 为有限正数。 */
+export function parseLevelsJson(raw: string, what: string): HeatmapLevel[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    throw new CliError(`--${what} 不是合法 JSON：${(e as Error).message}`);
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new CliError(`--${what} 必须是非空数组，如 [{"color":"#22c55e","max":10}]（末档可省 max 表示 +∞）`);
+  }
+  return parsed.map((item, i) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new CliError(`--${what}[${i}] 不是对象`);
+    }
+    const o = item as Record<string, unknown>;
+    if (typeof o.color !== 'string' || !o.color.trim()) {
+      throw new CliError(`--${what}[${i}].color 必须是非空字符串`);
+    }
+    const level: HeatmapLevel = { color: o.color.trim() };
+    if (o.max !== undefined && o.max !== null) {
+      const max = Number(o.max);
+      if (!Number.isFinite(max) || max <= 0) {
+        throw new CliError(`--${what}[${i}].max 必须是正数，收到 "${String(o.max)}"`);
+      }
+      level.max = max;
+    }
+    return level;
+  });
+}
+
+const RECOVERY_NUMBER_KEYS = [
+  'fatiguePerSet',
+  'fatigueTau',
+  'fitnessPerSet',
+  'fitnessTau',
+  'detrainDepth',
+  'detrainTau',
+  'detrainRef',
+] as const;
+
+/** 解析恢复曲线微调 JSON（RecoveryTuning 的部分覆盖）：七个数值参数 + 可选 levels 色标。 */
+export function parseRecoveryJson(raw: string): RecoveryTuning {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (e) {
+    throw new CliError(`--recovery-json 不是合法 JSON：${(e as Error).message}`);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new CliError('--recovery-json 必须是对象，如 {"fatiguePerSet":2.8,"fitnessTau":10}');
+  }
+  const o = parsed as Record<string, unknown>;
+  const tuning: RecoveryTuning = {};
+  for (const key of RECOVERY_NUMBER_KEYS) {
+    const v = o[key];
+    if (v === undefined) continue;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) {
+      throw new CliError(`--recovery-json.${key} 必须是非负数，收到 "${String(v)}"`);
+    }
+    (tuning as Record<string, unknown>)[key] = n;
+  }
+  if (o.levels !== undefined) {
+    if (o.levels === null) {
+      tuning.levels = undefined;
+    } else {
+      tuning.levels = parseLevelsJson(JSON.stringify(o.levels), 'recovery-json.levels');
+    }
+  }
+  const unknownKeys = Object.keys(o).filter(
+    (k) => !RECOVERY_NUMBER_KEYS.includes(k as (typeof RECOVERY_NUMBER_KEYS)[number]) && k !== 'levels'
+  );
+  if (unknownKeys.length > 0) {
+    throw new CliError(
+      `--recovery-json 有未知参数 "${unknownKeys.join(', ')}"。可用参数：${RECOVERY_NUMBER_KEYS.join(', ')}${'，levels'}`
+    );
+  }
+  if (Object.keys(tuning).length === 0) {
+    throw new CliError('--recovery-json 至少要提供一个参数（fatiguePerSet/fatigueTau/fitnessPerSet/fitnessTau/detrainDepth/detrainTau/detrainRef/levels）');
+  }
+  return tuning;
+}
+
+// 发展视图时间窗边界（与 muscleGrowth.normalizeGrowthWindow 消费端一致：越界夹紧 7–730）
+const GROWTH_WINDOW_MIN = 7;
+const GROWTH_WINDOW_MAX = 730;
+
+export function clampGrowthWindowDays(n: number): number {
+  return Math.min(GROWTH_WINDOW_MAX, Math.max(GROWTH_WINDOW_MIN, Math.round(n)));
 }
 
 export function addMuscle(config: WorkoutConfig, input: MuscleInput): Muscle {
@@ -389,6 +518,17 @@ export function addMuscle(config: WorkoutConfig, input: MuscleInput): Muscle {
     contributesToCoverage: input.contributesToCoverage ?? true,
     svgRegionIds: input.svgRegionIds ?? [],
     ...(input.restThresholdDays !== undefined ? { restThresholdDays: input.restThresholdDays } : {}),
+    ...(input.heatmapMetric ? { heatmapMetric: input.heatmapMetric } : {}),
+    ...(input.heatmapRange ? { heatmapRange: input.heatmapRange } : {}),
+    ...(input.heatmapLevels ? { heatmapLevels: input.heatmapLevels } : {}),
+    ...(input.growthLevels ? { growthLevels: input.growthLevels } : {}),
+    ...(input.growthRecentDays !== undefined && input.growthRecentDays !== null
+      ? { growthRecentDays: input.growthRecentDays }
+      : {}),
+    ...(input.growthBaselineDays !== undefined && input.growthBaselineDays !== null
+      ? { growthBaselineDays: input.growthBaselineDays }
+      : {}),
+    ...(input.recovery ? { recovery: input.recovery } : {}),
   };
   config.muscles.push(muscle);
   return muscle;
@@ -400,6 +540,20 @@ export interface MusclePatch {
   contributesToCoverage?: boolean;
   restThresholdDays?: number;
   svgRegionIds?: string[];
+  heatmapMetric?: string | null;
+  heatmapRange?: string | null;
+  heatmapLevels?: HeatmapLevel[] | null;
+  growthLevels?: HeatmapLevel[] | null;
+  growthRecentDays?: number | null;
+  growthBaselineDays?: number | null;
+  recovery?: RecoveryTuning | null;
+}
+
+/** 扩展字段的统一落法：undefined=不动；null=清除（回到跟随默认）；其余=覆盖。 */
+function applyOptional<T extends object, K extends keyof T>(target: T, key: K, value: T[K] | null | undefined): void {
+  if (value === undefined) return;
+  if (value === null) delete target[key];
+  else target[key] = value;
 }
 
 export function applyMuscleUpdate(config: WorkoutConfig, patch: MusclePatch): Muscle {
@@ -413,7 +567,15 @@ export function applyMuscleUpdate(config: WorkoutConfig, patch: MusclePatch): Mu
   if (patch.contributesToCoverage !== undefined) updates.contributesToCoverage = patch.contributesToCoverage;
   if (patch.restThresholdDays !== undefined) updates.restThresholdDays = patch.restThresholdDays;
   if (patch.svgRegionIds !== undefined) updates.svgRegionIds = patch.svgRegionIds;
-  config.muscles[index] = { ...config.muscles[index], ...updates };
+  const next = { ...config.muscles[index], ...updates };
+  applyOptional(next, 'heatmapMetric', patch.heatmapMetric);
+  applyOptional(next, 'heatmapRange', patch.heatmapRange);
+  applyOptional(next, 'heatmapLevels', patch.heatmapLevels);
+  applyOptional(next, 'growthLevels', patch.growthLevels);
+  applyOptional(next, 'growthRecentDays', patch.growthRecentDays);
+  applyOptional(next, 'growthBaselineDays', patch.growthBaselineDays);
+  applyOptional(next, 'recovery', patch.recovery);
+  config.muscles[index] = next;
   return config.muscles[index];
 }
 

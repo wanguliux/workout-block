@@ -3,7 +3,7 @@ import { parseArgs, UsageError } from './args';
 import { loadEnv } from './context';
 import { CliError } from './vault';
 import { cmdLocate, cmdConfig, cmdResolve } from './commands/configCmd';
-import { cmdAdd, cmdList, cmdDelete, cmdCompact } from './commands/recordCmd';
+import { cmdAdd, cmdList, cmdDelete, cmdUpdate, cmdCompact } from './commands/recordCmd';
 import { cmdStats } from './commands/statsCmd';
 import { cmdPlan } from './commands/planCmd';
 import { cmdBlock } from './commands/blockCmd';
@@ -32,16 +32,26 @@ const HELP = `workout-block CLI —— 在 Obsidian 之外安全读写 workout-b
   resolve <训练项名称或id>         中文名/英文名/id 反查训练项（录入前建议先跑）
 
 写入配置（训练项/训练类型/肌肉/统计 的增改删，级联规则与插件一致）：
-  config add-exercise --name <名> --category <类型> [--id ...] [--muscle <肌肉id>:primary|secondary ...]
+  config add-exercise --name <名> --category <类型> [--id ...]
+                      [--muscle <肌肉id>:primary|secondary[:练度] ...]
+                      （练度为正数系数：一条记录算几组，留空按角色取默认 主1/辅0.5）
   config update-exercise --exercise <名或id> [--new-id ...] [--name ...] [--category ...]
-                         [--muscle ...（整体替换）] [--clear-muscles]
+                         [--muscle <肌肉id>:primary|secondary[:练度] ...（整体替换）] [--clear-muscles]
   config delete-exercise --exercise <名或id> --yes    （级联软删其全部记录）
   config add-type --name <名> --fields-json '[{"key":"weight","inputType":"number","mass":true,"required":true}]'
   config update-type --type <名或id> [--new-id ...] [--name ...] [--fields-json ...]
                      （改 id 级联改写记录 category/训练项/统计关联）
   config delete-type --type <名或id> --yes
-  config add-muscle --name <名> [--coverage true|false] [--rest-days N] [--svg-ids a,b]
-  config update-muscle --muscle <id> [--name ...] [--coverage ...] [--rest-days ...] [--svg-ids ...]
+  config add-muscle --name <名> [--id ...] [--rest-days N] [--svg-ids a,b]
+                    [--heatmap-metric <统计名或id|none>] [--heatmap-range <天数|all|起..止|none>]
+                    [--heatmap-levels-json '[{"color":"#22c55e","max":10}]']
+                    [--growth-levels-json JSON] [--growth-recent-days N] [--growth-baseline-days N]
+                    [--recovery-json '{"fatiguePerSet":2.8,"fitnessTau":10,...}']
+                    （levels/recovery 支持 none 清除回到跟随默认；窗口天数自动夹紧 7–730）
+  config update-muscle --muscle <id> [--name ...] [--rest-days ...] [--svg-ids ...]
+                       [--heatmap-metric ...] [--heatmap-range ...] [--heatmap-levels-json ...]
+                       [--growth-levels-json ...] [--growth-recent-days ...] [--growth-baseline-days ...]
+                       [--recovery-json ...]
   config delete-muscle --muscle <id> --yes
   config add-stat --name <名> --types <类型,...> --builder count|sum:<字段>|productSum:<a>,<b>|oneRepMax:<重量>,<次数> | --expr "sum(reps*weight)"
   config update-stat --stat <名或id> [--name/--types/--builder/--expr/--granularity/--enabled/--unit ...]
@@ -51,6 +61,9 @@ const HELP = `workout-block CLI —— 在 Obsidian 之外安全读写 workout-b
   add --exercise <名称或id> [key=value ...] [--field key=value]
       [--time "YYYY-MM-DD HH:mm"] [--sets N] [--note 文字] [--plan 计划名] [--no-ask]
       （交互终端下，若必填字段未提供会逐个询问；--no-ask 可关闭询问、缺失必填直接报错）
+  update --id <记录id> [--exercise <名或id>] [--time "..."] [--note 文字 | --clear-note]
+         [--plan 计划名 | --clear-plan] [key=value ...] [--field key=value ...]
+         （编辑已有记录：只改提供的项；换训练项时类型级联、必填必须齐备；key= 空值移除该字段）
   list [--exercise <名>] [--from YYYY-MM-DD] [--to YYYY-MM-DD]
        [--last N] [--limit N] [--all]
   delete --id <记录id>             软删除（追加墓碑，与插件删除同语义）
@@ -77,10 +90,10 @@ const HELP = `workout-block CLI —— 在 Obsidian 之外安全读写 workout-b
   plan delete --plan <名称或id> --yes
 
 代码块生成（输出可直接粘进笔记的代码块文本）：
-  block <workout-log|workout-day|workout-heatmap|workout-plan> [--param key=value ...]
+  block <workout-log|workout-day|workout-heatmap|workout-plan|workout-recovery> [--param key=value ...]
 
 通用：
-  --json    机器可读输出（add/list/stats/plan/config/locate/doctor 均支持）
+  --json    机器可读输出（add/update/list/stats/plan/config/locate/doctor 均支持）
   --yes     删除类危险操作的显式确认（未加时只给影响预览、不动数据）
   --force   跳过「--vault 必须是真实 Obsidian 仓库」校验（仅测试/高级场景）
 
@@ -103,7 +116,7 @@ async function main(): Promise<void> {
   }
 
   const args = parseArgs(argv.slice(1), {
-    flags: ['json', 'all', 'yes', 'clear-muscles', 'no-ask', 'force'],
+    flags: ['json', 'all', 'yes', 'clear-muscles', 'clear-note', 'clear-plan', 'no-ask', 'force'],
     repeated: ['field', 'param', 'muscle'],
   });
 
@@ -127,6 +140,7 @@ async function main(): Promise<void> {
     case 'config': return cmdConfig(env, args);
     case 'resolve': return cmdResolve(env, args);
     case 'add': return cmdAdd(env, args);
+    case 'update': return cmdUpdate(env, args);
     case 'list': return cmdList(env, args);
     case 'delete': return cmdDelete(env, args);
     case 'compact': return cmdCompact(env, args);
